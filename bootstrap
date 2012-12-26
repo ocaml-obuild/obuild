@@ -1,11 +1,12 @@
 #!/bin/sh
 
-modules="types utils conf helper filesystem build obuild"
+modules="types ext utils conf helper filesystem dist prog configure build obuild"
 libs="unix"
 OCAMLOPT=ocamlopt
 
 set -e 
 (cd src;
+	rm -f *.cmi *.cmx *.o
 	for mod in $modules
 	do
 		echo "COMPILING $mod"
@@ -13,5 +14,10 @@ set -e
 	done;
 	echo "LINKING obuild.bootstrap"
 	$OCAMLOPT -o obuild.bootstrap ${libs// /.cmxa }.cmxa ${modules// /.cmx }.cmx
+	rm *.cmi *.cmx *.o
+	mv obuild.bootstrap ..
 )
-
+./obuild.bootstrap clean
+./obuild.bootstrap configure
+./obuild.bootstrap build
+# rm obuild.bootstrap

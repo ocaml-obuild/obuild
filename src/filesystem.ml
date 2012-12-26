@@ -1,7 +1,11 @@
-exception UnexpectedFileType
+open Printf
+open Ext
 
-let removeDir path =
-    let rec rmdir_recursive path =
+exception UnexpectedFileType
+exception WriteFailed
+
+let removeDirContent path =
+    let rec rmdir_recursive f path =
         let dirhandle = Unix.opendir path in
         (try
             while true do
@@ -9,15 +13,85 @@ let removeDir path =
                 if String.length ent > 0 && ent.[0] <> '.'
                     then
                         let fent = path ^ Filename.dir_sep ^ ent in
-                        match (Unix.lstat ent).Unix.st_kind with
-                        | Unix.S_DIR -> rmdir_recursive ent
-                        | Unix.S_REG -> Unix.unlink ent
+                        match (Unix.lstat fent).Unix.st_kind with
+                        | Unix.S_DIR -> rmdir_recursive (Unix.rmdir) fent
+                        | Unix.S_REG -> Unix.unlink fent
                         | _          -> raise UnexpectedFileType
             done;
         with End_of_file ->
             ()
         );
         Unix.closedir dirhandle;
-        Unix.rmdir path 
+        f path
         in
-    rmdir_recursive path
+    rmdir_recursive (fun _ -> ()) path
+
+let removeDir path = removeDirContent path; Unix.rmdir path; ()
+
+let getModificationTime path =
+   try (Unix.stat path).Unix.st_mtime
+   with _ -> 0.0
+
+(* create a directory safely.
+ *
+ * return false if the directory already exists
+ * return true if the directory has been created *)
+let mkdirSafe path perm =
+    if Sys.file_exists path
+    then (if Sys.is_directory path
+            then false
+            else failwith ("directory " ^ path ^ " cannot be created: file already exists"))
+    else (Unix.mkdir path perm; true)
+
+let create_or_empty_dir path =
+    let created = mkdirSafe path 0o755 in
+    if not created then
+        removeDirContent path;
+    ()
+
+let write_no_partial fd b o l =
+    let len = ref l in
+    let ofs = ref o in
+    while !len > 0 do
+        let written = Unix.write fd b !ofs !len in
+        if written = 0 then raise WriteFailed;
+        ofs := !ofs + written;
+        len := !len - written
+    done
+
+let withfile filepath openflags perms f =
+    let fd = Unix.openfile filepath openflags perms in
+    finally (fun () -> f fd) (fun () -> Unix.close fd)
+
+let writeFile filepath s =
+    withfile filepath [Unix.O_WRONLY; Unix.O_CREAT] 0o644 (fun fd ->
+        write_no_partial fd s 0 (String.length s)
+    )
+
+let readFile filepath =
+    let buf = Buffer.create 1024 in
+    let b = String.create 1024 in
+    withfile filepath [Unix.O_RDONLY] 0o644 (fun fd ->
+        let isDone = ref false in
+        while not !isDone do
+            let r = Unix.read fd b 0 1024 in
+            if r > 0
+                then Buffer.add_substring buf b 0 r
+                else isDone := true
+        done;
+        Buffer.contents buf
+    )
+
+let copy_file src dst =
+    let s = String.create 4096 in
+    withfile dst [Unix.O_WRONLY; Unix.O_CREAT] 0o644 (fun fdDst ->
+        withfile src [Unix.O_RDONLY] 0o644 (fun fdSrc ->
+            let isDone = ref false in
+            while not !isDone do
+                let r = Unix.read fdSrc s 0 4096 in
+                if r > 0
+                    then write_no_partial fdDst s 0 r
+                    else isDone := true
+            done
+        )
+    )

@@ -1,0 +1,5 @@
+*.cmx
+*.o
+*.cmi
+dist
+src/obuild

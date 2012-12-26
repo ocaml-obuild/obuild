@@ -1,11 +1,15 @@
 name: obuild
-version: 0.0
-description: o'build o'build ye source
+version: 0.0.0
+description:
+  o'build o'build ye source
+  .
+  simple completly declarative build system
 licence: GPL
 author: Vincent Hanquez <tab@snarc.org>
 obuild-ver: 1
+homepage: http://github.com/vincenthz/obuild
 
 executable obuild
   main-is: obuild.ml
   src-dir: src
-  build-deps: unix, threads
+  build-deps: unix
