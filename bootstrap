@@ -1,0 +1,17 @@
+#!/bin/sh
+
+modules="types utils conf helper filesystem build obuild"
+libs="unix"
+OCAMLOPT=ocamlopt
+
+set -e 
+(cd src;
+	for mod in $modules
+	do
+		echo "COMPILING $mod"
+		$OCAMLOPT -c ${mod}.ml
+	done;
+	echo "LINKING obuild.bootstrap"
+	$OCAMLOPT -o obuild.bootstrap ${libs// /.cmxa }.cmxa ${modules// /.cmx }.cmx
+)
+

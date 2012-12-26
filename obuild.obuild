@@ -1,0 +1,11 @@
+name: obuild
+version: 0.0
+description: o'build o'build ye source
+licence: GPL
+author: Vincent Hanquez <tab@snarc.org>
+obuild-ver: 1
+
+executable obuild
+  main-is: obuild.ml
+  src-dir: src
+  build-deps: unix, threads
