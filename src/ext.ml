@@ -21,6 +21,16 @@ let (</>) a b =
                     else a ^ dsep ^ b)
         else b
 
+let string_index_pred p s =
+    let len = String.length s in
+    let i = ref 0 in
+    while !i < len && not (p s.[!i]) do
+        i := !i + 1
+    done;
+    if !i == len
+        then (raise Not_found)
+        else !i
+
 let rec string_split ?limit:(limit=(-1)) c s =
     let i = try String.index s c with Not_found -> -1 in
     let nlimit = if limit = -1 || limit = 0 then limit else limit - 1 in
@@ -30,6 +40,16 @@ let rec string_split ?limit:(limit=(-1)) c s =
         let a = String.sub s 0 i
         and b = String.sub s (i + 1) (String.length s - i - 1) in
         a :: (string_split ~limit: nlimit c b)
+
+let rec string_split_pred ?limit:(limit=(-1)) p s =
+    let i = try string_index_pred p s with Not_found -> -1 in
+    let nlimit = if limit = -1 || limit = 0 then limit else limit - 1 in
+    if i = -1 || nlimit = 0 then
+        [ s ]
+    else
+        let a = String.sub s 0 i
+        and b = String.sub s (i + 1) (String.length s - i - 1) in
+        a :: (string_split_pred ~limit: nlimit p b)
 
 let string_startswith prefix x =
     let x_l = String.length x and prefix_l = String.length prefix in
@@ -94,6 +114,13 @@ let hashtbl_modify_all f h =
         Hashtbl.replace h k (f v)
     ) keys
 
+let hashtbl_fromList l =
+    let h = Hashtbl.create (List.length l) in
+    List.iter (fun (k,v) -> Hashtbl.add h k v) l;
+    h
+
+let hashtbl_toList h = Hashtbl.fold (fun k v l -> (k,v)::l) h []
+
 let first f (a,b) = (f a, b)
 let second f (a,b) = (a, f b)
 
@@ -101,3 +128,4 @@ exception ConversionIntFailed of string * string
 
 let user_int_of_string loc s =
     try int_of_string s with _ -> raise (ConversionIntFailed (loc,s))
+

@@ -2,7 +2,7 @@ open Printf
 open Ext
 open Types
 open Helper
-open Conf
+open Project
 
 let major = 0
 let minor = 0
@@ -21,13 +21,13 @@ let mainConfigure generalConf argv =
         userFlagSettings := tweak :: !userFlagSettings
         in
     Arg.parse_argv (Array.of_list argv)
-                    [ ("--enable-bytecode", Arg.Set useBytecode, "enable compilation as bytecode")
-                    ; ("--enable-native", Arg.Set useNative, "enable compilation as native")
-                    ; ("--disable-bytecode", Arg.Clear useBytecode, "disable compilation as bytecode")
-                    ; ("--disable-native", Arg.Clear useNative, "disable compilation as native")
-                    ; ("--flag", Arg.String userSetFlagSettings, "enable or disable a project's flag")
-                    ] (fun s -> failwith ("unknown option: " ^ s))
-                    usageConfigure;
+        [ ("--enable-bytecode", Arg.Set useBytecode, "enable compilation as bytecode")
+        ; ("--enable-native", Arg.Set useNative, "enable compilation as native")
+        ; ("--disable-bytecode", Arg.Clear useBytecode, "disable compilation as bytecode")
+        ; ("--disable-native", Arg.Clear useNative, "disable compilation as native")
+        ; ("--flag", Arg.String userSetFlagSettings, "enable or disable a project's flag")
+        ] (fun s -> failwith ("unknown option: " ^ s))
+        usageConfigure;
 
     let projFile = projectRead () in
     verbose generalConf Report "Configuring %s-%s...\n" projFile.obuild_name projFile.obuild_version;
@@ -37,14 +37,23 @@ let mainConfigure generalConf argv =
 
 let mainBuild generalConf argv =
     let projFile = projectRead () in
+    let usageBuild = "build" in
+
     Configure.check generalConf;
 
-    List.iter (Build.compileLib generalConf projFile) projFile.obuild_libs;
-    List.iter (Build.compileExe generalConf projFile) projFile.obuild_exes;
+    let jopt = ref None in
+    Arg.parse_argv (Array.of_list argv)
+        [ ("-j", Arg.Int (fun i -> jopt := Some i), "parallelization")
+        ] (fun s -> failwith ("unknown option: " ^ s))
+        usageBuild;
+
+    let cache = Prepare.prepare generalConf projFile in
+    List.iter (Build.compileLib cache) projFile.obuild_libs;
+    List.iter (Build.compileExe cache) projFile.obuild_exes;
     ()
 
 let mainClean _ argv =
-    if Sys.file_exists Dist.distPath
+    if Filesystem.exists Dist.distPath
         then Filesystem.removeDir Dist.distPath
         else ()
 
@@ -62,22 +71,22 @@ let mainSdist _ argv =
     let name = projFile.obuild_name in
     let ver = projFile.obuild_version in
     let sdistDir = name ^ "-" ^ ver in
-    let sdistName = sdistDir ^ ".tar.gz" in
-    let dest = Dist.distPath </> sdistDir in
+    (*let sdistName = sdistDir ^ ".tar.gz" in*)
+    (*let dest = Dist.distPath </> sdistDir in*)
 
-    exit 0;
     (*
     Dist.with_temporary_dir (fun dir ->
         Unix.chdir dir
-        let 
     );
     *)
 
+    (*
     Unix.mkdir dest 0o755;
     (*List.iter (fun x -> ()) obuild.obuild_lib *)
 
     Unix.chdir dest;
     Prog.runTar sdistName sdistDir;
+    *)
     ()
 
 let mainHelp _ argv =
@@ -93,12 +102,17 @@ let usageCommands = String.concat "\n"
     ; "  help         Help about commands"
     ]
 
+(* parse the global args up the first non option <command>
+ * <exe> -opt1 -opt2 <command> <...>
+ * *)
 let parseGlobalArgs () =
     let printVersion () = printf "obuild %d.%d\n" major minor; exit 0
         in
     let printHelp () = printf "a rescue team has been dispatched\n";
                        exit 0
         in
+    (* get the two list spliced and used Arg. instead of inlining the arg parsing
+     * *)
     let rec processGlobalArgs conf l =
         match l with
         | x::xs -> if String.length x > 0 && x.[0] = '-'
@@ -108,6 +122,7 @@ let parseGlobalArgs () =
                             | "--version" -> printVersion ()
                             | "--verbose" -> { conf with conf_verbosity = Verbose }
                             | "--debug"   -> { conf with conf_verbosity = Debug }
+                            | "--debug-with-cmd" -> { conf with conf_verbosity = DebugPlus }
                             | "--silent"  -> { conf with conf_verbosity = Silent }
                             | _           -> failwith ("unknown global option: " ^ x)
                             in
@@ -154,7 +169,7 @@ let () =
                 )
         (* build related failure *)
         | Build.CompilationFailed e       -> eprintf "\n%s" e; exit 5
-        | Build.DependencyAnalyzeFailed e -> eprintf "\n%s" e; exit 6
+        | Prepare.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 6
         | Build.LinkingFailed e           -> eprintf "\n%s" e; exit 7
         (* others exception *)
         | Exit              -> ()

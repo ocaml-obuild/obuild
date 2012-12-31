@@ -56,7 +56,7 @@ format is supported by indenting (with spaces) the value related to the key.
       .
       This is a long description describing properly what the project does.
     licence: MyLicense
-    author: John Doe <john@doe.com>
+    authors: John Doe <john@doe.com>
     obuild-ver: 1
     homepage: http://my.server.com/myproject
 

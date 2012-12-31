@@ -1,5 +1,6 @@
 open Types
 open Ext
+open Filepath
 
 exception NoConfFile
 exception MultipleConfFiles
@@ -30,7 +31,7 @@ let projectParse lines =
                       ; obuild_version     = ""
                       ; obuild_description = ""
                       ; obuild_license     = ""
-                      ; obuild_author      = ""
+                      ; obuild_authors     = []
                       ; obuild_ver         = 0
                       ; obuild_homepage    = ""
                       ; obuild_flags       = []
@@ -68,6 +69,32 @@ let projectParse lines =
         let flag = processChunk parseFlag emptyFlag cont in
         { acc with obuild_flags = flag :: acc.obuild_flags }
         in
+    let parseDeps value =
+        let parseConstraint l =
+            (* proper lexer/parser please: to parse real expressions. this is a quicky *)
+            match l with
+            | []         -> None
+            | ["="; v]   -> Some (Eq v)
+            | [">="; v ] -> Some (Ge v)
+            | ["<="; v ] -> Some (Le v)
+            | [">"; v ]  -> Some (Gt v)
+            | ["<"; v ]  -> Some (Lt v)
+            | _          -> failwith "unrecognize constraint"
+            in
+        let parseDependency w =
+            match string_words w with
+            | []     -> failwith "empty dependency"
+            | k :: l -> let (dep, subDeps) =
+                            match string_split '.' k with
+                            | m::subs -> (m, subs)
+                            | _       -> failwith ("unknown dependency format: " ^ k)
+                            in
+                        ({ dep_name = dep; dep_subname = subDeps }, parseConstraint l)
+            in
+        List.map parseDependency (parseCSV value)
+        in
+    let parseModuleName value = List.map wrap_module (parseCSV value) in
+    let parseFilenames value = List.map wrap_filename (parseCSV value) in
 
     let parseLibrary (acc: obuild_lib) line cont =
         match Utils.toKV line with
@@ -75,16 +102,23 @@ let projectParse lines =
         | (k, Some v) ->
                 let (value: string) = String.concat "\n" (v :: List.map snd cont) in
                 (match k with
-                | "modules"    -> { acc with lib_modules = parseCSV value @ acc.lib_modules }
-                | "build-deps" -> { acc with lib_builddeps = parseCSV value @ acc.lib_builddeps }
-                | "src-dir"    -> { acc with lib_srcdir = Some value }
+                | "modules"    -> { acc with lib_modules   = parseModuleName value @ acc.lib_modules }
+                | "build-deps" -> { acc with lib_builddeps = parseDeps value @ acc.lib_builddeps }
+                | "src-dir"    -> { acc with lib_srcdir    = Some value }
+                | "C-dir"      -> { acc with lib_cdir      = Some value }
+                | "C-sources"  -> { acc with lib_csources  = acc.lib_csources @ parseFilenames value }
+                | "pack"       -> { acc with lib_pack      = bool_of_string value }
                 | k            -> failwith ("unexpected item in library : " ^ k)
                 )
         in
     let doLibrary acc args cont =
-        let emptyLib = { lib_modules = []
+        let emptyLib = { lib_name = List.hd args
+                       ; lib_modules = []
                        ; lib_builddeps = []
                        ; lib_srcdir = None
+                       ; lib_csources = []
+                       ; lib_cdir = None
+                       ; lib_pack = false
                        } in
         let lib = processChunk parseLibrary emptyLib cont in
         { acc with obuild_libs = lib :: acc.obuild_libs }
@@ -97,7 +131,9 @@ let projectParse lines =
                 (match k with
                 | "src-dir"    -> { acc with exe_srcdir = Some value }
                 | "main-is"    -> { acc with exe_main = value }
-                | "build-deps" -> { acc with exe_builddeps = parseCSV value @ acc.exe_builddeps }
+                | "build-deps" -> { acc with exe_builddeps = parseDeps value @ acc.exe_builddeps }
+                | "C-dir"      -> { acc with exe_cdir      = Some value }
+                | "C-sources"  -> { acc with exe_csources  = acc.exe_csources @ parseFilenames value }
                 | k            -> failwith ("unexpected item in executable : " ^ k)
                 )
         in
@@ -106,6 +142,8 @@ let projectParse lines =
                        ; exe_main = ""
                        ; exe_srcdir = None
                        ; exe_builddeps = []
+                       ; exe_csources = []
+                       ; exe_cdir = None
                        } in
         let exe = processChunk parseExecutable emptyExe cont in
         { acc with obuild_exes = exe :: acc.obuild_exes }
@@ -130,7 +168,8 @@ let projectParse lines =
                 | "license"     -> { acc with obuild_license = value }
                 | "licence"     -> { acc with obuild_license = value }
                 | "homepage"    -> { acc with obuild_homepage = value }
-                | "author"      -> { acc with obuild_author = value }
+                | "authors"     -> { acc with obuild_authors = parseCSV value }
+                | "author"      -> { acc with obuild_authors = [value] }
                 | "obuild-ver"  -> { acc with obuild_ver = user_int_of_string "obuild-ver" value }
                 | k             -> failwith ("unknown key: " ^ k)
         )

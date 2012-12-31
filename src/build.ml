@@ -2,191 +2,150 @@ open Types
 open Ext
 open Helper
 open Printf
+open Filepath
+open Prepare
 
+exception CCompilationFailed of string
 exception CompilationFailed of string
-exception DependencyAnalyzeFailed of string
 exception LinkingFailed of string
 
-type module_desc =
-    { module_use_threads : bool
-    ; module_src_mtime : float
-    ; module_has_interface : bool
-    ; dep_cwd_modules : modname list
-    ; dep_other_modules : modname list
-    }
-
-type dep_opt =
-    { dep_withopt : bool
-    ; dep_src_dir : string option
+type common_opt =
+    { common_build_native : bool (* build native or bytecode *)
+    ; common_use_withopt : bool (* use the .opt compiler *)
     }
 
 type compile_opt =
-    { compile_native        : bool (* build native or bytecode *)
-    ; compile_withopt       : bool (* use the .opt compiler *)
+    { compile_common        : common_opt
     ; compile_dest_dir      : string option
     ; compile_src_dir       : string option
     ; compile_use_thread    : bool
     ; compile_include_paths : string list
     }
 
+type ccompile_opt =
+    { ccompile_common        : common_opt
+    ; ccompile_opts          : string list
+    ; ccompile_include_paths : string list
+    ; ccompile_dest_dir      : string option
+    ; ccompile_src_dir       : string option
+    }
+
+type clinking_opt =
+    { clinking_common        : common_opt
+    ; clinking_shared        : bool
+    ; clinking_dest          : filepath
+    }
+
 type linking_opts =
-    { linking_native        : bool
-    ; linking_withopt       : bool
-    ; linking_dest          : string
+    { linking_common        : common_opt
+    ; linking_lib           : bool
+    ; linking_dest          : filepath
     ; linking_use_thread    : bool
+    ; linking_cclibs        : string list
     ; linking_include_paths : string list
     }
 
-let cmxa_of_lib lib = lib ^ ".cmxa"
-let cma_of_lib lib = lib ^ ".cma"
-
-let cmx_of_module modname = String.uncapitalize modname ^ ".cmx"
-let cmo_of_module modname = String.uncapitalize modname ^ ".cmo"
-let cmi_of_module modname = String.uncapitalize modname ^ ".cmi"
-let o_of_module modname = String.uncapitalize modname ^ ".o"
-
-let filename_of_module modname = String.uncapitalize modname ^ ".ml"
-let interface_of_module modname = String.uncapitalize modname ^ ".mli"
-
-let module_of_filename filename = String.capitalize (Filename.chop_extension filename)
-
-(* return the (modules list) dependency for a specific file *)
-let runOcamldep dopt modname =
-    let srcFile = (default "" dopt.dep_src_dir) </> filename_of_module modname in
-    let args = ["ocamldep" ^ (if dopt.dep_withopt then ".opt" else "")]
-             @ (maybe [] (fun x -> ["-I"; x]) dopt.dep_src_dir)
-             @ ["-modules"; srcFile ] in
-    match run_with_outputs args with
-    | Success (f,_) -> (
-        match Utils.toKV f with
-        | (_,None)   -> raise (DependencyAnalyzeFailed ("assumption failed: " ^ f))
-        | (_,Some v) -> let vStripped = string_stripSpaces v in
-                        if vStripped = ""
-                               then []
-                               else List.map string_stripSpaces (string_words vStripped)
-        )
-    | Failure er -> raise (DependencyAnalyzeFailed er)
-
-let runOcamlCompile copt modname =
-    let srcFile = (default "" copt.compile_src_dir) </> filename_of_module modname in
-    let dstFile = (default "" copt.compile_dest_dir) </>
-                  (if copt.compile_native then cmx_of_module else cmo_of_module) modname
+let runOcamlCompile gconf copt compileInterface modname =
+    let commonOpts = copt.compile_common in
+    let (srcFile, dstFile) =
+        if compileInterface
+            then
+                (with_optpath copt.compile_src_dir (interface_of_module modname)
+                ,with_optpath copt.compile_dest_dir (cmi_of_module modname)
+                )
+            else 
+                (with_optpath copt.compile_src_dir (filename_of_module modname)
+                ,with_optpath copt.compile_dest_dir ((if commonOpts.common_build_native then cmx_of_module else cmo_of_module) modname)
+                )
         in
-    let args = [ (if copt.compile_native then "ocamlopt" else "ocamlc") ^
-                 (if copt.compile_withopt then ".opt" else "") ]
+    let args = [ (if commonOpts.common_build_native then "ocamlopt" else "ocamlc") ^
+                 (if commonOpts.common_use_withopt then ".opt" else "") ]
              @ (if copt.compile_use_thread then ["-thread"] else [])
              @ (Utils.to_include_path_options copt.compile_include_paths)
-             @ ["-o"; dstFile]
-             @ ["-c"; srcFile ]
+             @ ["-o"; filepath_to_string dstFile ]
+             @ ["-c"; filepath_to_string srcFile ]
         in
-    match run_with_outputs args with
+    match run_with_outputs gconf args with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (CompilationFailed er)
 
-(*
-*)
+let runCCompile gconf copt file =
+    let setup = gconf.conf_setup in
 
-let runOcamlLinking lopt libs modules =
-    let args = [ (if lopt.linking_native then "ocamlopt" else "ocamlc") ^
-                 (if lopt.linking_withopt then ".opt" else "") ]
-             @ (if lopt.linking_use_thread then ["-thread"] else [])
-             @ [ "-o"; lopt.linking_dest ]
-             @ (Utils.to_include_path_options lopt.linking_include_paths)
-             @ (List.map (if lopt.linking_native then cmxa_of_lib else cma_of_lib) libs)
-             @ (List.map (if lopt.linking_native then cmx_of_module else cmo_of_module) modules)
+    let callCCompiler =
+        try string_words (List.assoc "bytecomp_c_compiler" setup)
+        with Not_found -> raise (CCompilationFailed "no bytecomp_c_compiler returned by ocaml")
+        in
+    let srcFile = with_optpath copt.ccompile_src_dir file in
+    let dstFile = with_optpath copt.ccompile_dest_dir (wrap_filename (file.filename ^ ".o")) in (* make a .c.o file to avoid collision *)
+    let args = callCCompiler
+             @ copt.ccompile_opts
+             @ (Utils.to_include_path_options copt.ccompile_include_paths)
+             @ ["-o"; dstFile.filepath]
+             @ ["-c"; srcFile.filepath]
+        in
+    match run_with_outputs gconf args with
+    | Success (_, warnings) -> warnings
+    | Failure er            -> raise (CCompilationFailed er)
+
+let runCLinking gconf lopt depfiles =
+    let args = [ "gcc" ]
+             @ (if lopt.clinking_shared then [ "-shared" ] else [])
+             @ ["-o"; lopt.clinking_dest.filepath ]
+             @ depfiles
              in
-    match run_with_outputs args with
+    match run_with_outputs gconf args with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
-type compilation_state =
-    { compilation_modules  : (modname, module_desc) Hashtbl.t
-    ; compilation_order    : modname list list
-    ; compilation_builddir : string
-    }
+let runAr gconf dest deps =
+    let args = [ "ar"; "rc"; dest ] @ deps in
+    match run_with_outputs gconf args with
+    | Success (_, warnings) -> warnings
+    | Failure er            -> raise (LinkingFailed er)
 
-(* prepare modules dependencies and various compilation state
- * that is going to be required for compilation and linking.
- *)
-let prepare generalConf buildDir srcDir toplevelModules =
-    let modulesDeps = Hashtbl.create 64 in
-    let rec loop modname =
-        if Hashtbl.mem modulesDeps modname
-        then ()
-        else (
-            verbose generalConf Verbose "Analysing %s\n%!" modname;
-            let filepath = maybe "" (fun x -> x) srcDir </> filename_of_module modname in
-            let modTime = Filesystem.getModificationTime filepath in
-            verbose generalConf Debug "  %s has mtime %f\n%!" modname modTime;
+let runRanlib gconf dest =
+    match run_with_outputs gconf [ "ranlib"; dest ] with
+    | Success (_, warnings) -> warnings
+    | Failure er            -> raise (LinkingFailed er)
 
-            let dopt = { dep_withopt = true
-                       ; dep_src_dir = srcDir
-                       } in
-            let allDeps = runOcamldep dopt modname in
-            verbose generalConf Debug "  %s depends on %s\n%!" modname (String.concat "," allDeps);
-            let (cwdDeps, otherDeps) = List.partition (fun dep ->
-                let filename = maybe "" (fun x -> x) srcDir </> filename_of_module dep in
-                Sys.file_exists filename
-                ) allDeps in
-            let hasInterface = Sys.file_exists (interface_of_module modname) in
-            let use_threads = List.mem "Thread" otherDeps in
-            Hashtbl.add modulesDeps modname { module_use_threads   = use_threads
-                                            ; module_has_interface = hasInterface
-                                            ; module_src_mtime     = modTime
-                                            ; dep_cwd_modules      = cwdDeps
-                                            ; dep_other_modules    = otherDeps
-                                            };
-            List.iter loop cwdDeps
-        )
-        in
-    (* create a very simplified DAG using a list.
-     * it doesn't capture fine grained dependencies,
-     * so it can't parallelize the best way, however there's still some
-     * room for parallelization for blocks of free modules. *)
-    let get_order () =
-        let order = ref [] in
-        (* copy and simplify the module deps hashtbl *)
-        let h = hashtbl_map (fun dep -> dep.dep_cwd_modules) modulesDeps in
-        while Hashtbl.length h > 0 do
-            let freeModules = Hashtbl.fold (fun k v acc -> if v = [] then k :: acc else acc) h [] in
-            if freeModules = []
-                then failwith "internal error in dependencies"
-                else ();
-            hashtbl_modify_all (fun v -> List.filter (fun x -> not (List.mem x freeModules)) v) h;
-            List.iter (Hashtbl.remove h) freeModules;
-            order := freeModules :: !order
-        done;
-        List.rev !order
-        in
 
-    (* prepare the module hashtbl *)
-    List.iter (fun m -> loop m) toplevelModules;
-
-    { compilation_modules  = modulesDeps
-    ; compilation_order    = get_order ()
-    ; compilation_builddir = buildDir
-    }
+let runOcamlLinking gconf lopt libs modules =
+    let commonOpts = lopt.linking_common in
+    let args = [ (if commonOpts.common_build_native then "ocamlopt" else "ocamlc") ^
+                 (if commonOpts.common_use_withopt then ".opt" else "") ]
+             @ (if lopt.linking_use_thread then ["-thread"] else [])
+             @ (if lopt.linking_lib then ["-a"] else [])
+             @ [ "-o"; lopt.linking_dest.filepath ]
+             @ (Utils.to_include_path_options lopt.linking_include_paths)
+             @ (List.map filepath_to_string libs)
+             @ (List.map filename_to_string $ List.map (cmc_of_module commonOpts.common_build_native) modules)
+             @ (List.concat (List.map (fun x -> [ "-cclib"; x ]) lopt.linking_cclibs))
+             in
+    match run_with_outputs gconf args with
+    | Success (_, warnings) -> warnings
+    | Failure er            -> raise (LinkingFailed er)
 
 let check_compile_needed copt modules_deps modname =
-    (*
-    let dstFileO =
-        if copt.compile_native
-            then Some (default "" copt.compile_dest_dir </> o_of_module modname)
-            else None
-        in
-    let dstFileCMI = (default "" copt.compile_dest_dir) </> cmi_of_module modname in
-    *)
     let module_desc = Hashtbl.find modules_deps modname in
 
     let srcMTime = module_desc.module_src_mtime in
-    (* cmx/cmo file *)
-    let dstFile = (default "" copt.compile_dest_dir) </>
-                  (if copt.compile_native then cmx_of_module else cmo_of_module) modname in
-    let dstExists = Sys.file_exists dstFile in
-    let dstMTime = Filesystem.getModificationTime dstFile in
+    let intfMTime = module_desc.module_intf_mtime in
 
-    let deps = module_desc.dep_cwd_modules in
-    let depsWithMTime = List.map (fun dep -> (dep, (Hashtbl.find modules_deps dep).module_src_mtime)) deps in
+    let cmc_of_module = cmc_of_module copt.compile_common.common_build_native in
+    (* cmx/cmo file *)
+    let moduleCmcFile = with_optpath copt.compile_dest_dir (cmc_of_module modname) in
+    let dstFileCMI = with_optpath copt.compile_dest_dir (cmi_of_module modname) in
+
+    let dstExists = Filesystem.exists moduleCmcFile in
+    let dstMTime = Filesystem.getModificationTime moduleCmcFile in
+    let dstCMIMTime = Filesystem.getModificationTime dstFileCMI in
+
+    let depSources = module_desc.dep_cwd_modules in
+    let depDestTime = List.map (fun dep -> (dep, Filesystem.getModificationTime (with_optpath copt.compile_dest_dir (cmc_of_module dep)))) depSources in
+
+    (*let depsWithMTime = List.map (fun dep -> (dep, (Hashtbl.find modules_deps
+     * dep).module_src_mtime)) deps in*)
 
     let rec loopAbort l =
         match l with
@@ -196,51 +155,157 @@ let check_compile_needed copt modules_deps modname =
 
     let checks =
         [ (fun () -> not dstExists), ""
-        ; (fun () -> srcMTime >= dstMTime), "destination obsolete"
+        ; (fun () -> srcMTime >= dstMTime), "source changed"
+        ; (fun () -> intfMTime >= dstCMIMTime), "interface changed"
         ] @
-        List.map (fun (dep, mt) -> ((fun () -> dstMTime < mt), dep ^ " changed")) depsWithMTime
+        List.map (fun (dep, mt) -> ((fun () -> dstMTime < mt), dep.modname ^ " changed")) depDestTime
         in
     loopAbort checks
 
-let compile generalConf compilationPaths srcDir cstate =
+let print_warnings warnings =
+    if warnings <> "" then fprintf stderr "%s%!" warnings else ()
+
+let separate_deps gstate =
+    let internal = ref [] in
+    let system = ref [] in
+    Hashtbl.iter (fun k v ->
+        if v.dep_type = Internal
+            then internal := k :: !internal
+            else system   := k :: !system
+    ) gstate.data_deps;
+    (!internal, !system)
+
+let get_caml_include_path gstate =
+    try List.assoc "standard_library" gstate.data_gconf.conf_setup
+    with Not_found -> raise (CCompilationFailed "no standard_library returned by ocaml")
+
+let get_dep_path gstate dep =
+    let camlIncludePath = get_caml_include_path gstate in
+    match (Hashtbl.find gstate.data_deps dep.dep_name).dep_type with
+    | Internal -> Dist.createBuildDest (Dist.Library dep.dep_name)
+    | System   -> with_path camlIncludePath (wrap_filename dep.dep_name)
+
+let compile gstate target cstate =
+    let camlIncludePath = get_caml_include_path gstate in
+
+    let extraPaths = List.map (fun (dep,_) -> get_dep_path gstate dep) target.target_builddeps in
+
     let compiledModules = ref [] in
     let modules = List.concat cstate.compilation_order in
-    verbose generalConf Debug "Compiling order : %s\n%!" (String.concat "," modules);
     let nbStep = List.length modules in
-    list_iteri (fun currentStep m ->
-        let useThreads = (Hashtbl.find cstate.compilation_modules m).module_use_threads in
-        let copt = { compile_native        = true
-                   ; compile_withopt       = true
-                   ; compile_dest_dir      = Some cstate.compilation_builddir
-                   ; compile_src_dir       = srcDir
-                   ; compile_use_thread    = useThreads
-                   ; compile_include_paths = compilationPaths
-                   } in
+    let nbCStep = List.length cstate.compilation_csources in
 
-        (match check_compile_needed copt cstate.compilation_modules m with
-        | Some reason -> (
-                verbose generalConf Report "[%d of %d] Compiling %s%s\n%!" currentStep nbStep m
-                    (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+    let comOpts = { common_build_native = true
+                  ; common_use_withopt  = true
+                  } in
+    let compile_c () =
+        list_iteri (fun currentStep cFile ->
+            verbose gstate.data_gconf Report "[%d of %d] Compiling C %s\n%!" currentStep nbCStep (cFile.filename);
+            let copt = { ccompile_common        = comOpts
+                       ; ccompile_opts          = []
+                       ; ccompile_include_paths = (maybe [] (fun x -> [x]) target.target_cdir) @ [camlIncludePath]
+                       ; ccompile_dest_dir      = Some cstate.compilation_builddir.filepath
+                       ; ccompile_src_dir       = target.target_cdir
+                       } in
+            let warnings = runCCompile gstate.data_gconf copt cFile in
+            print_warnings warnings
+        ) cstate.compilation_csources
+        in
+    let compile_ocaml () =
+        list_iteri (fun currentStep m ->
+            let useThreads = (Hashtbl.find cstate.compilation_modules m).module_use_threads in
+            let hasIntf = (Hashtbl.find cstate.compilation_modules m).module_has_interface in
+            let copt = { compile_common        = comOpts
+                       ; compile_dest_dir      = Some cstate.compilation_builddir.filepath
+                       ; compile_src_dir       = target.target_srcdir
+                       ; compile_use_thread    = useThreads
+                       ; compile_include_paths = List.map filepath_to_string (cstate.compilation_paths @ extraPaths)
+                       } in
 
-                let warnings = runOcamlCompile copt m in
-                if warnings <> "" then fprintf stderr "%s%!" warnings
-                )
-        | None ->
-                ()
-        );
-        compiledModules := m :: !compiledModules
-    ) modules;
+            (* put in the runqueue *)
+            (match check_compile_needed copt cstate.compilation_modules m with
+            | Some reason -> (
+                    verbose gstate.data_gconf Report "[%d of %d] Compiling %s%s\n%!" currentStep nbStep (m.modname)
+                        (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+
+                    if hasIntf then (
+                        verbose gstate.data_gconf Debug "  Compiling Interface\n%!";
+                        let warnings = runOcamlCompile gstate.data_gconf copt true m in
+                        print_warnings warnings
+                    );
+                    let warnings = runOcamlCompile gstate.data_gconf copt false m in
+                    print_warnings warnings
+            )
+            | None ->
+                    ()
+            );
+            compiledModules := m :: !compiledModules
+        ) modules
+        in
+    (* we could parallelize the C and OCaml compilation,
+     * they are completely independant *)
+    compile_c ();
+    verbose gstate.data_gconf Debug "Compiling order : %s\n%!" (String.concat "," $ List.map modname_to_string modules);
+    compile_ocaml ();
+
     List.rev !compiledModules
+
+let linkCStuff gconf cstate clibName =
+    let comOpts = { common_build_native = true
+                  ; common_use_withopt  = true
+                  } in
+    let soFile = with_path cstate.compilation_builddir.filepath (wrap_filename ("dll" ^ clibName ^ ".so")) in
+    let aFile = cstate.compilation_builddir.filepath </> ("lib" ^ clibName ^ ".a") in
+
+    let clopts = { clinking_common = comOpts
+                 ; clinking_shared = true
+                 ; clinking_dest   = soFile
+                 } in
+    let cdepFiles = List.map (fun x -> cstate.compilation_builddir.filepath </> (x.filename ^ ".o")) cstate.compilation_csources in
+    let warnings = runCLinking gconf clopts cdepFiles in
+    print_warnings warnings;
+    print_warnings (runAr gconf aFile cdepFiles);
+    print_warnings (runRanlib gconf aFile);
+    ()
 
 (* compile and link a library
  *)
-let compileLib generalConf projFile lib =
-    verbose generalConf Report "Building library %s\n" (projFile.obuild_name);
+let compileLib gstate lib =
+    let linklib cstate compiled =
+        let dest = with_path cstate.compilation_builddir.filepath (cmxa_of_lib lib.lib_name) in
 
-    let buildDir = Dist.createBuildDest (Dist.Library) in
+        let useThreadLib = List.mem "threads" $ List.map (fun (x,_) -> x.dep_name) lib.lib_builddeps in
+        let useThreads = Hashtbl.fold (fun _ v a -> v.module_use_threads || a) cstate.compilation_modules useThreadLib in
 
-    let cstate = prepare generalConf buildDir lib.lib_srcdir lib.lib_modules in
-    ignore cstate;
+        let comOpts = { common_build_native = true
+                      ; common_use_withopt  = true
+                      } in
+
+        let cclibs = if cstate.compilation_csources <> [] then [lib.lib_name] else [] in
+        let lopts = { linking_common        = comOpts
+                    ; linking_lib           = true
+                    ; linking_dest          = dest
+                    ; linking_use_thread    = useThreads
+                    ; linking_cclibs        = List.map (fun x -> "-l" ^ x) cclibs 
+                    ; linking_include_paths = [cstate.compilation_builddir.filepath]
+                    } in
+        linkCStuff gstate.data_gconf cstate gstate.data_projFile.obuild_name;
+        let warnings = runOcamlLinking gstate.data_gconf lopts [] compiled in
+        print_warnings warnings;
+        ()
+        in
+
+    verbose gstate.data_gconf Report "Building library %s\n" lib.lib_name;
+    let buildDir = Dist.createBuildDest (Dist.Library lib.lib_name) in
+    let target = { target_srcdir    = lib.lib_srcdir
+                 ; target_cdir      = lib.lib_cdir
+                 ; target_csources  = lib.lib_csources
+                 ; target_builddeps = lib.lib_builddeps
+                 } in
+    let cstate = prepare_compilation gstate buildDir target lib.lib_modules in
+    let compiled = compile gstate target cstate in
+    verbose gstate.data_gconf Report "Linking library %s\n" lib.lib_name;
+    linklib cstate compiled;
     ()
 
 (* compile and link an executable
@@ -249,32 +314,68 @@ let compileLib generalConf projFile lib =
  * here we compile every modules and link the result at the end.
  *
  *)
-let compileExe generalConf projFile exe =
-    verbose generalConf Report "Building executable %s\n" (exe.exe_name);
+let compileExe gstate exe =
+    verbose gstate.data_gconf Report "Building executable %s\n" (exe.exe_name);
 
     let buildDir = Dist.createBuildDest (Dist.Executable exe.exe_name) in
-    let srcDir =
-        match exe.exe_srcdir with
-        | None     -> []
-        | Some dir -> [dir]
-        in
-    let compilationPaths = [buildDir] @ srcDir in
+
+    let extraPaths = List.map (fun (dep,_) -> get_dep_path gstate dep) exe.exe_builddeps in
+
+    let (selfDeps, systemDeps) = separate_deps gstate in
+    let selfLibDirs = List.map (fun dep -> Dist.createBuildDest (Dist.Library dep)) selfDeps in
+
     let linking cstate compiled =
-        let dest = cstate.compilation_builddir </> exe.exe_name in
-        verbose generalConf Report "Linking %s\n%!" dest;
-        let useThreadLib = List.mem "threads" exe.exe_builddeps in
+        let outputName = wrap_filename (exe.exe_name ^ (if Utils.is_windows then ".exe" else "")) in
+        let dest = with_path cstate.compilation_builddir.filepath outputName in
+        verbose gstate.data_gconf Report "Linking %s\n%!" dest.filepath;
+
+        let useThreadLib =
+            try let _ = List.find (fun (dep,_) -> dep.dep_name = "threads") exe.exe_builddeps in true
+            with _ -> false
+            in
         let useThreads = Hashtbl.fold (fun _ v a -> v.module_use_threads || a) cstate.compilation_modules useThreadLib in
-        let lopts = { linking_native        = true
-                    ; linking_withopt       = true
-                    ; linking_dest          = dest ^ (if Utils.is_windows then ".exe" else "")
+        let comOpts = { common_build_native = true
+                      ; common_use_withopt  = true
+                      } in
+        let lopts = { linking_common        = comOpts
+                    ; linking_lib           = false
+                    ; linking_dest          = dest
+                    ; linking_cclibs        = List.map (fun x -> "-L" ^ x.filepath) selfLibDirs
                     ; linking_use_thread    = useThreads
-                    ; linking_include_paths = [cstate.compilation_builddir]
+                    ; linking_include_paths = List.map filepath_to_string ([cstate.compilation_builddir] @ extraPaths)
                     } in
-        let warnings = runOcamlLinking lopts exe.exe_builddeps compiled in
-        if warnings <> "" then fprintf stderr "%s%!" warnings;
+
+        List.iter (fun (dep,_) ->
+            verbose gstate.data_gconf Report "Depending on %s(%s)\n%!" dep.dep_name  (String.concat "." dep.dep_subname)
+        ) exe.exe_builddeps;
+
+        let buildDeps = (*List.map (fun x -> with_path "" (cmxa_of_lib x)) $ *)
+            List.map (fun (dep,_) ->
+                let path = get_dep_path gstate dep in
+                with_path "" (cmxa_of_lib dep.dep_name)
+            ) exe.exe_builddeps
+            in
+        (*
+        let extraSystemDeps = List.map (fun sysdep ->
+            match (Hashtbl.find gstate.data_deps sysdep).dep_meta with
+            | None      -> failwith ("internal error: system library without a meta " ^ sysdep)
+            | Some meta -> (*Meta.find meta*)
+        ) systemDeps in
+                      (*@ (List.map (fun libDir -> with_path libDir (cmxa_of_lib
+                       * gstate.data_projFile.obuild_name)) libDirs)*)
+                      in
+                      *)
+        let warnings = runOcamlLinking gstate.data_gconf lopts buildDeps compiled in
+        print_warnings warnings;
         ()
-    in
+        in
     (* get modules dependencies *)
-    let cstate   = prepare generalConf buildDir exe.exe_srcdir [module_of_filename exe.exe_main] in
-    let compiled = compile generalConf compilationPaths exe.exe_srcdir cstate in
-    linking cstate compiled
+    let target = { target_srcdir    = exe.exe_srcdir
+                 ; target_cdir      = exe.exe_cdir
+                 ; target_csources  = exe.exe_csources
+                 ; target_builddeps = exe.exe_builddeps
+                 } in
+    let cstate   = prepare_compilation gstate buildDir target [module_of_filename (wrap_filename exe.exe_main)] in
+    let compiled = compile gstate target cstate in
+    linking cstate compiled;
+    ()

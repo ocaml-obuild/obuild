@@ -1,10 +1,13 @@
 open Printf
 open Ext
+open Types
+open Filepath
 
 exception UnexpectedFileType
 exception WriteFailed
 
-let removeDirContent path =
+let removeDirContent wpath =
+    let path = wpath.filepath in
     let rec rmdir_recursive f path =
         let dirhandle = Unix.opendir path in
         (try
@@ -26,22 +29,24 @@ let removeDirContent path =
         in
     rmdir_recursive (fun _ -> ()) path
 
-let removeDir path = removeDirContent path; Unix.rmdir path; ()
+let removeDir path = removeDirContent path; Unix.rmdir path.filepath; ()
 
 let getModificationTime path =
-   try (Unix.stat path).Unix.st_mtime
+   try (Unix.stat path.filepath).Unix.st_mtime
    with _ -> 0.0
+
+let exists path = Sys.file_exists path.filepath
 
 (* create a directory safely.
  *
  * return false if the directory already exists
  * return true if the directory has been created *)
 let mkdirSafe path perm =
-    if Sys.file_exists path
-    then (if Sys.is_directory path
+    if Sys.file_exists path.filepath
+    then (if Sys.is_directory path.filepath
             then false
-            else failwith ("directory " ^ path ^ " cannot be created: file already exists"))
-    else (Unix.mkdir path perm; true)
+            else failwith ("directory " ^ path.filepath ^ " cannot be created: file already exists"))
+    else (Unix.mkdir path.filepath perm; true)
 
 let create_or_empty_dir path =
     let created = mkdirSafe path 0o755 in
@@ -59,19 +64,19 @@ let write_no_partial fd b o l =
         len := !len - written
     done
 
-let withfile filepath openflags perms f =
-    let fd = Unix.openfile filepath openflags perms in
+let withfile path openflags perms f =
+    let fd = Unix.openfile path.filepath openflags perms in
     finally (fun () -> f fd) (fun () -> Unix.close fd)
 
-let writeFile filepath s =
-    withfile filepath [Unix.O_WRONLY; Unix.O_CREAT] 0o644 (fun fd ->
+let writeFile path s =
+    withfile path [Unix.O_WRONLY; Unix.O_CREAT] 0o644 (fun fd ->
         write_no_partial fd s 0 (String.length s)
     )
 
-let readFile filepath =
+let readFile path =
     let buf = Buffer.create 1024 in
     let b = String.create 1024 in
-    withfile filepath [Unix.O_RDONLY] 0o644 (fun fd ->
+    withfile path [Unix.O_RDONLY] 0o644 (fun fd ->
         let isDone = ref false in
         while not !isDone do
             let r = Unix.read fd b 0 1024 in

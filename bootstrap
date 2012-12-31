@@ -1,6 +1,6 @@
 #!/bin/sh
 
-modules="types ext utils conf helper filesystem dist prog configure build obuild"
+modules="types ext utils filepath project helper filesystem meta dist prog prepare configure build obuild"
 libs="unix"
 OCAMLOPT=ocamlopt
 
