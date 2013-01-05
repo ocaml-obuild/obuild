@@ -20,6 +20,8 @@ type package = { package_name        : string
                ; package_directory   : string
                ; package_description : string
                ; package_exists_if   : string
+               ; package_browse_interface : string
+               ; package_type_of_threads : string
                ; package_archive     : (csv * string) list
                ; package_version     : string
                ; package_subs        : package list
@@ -109,14 +111,16 @@ let parseFile file =
             in
         loop 0
         in
-    let newPkg name = { package_name        = name
-                      ; package_requires    = []
-                      ; package_directory   = ""
-                      ; package_description = ""
-                      ; package_exists_if   = ""
-                      ; package_archive     = []
-                      ; package_version     = ""
-                      ; package_subs        = []
+    let newPkg name = { package_name             = name
+                      ; package_requires         = []
+                      ; package_directory        = ""
+                      ; package_description      = ""
+                      ; package_browse_interface = ""
+                      ; package_type_of_threads  = ""
+                      ; package_exists_if        = ""
+                      ; package_archive          = []
+                      ; package_version          = ""
+                      ; package_subs             = []
                       }
                       in
     let rec parseCSVtail tokens =
@@ -179,3 +183,35 @@ let parseFile file =
         in
     let metaContent = Filesystem.readFile file in
     fst (parse (newPkg "") (lexer metaContent))
+
+let write path package =
+    let out = Buffer.create 1024 in
+    let append = Buffer.add_string out in
+    let rec write_one indent pkg =
+        let indentStr = String.make indent ' ' in
+        if pkg.package_description <> ""
+            then append (sprintf "%sdescription = \"%s\" (\n" indentStr pkg.package_description);
+        if pkg.package_version <> ""
+            then append (sprintf "%sversion = \"%s\" (\n" indentStr pkg.package_version);
+        if pkg.package_browse_interface <> ""
+            then append (sprintf "%sbrowse_interfaces = \"%s\" (\n" indentStr pkg.package_browse_interface);
+        if pkg.package_exists_if <> ""
+            then append (sprintf "%sexists_if = \"%s\" (\n" indentStr pkg.package_exists_if);
+
+        let v = String.concat "," (List.map (fun dep -> String.concat "." (dep.dep_name :: dep.dep_subname)) pkg.package_requires) in
+        if v <> ""
+            then append (sprintf "%srequires = \"%s\" (\n" indentStr v);
+
+        List.iter (fun (csv,v) ->
+            let k = String.concat "," csv in
+            append (sprintf "%sarchive(%s) = \"%s\" (\n" indentStr k v)
+        ) pkg.package_archive;
+        List.iter (fun spkg ->
+            append (sprintf "%spackage \"%s\" (\n" indentStr spkg.package_name);
+            write_one (indent+2) spkg;
+            append (sprintf "%s)\n" indentStr)
+        ) pkg.package_subs
+        in
+
+    write_one 0 package;
+    Filesystem.writeFile path (Buffer.contents out)

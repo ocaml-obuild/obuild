@@ -27,7 +27,8 @@ type dep_name = { dep_name : dep_main_name
 type dependency = dep_name * (dep_constraint option)
 
 type obuild_target =
-    { target_srcdir    : string option
+    { target_name      : string
+    ; target_srcdir    : string option
     ; target_cdir      : string option
     ; target_csources  : filename list
     ; target_builddeps : dependency list

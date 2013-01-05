@@ -1,11 +1,11 @@
 #!/bin/sh
 
-modules="types ext utils filepath project helper filesystem meta dist prog prepare configure build obuild"
+modules="types ext dag utils filepath project helper filesystem meta dist prog prepare configure build obuild"
 libs="unix"
-OCAMLOPT=ocamlopt
+OCAMLOPT=ocamlopt.opt
 
 set -e 
-(cd src;
+time (cd src;
 	rm -f *.cmi *.cmx *.o
 	for mod in $modules
 	do
@@ -19,5 +19,5 @@ set -e
 )
 ./obuild.bootstrap clean
 ./obuild.bootstrap configure
-./obuild.bootstrap build
+time ./obuild.bootstrap build
 # rm obuild.bootstrap

@@ -27,6 +27,7 @@ obuild supports very few sub commands:
     obuild clean
     obuild configure
     obuild build
+    obuild install
     obuild sdist
 
 * clean:  make sure there's no build by product in the current project
@@ -38,6 +39,8 @@ obuild supports very few sub commands:
          This will usually build a library or executables.
 * sdist: create a compressed archive package with every pieces needed to
          distribute it.
+* install: install to a specific destination the necessary files part of
+           a library or executable
 
 How to write a project file
 ---------------------------
@@ -66,3 +69,10 @@ Declaring an executable
       main-is: mymain.ml
       src-dir: src
       build-deps: unix
+
+Declarating a library
+
+    library mylib
+      modules: Module1, Module2
+      src-dir: lib
+      build-deps: mydep1, mydep2

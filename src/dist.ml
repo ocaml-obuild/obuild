@@ -20,24 +20,20 @@ let check f =
 let checkOrFail () = check (fun () -> raise DoesntExist)
 let checkOrCreate () = check (fun () -> Unix.mkdir distPath.filepath 0o755)
 
-type buildType = Autogen | Library of string | Executable of string
+type buildType = Autogen | Dot | Library of string | Executable of string
 
 let createBuildDest buildtype =
     let buildDir = wrap_filepath (distPath.filepath </> "build") in
     let _ = Filesystem.mkdirSafe buildDir 0o755 in
-    match buildtype with
-    | Library l    ->
-           let libDir = wrap_filepath (buildDir.filepath </> "lib-" ^ l) in
-           let _ = Filesystem.mkdirSafe libDir 0o755 in
-           libDir
-    | Autogen      ->
-           let autoDir = wrap_filepath (buildDir.filepath </> "autogen") in
-           let _ = Filesystem.mkdirSafe autoDir 0o755 in
-           autoDir
-    | Executable e ->
-           let exeDir = wrap_filepath (buildDir.filepath </> e) in
-           let _ = Filesystem.mkdirSafe exeDir 0o755 in
-           exeDir
+    let destDir =
+        match buildtype with
+        | Library l    -> wrap_filepath (buildDir.filepath </> "lib-" ^ l)
+        | Dot          -> wrap_filepath (buildDir.filepath </> "dot")
+        | Autogen      -> wrap_filepath (buildDir.filepath </> "autogen")
+        | Executable e -> wrap_filepath (buildDir.filepath </> e)
+        in
+    let _ = Filesystem.mkdirSafe destDir 0o755 in
+    destDir
 
 let read_setup () =
     try

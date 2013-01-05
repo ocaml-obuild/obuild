@@ -9,7 +9,7 @@ let getDigestKV () =
     [ ("obuild-digest", digest) ]
 
 let run gconf projFile =
-    let cache = Prepare.prepare gconf projFile in
+    let cache = Prepare.prepare gconf projFile Prepare.defaultBuildOpts in
 
     Dist.checkOrCreate ();
     let digestKV = getDigestKV () in
@@ -19,6 +19,7 @@ let run gconf projFile =
 
     let autogenDir = Dist.createBuildDest Dist.Autogen in
     (*generateMlFile (autogenDir </> "path_generated.ml")*)
+    ignore autogenDir;
 
     ()
 

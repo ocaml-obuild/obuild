@@ -48,17 +48,34 @@ type data_dep =
     ; dep_type : dep_type
     }
 
+type build_opts =
+    { opt_nb_jobs_par : int
+    ; opt_dump_dot    : bool
+    }
+
+let defaultBuildOpts =
+    { opt_nb_jobs_par = 1
+    ; opt_dump_dot    = false
+    }
+
+type common_opt =
+    { common_build_native : bool (* build native or bytecode *)
+    ; common_use_withopt : bool (* use the .opt compiler *)
+    }
+
 type data_cache =
-    { data_deps       : (dep_main_name, data_dep) Hashtbl.t
-    ; data_file_mtime : (filepath, float) Hashtbl.t
-    ; data_ocamlcfg   : (string, string) Hashtbl.t
-    ; data_gconf      : general_conf
-    ; data_projFile   : obuild
+    { data_deps        : (dep_main_name, data_dep) Hashtbl.t
+    ; data_file_mtime  : (filepath, float) Hashtbl.t
+    ; data_ocamlcfg    : (string, string) Hashtbl.t
+    ; data_gconf       : general_conf
+    ; data_projFile    : obuild
+    ; data_commonopts  : common_opt
+    ; data_buildopts   : build_opts
     }
 
 (* get all the dependencies required
  * and prepare the global cache of value *)
-let prepare gconf projFile =
+let prepare gconf projFile buildOpts =
     let ocamlCfg = Prog.getOcamlConfig gconf true in
     let stdlibPath =
         try List.assoc "standard_library" ocamlCfg
@@ -102,16 +119,26 @@ let prepare gconf projFile =
                        ) meta
     ) (Hashtbl.fold (fun _ v acc -> v :: acc) depsTable []);
 
-    { data_deps       = depsTable
-    ; data_file_mtime = Hashtbl.create 64
-    ; data_ocamlcfg   = hashtbl_fromList ocamlCfg
-    ; data_projFile   = projFile
-    ; data_gconf      = gconf
+    { data_deps        = depsTable
+    ; data_file_mtime  = Hashtbl.create 64
+    ; data_ocamlcfg    = hashtbl_fromList ocamlCfg
+    ; data_projFile    = projFile
+    ; data_gconf       = gconf
+    ; data_buildopts   = buildOpts
+    ; data_commonopts  =
+            { common_build_native = true (* hardcoded for now, till we got bytecode support *)
+            ; common_use_withopt  = gconf.conf_withopt
+            }
     }
+
+type compile_type = CompileModule    of modname
+                  | CompileInterface of modname
+                  | CompileC         of filename
 
 type compilation_state =
     { compilation_modules  : (modname, module_desc) Hashtbl.t
     ; compilation_csources : filename list
+    ; compilation_dag      : compile_type Dag.t
     ; compilation_order    : modname list list
     ; compilation_builddir : filepath
     ; compilation_paths    : filepath list
@@ -147,6 +174,7 @@ let prepare_compilation cache buildDir target toplevelModules =
                 let filename = with_optpath target.target_srcdir (filename_of_module dep) in
                 Filesystem.exists filename
                 ) allDeps in
+            (*List.iter (fun cwdDep -> Dag.add_edge modname cwdDep dag) cwdDeps;*)
             let use_threads = List.mem (wrap_module "Thread") otherDeps in
             Hashtbl.add modulesDeps modname { module_use_threads   = use_threads
                                             ; module_has_interface = hasInterface
@@ -157,6 +185,49 @@ let prepare_compilation cache buildDir target toplevelModules =
                                             };
             List.iter loop cwdDeps
         )
+        in
+    let get_dag () =
+        let dag = Dag.init () in
+        let h = hashtbl_map (fun dep -> dep.dep_cwd_modules) modulesDeps in
+        while Hashtbl.length h > 0 do
+            let freeModules = Hashtbl.fold (fun k v acc -> if v = [] then k :: acc else acc) h [] in
+            if freeModules = []
+                then failwith "internal error in dependencies"
+                else ();
+            List.iter (fun m ->
+                Hashtbl.iter (fun k v ->
+                    if k <> m then (
+                        if List.mem m v then (
+                            let kdep = Hashtbl.find modulesDeps k in
+                            if kdep.module_has_interface
+                                then (
+                                    Dag.addEdge (CompileInterface k) (CompileModule m) dag;
+                                    Dag.addEdge (CompileModule k) (CompileInterface k) dag
+                                ) else
+                                    Dag.addEdge (CompileModule k) (CompileModule m) dag
+                        )
+                    )
+                ) h;
+
+                (* make sure if the module doesn't have any parents
+                 * that we don't forget about the node *)
+                let mdep = Hashtbl.find modulesDeps m in
+                if mdep.module_has_interface
+                    then (
+                        if not (Dag.existsNode (CompileInterface m) dag)
+                            then (Dag.addNode (CompileInterface m) dag;
+                                  Dag.addEdge (CompileModule m) (CompileInterface m) dag
+                            )
+                    ) else (
+                        if not (Dag.existsNode (CompileModule m) dag)
+                            then Dag.addNode (CompileModule m) dag
+                    )
+            ) freeModules;
+
+            hashtbl_modify_all (fun v -> List.filter (fun x -> not (List.mem x freeModules)) v) h;
+            List.iter (Hashtbl.remove h) freeModules;
+        done;
+        dag
         in
     (* create a very simplified DAG using a list.
      * it doesn't capture fine grained dependencies,
@@ -181,9 +252,43 @@ let prepare_compilation cache buildDir target toplevelModules =
     (* prepare the module hashtbl *)
     List.iter (fun m -> loop m) toplevelModules;
 
+    (* we don't have a dependency tree for C sources files, so
+     * for now we rely on the user to specify the compilation order
+     * in the project file, and we serialize everything.
+     *)
+    let append_c_deps dag =
+        let rec loop prev nodes =
+            match nodes with
+            | []             -> ()
+            | current::[]    -> Dag.addEdge (CompileC current) (CompileC prev) dag
+            | current::nexts -> Dag.addEdge (CompileC current) (CompileC prev) dag;
+                                loop current nexts
+            in
+        match target.target_csources with
+        | []    -> ()
+        | x::[] -> Dag.addNode (CompileC x) dag
+        | x::xs -> loop x xs
+        in
+
+    let dag = get_dag () in
+    append_c_deps dag;
+
+    if cache.data_buildopts.opt_dump_dot
+        then (
+            let dotDir = Dist.createBuildDest Dist.Dot in
+            let path = wrap_filepath (dotDir.filepath </> (target.target_name ^ ".dot")) in
+            let dotContent = Dag.toDot (fun x -> match x with
+                                                 | CompileModule x    -> "mod " ^ x.modname
+                                                 | CompileInterface x -> "intf " ^ x.modname
+                                                 | CompileC x         -> "C " ^ x.filename
+                                       ) target.target_name true dag in
+            Filesystem.writeFile path dotContent;
+        );
+
     { compilation_modules  = modulesDeps
     ; compilation_csources = target.target_csources
     ; compilation_order    = get_order ()
+    ; compilation_dag      = dag
     ; compilation_builddir = buildDir
     ; compilation_paths    = [buildDir] @ (maybe [] (fun v -> [wrap_filepath v]) target.target_srcdir)
     ; compilation_runqueue = []

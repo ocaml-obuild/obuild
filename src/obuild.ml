@@ -42,14 +42,20 @@ let mainBuild generalConf argv =
     Configure.check generalConf;
 
     let jopt = ref None in
+    let dotopt = ref false in
     Arg.parse_argv (Array.of_list argv)
-        [ ("-j", Arg.Int (fun i -> jopt := Some i), "parallelization")
+        [ ("-j", Arg.Int (fun i -> jopt := Some i), "maximum number of jobs in parallel")
+        ; ("--dot", Arg.Set dotopt, "dump dependencies dot files during build")
         ] (fun s -> failwith ("unknown option: " ^ s))
         usageBuild;
 
-    let cache = Prepare.prepare generalConf projFile in
-    List.iter (Build.compileLib cache) projFile.obuild_libs;
-    List.iter (Build.compileExe cache) projFile.obuild_exes;
+    let build_opts = { Prepare.opt_nb_jobs_par = default 2 !jopt
+                     ; Prepare.opt_dump_dot    = !dotopt
+                     }
+        in
+    let gstate = Prepare.prepare generalConf projFile build_opts in
+    List.iter (Build.compileLib gstate) projFile.obuild_libs;
+    List.iter (Build.compileExe gstate) projFile.obuild_exes;
     ()
 
 let mainClean _ argv =
@@ -71,7 +77,9 @@ let mainSdist _ argv =
     let name = projFile.obuild_name in
     let ver = projFile.obuild_version in
     let sdistDir = name ^ "-" ^ ver in
-    (*let sdistName = sdistDir ^ ".tar.gz" in*)
+    let sdistName = sdistDir ^ ".tar.gz" in
+    ignore sdistName;
+
     (*let dest = Dist.distPath </> sdistDir in*)
 
     (*
@@ -90,6 +98,9 @@ let mainSdist _ argv =
     ()
 
 let mainHelp _ argv =
+    ()
+
+let mainInstall _ argv =
     ()
 
 let knownCommands = [ "configure"; "build"; "clean"; "sdist"; "help" ]
@@ -147,6 +158,7 @@ let defaultMain () =
     | "build"     -> mainBuild generalConf args
     | "clean"     -> mainClean generalConf args
     | "sdist"     -> mainSdist generalConf args
+    | "install"   -> mainInstall generalConf args
     | "help"      -> mainHelp generalConf args
     | cmd         -> eprintf "error: unknown command: %s\n\n  known commands: " cmd;
                      List.iter (eprintf "    %s\n") knownCommands;
@@ -168,9 +180,9 @@ let () =
                 | _        -> eprintf "error: config changed (reason=%s). run the configure command again\n" r; exit 4
                 )
         (* build related failure *)
-        | Build.CompilationFailed e       -> eprintf "\n%s" e; exit 5
+        | Build.CompilationFailed e       -> eprintf "\n%s\n%!" e; exit 5
         | Prepare.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 6
-        | Build.LinkingFailed e           -> eprintf "\n%s" e; exit 7
+        | Build.LinkingFailed e           -> eprintf "\n%s\n%!" e; exit 7
         (* others exception *)
         | Exit              -> ()
         | e                 -> eprintf "uncaught exception\n"; raise e

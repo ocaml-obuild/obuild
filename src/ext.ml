@@ -90,6 +90,8 @@ let string_drop n s =
 
 let string_words s = List.filter (fun x -> x <> "") (string_split ' ' s)
 
+let list_remove e list = List.filter (fun x -> x <> e) list
+
 let list_iteri f list =
     let rec loop i l =
         match l with
@@ -103,12 +105,14 @@ let hashtbl_map f h =
     Hashtbl.iter (fun k v -> Hashtbl.add newh k (f v)) h;
     newh
 
+let hashtbl_keys h = Hashtbl.fold (fun k _ l -> k :: l) h []
+
 let hashtbl_modify_one f k h =
     let v = Hashtbl.find h k in
     Hashtbl.replace h k (f v)
 
 let hashtbl_modify_all f h =
-    let keys = Hashtbl.fold (fun k _ acc -> k :: acc) h [] in
+    let keys = hashtbl_keys h in
     List.iter (fun k ->
         let v = Hashtbl.find h k in
         Hashtbl.replace h k (f v)

@@ -1,0 +1,6 @@
+name: p1
+version: 1.0
+obuild-ver: 1
+
+library p1
+  modules: P1
