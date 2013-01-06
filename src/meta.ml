@@ -29,6 +29,18 @@ type package = { package_name        : string
 
 type meta = package
 
+let newPkg name = { package_name             = name
+                  ; package_requires         = []
+                  ; package_directory        = ""
+                  ; package_description      = ""
+                  ; package_browse_interface = ""
+                  ; package_type_of_threads  = ""
+                  ; package_exists_if        = ""
+                  ; package_archive          = []
+                  ; package_version          = ""
+                  ; package_subs             = []
+                  }
+
 let rec iterate f package = f package; List.iter (iterate f) package.package_subs
 
 let rec find subs pkg =
@@ -88,7 +100,6 @@ let parseFile file =
             (String.sub s (o+1) (!i-(o+1)),!i+1)
             in
         let rec loop o =
-            (*printf "%d: %c\n" o (s.[o]);*)
             if o >= len
                 then []
                 else (
@@ -104,25 +115,13 @@ let parseFile file =
                         Hashtbl.find simpleChar s.[o] :: loop (o+1)
                     ) else if (s.[o] >= 'a' && s.[o] <= 'z') ||
                             (s.[o] >= 'A' && s.[o] <= 'Z') then (
-                         let (id, no) = parseIdent o in I id :: loop no
+                        let (id, no) = parseIdent o in I id :: loop no
                     ) else
                         failwith (sprintf "%d.%d: unknown character '%c'" !line (o - !lineoff) s.[o])
                 )
             in
         loop 0
         in
-    let newPkg name = { package_name             = name
-                      ; package_requires         = []
-                      ; package_directory        = ""
-                      ; package_description      = ""
-                      ; package_browse_interface = ""
-                      ; package_type_of_threads  = ""
-                      ; package_exists_if        = ""
-                      ; package_archive          = []
-                      ; package_version          = ""
-                      ; package_subs             = []
-                      }
-                      in
     let rec parseCSVtail tokens =
         match tokens with
         | COMMA :: I s :: xs -> let (l, r) = parseCSVtail xs in (s :: l, r)
@@ -215,3 +214,8 @@ let write path package =
 
     write_one 0 package;
     Filesystem.writeFile path (Buffer.contents out)
+
+let parseConfFile content =
+    List.map Utils.toKVeq (string_lines_noempty content)
+
+let getConf path = parseConfFile (Filesystem.readFile path)

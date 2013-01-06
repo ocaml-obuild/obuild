@@ -12,15 +12,6 @@ let ($) f a = f a
 
 let id = (fun x -> x)
 
-let (</>) a b =
-    let len = String.length a in
-    if len > 0
-        then (let dsep = Filename.dir_sep in
-                if String.make 1 (a.[len-1]) = dsep
-                    then a ^ b
-                    else a ^ dsep ^ b)
-        else b
-
 let string_index_pred p s =
     let len = String.length s in
     let i = ref 0 in
@@ -88,7 +79,12 @@ let string_drop n s =
     then invalid_arg "drop"
     else String.sub s n (len - n)
 
-let string_words s = List.filter (fun x -> x <> "") (string_split ' ' s)
+let string_lines s = string_split '\n' s
+let string_words s = string_split_pred (fun c -> c = ' ' || c = '\n' || c = '\t') s
+
+let no_empty emptyVal = List.filter (fun x -> x <> emptyVal)
+let string_words_noempty s = no_empty "" (string_words s)
+let string_lines_noempty s = no_empty "" (string_lines s)
 
 let list_remove e list = List.filter (fun x -> x <> e) list
 
@@ -129,7 +125,10 @@ let first f (a,b) = (f a, b)
 let second f (a,b) = (a, f b)
 
 exception ConversionIntFailed of string * string
+exception ConversionBoolFailed of string * string
 
 let user_int_of_string loc s =
     try int_of_string s with _ -> raise (ConversionIntFailed (loc,s))
 
+let user_bool_of_string loc s =
+    try bool_of_string s with _ -> raise (ConversionBoolFailed (loc,s))

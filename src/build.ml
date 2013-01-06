@@ -1,191 +1,209 @@
 open Types
 open Ext
 open Helper
+open Process
 open Printf
 open Filepath
+open Filetype
 open Prepare
+open Target
+open Building
+open Gconf
+open Modname
 
 exception CCompilationFailed of string
 exception CompilationFailed of string
 exception LinkingFailed of string
+exception Internal_Inconsistancy of string * string
 
 type compile_opt =
-    { compile_common        : common_opt
-    ; compile_dest_dir      : string option
-    ; compile_src_dir       : string option
+    { compile_common        : common_opts
+    ; compile_dest_dir      : filepath
+    ; compile_src_dir       : filepath option
     ; compile_use_thread    : bool
-    ; compile_include_paths : string list
+    ; compile_include_paths : filepath list
     }
 
 type ccompile_opt =
-    { ccompile_common        : common_opt
+    { ccompile_common        : common_opts
     ; ccompile_opts          : string list
-    ; ccompile_include_paths : string list
-    ; ccompile_dest_dir      : string option
-    ; ccompile_src_dir       : string option
+    ; ccompile_include_paths : filepath list
+    ; ccompile_dest_dir      : filepath
+    ; ccompile_src_dir       : filepath option
     }
 
 type clinking_opt =
-    { clinking_common        : common_opt
+    { clinking_common        : common_opts
     ; clinking_shared        : bool
     ; clinking_dest          : filepath
     }
 
 type linking_opts =
-    { linking_common        : common_opt
+    { linking_common        : common_opts
     ; linking_lib           : bool
     ; linking_dest          : filepath
     ; linking_use_thread    : bool
     ; linking_cclibs        : string list
-    ; linking_include_paths : string list
+    ; linking_include_paths : filepath list
     }
 
-let runOcamlCompile gconf copt compileInterface modname =
+let runOcamlCompile copt compileInterface useDebug useProf modname =
     let commonOpts = copt.compile_common in
     let (srcFile, dstFile) =
         if compileInterface
             then
                 (with_optpath copt.compile_src_dir (interface_of_module modname)
-                ,with_optpath copt.compile_dest_dir (cmi_of_module modname)
+                ,copt.compile_dest_dir </> (cmi_of_module modname)
                 )
             else 
                 (with_optpath copt.compile_src_dir (filename_of_module modname)
-                ,with_optpath copt.compile_dest_dir ((cmc_of_module commonOpts.common_build_native) modname)
+                ,copt.compile_dest_dir </> ((cmc_of_module commonOpts.common_build_native useDebug useProf) modname)
                 )
         in
-    let args = [ (if commonOpts.common_build_native then "ocamlopt" else "ocamlc") ^
-                 (if commonOpts.common_use_withopt then ".opt" else "") ]
+    let args = [ if commonOpts.common_build_native then Prog.getOcamlOpt () else Prog.getOcamlC () ]
              @ (if copt.compile_use_thread then ["-thread"] else [])
              @ (Utils.to_include_path_options copt.compile_include_paths)
-             @ ["-o"; filepath_to_string dstFile ]
-             @ ["-c"; filepath_to_string srcFile ]
+             @ (if useProf then [ "-p"] else [])
+             @ (if useDebug then [ "-g"] else [])
+             @ ["-o"; fp_to_string dstFile ]
+             @ ["-c"; fp_to_string srcFile ]
         in
-    spawn gconf args
+    spawn args
 
-let runCCompile gconf copt file =
-    let setup = gconf.conf_setup in
+let o_from_cfile file = fn (file.filename ^ ".o")
+
+let runCCompile project copt file =
+    let setup = project.project_ocamlcfg in
 
     let callCCompiler =
-        try string_words (List.assoc "bytecomp_c_compiler" setup)
+        try string_words_noempty (Hashtbl.find setup "bytecomp_c_compiler")
         with Not_found -> raise (CCompilationFailed "no bytecomp_c_compiler returned by ocaml")
         in
     let srcFile = with_optpath copt.ccompile_src_dir file in
-    let dstFile = with_optpath copt.ccompile_dest_dir (wrap_filename (file.filename ^ ".o")) in (* make a .c.o file to avoid collision *)
+    (* make a .c.o file to avoid collision *)
+    let dstFile = copt.ccompile_dest_dir </> o_from_cfile file in
     let args = callCCompiler
              @ copt.ccompile_opts
              @ (Utils.to_include_path_options copt.ccompile_include_paths)
              @ ["-o"; dstFile.filepath]
              @ ["-c"; srcFile.filepath]
         in
-    spawn gconf args
+    spawn args
 
-let runCLinking gconf lopt depfiles =
-    let args = [ "gcc" ]
+let runCLinking lopt depfiles =
+    let args = [ Prog.getCC () ]
              @ (if lopt.clinking_shared then [ "-shared" ] else [])
-             @ ["-o"; lopt.clinking_dest.filepath ]
-             @ depfiles
+             @ ["-o"; fp_to_string lopt.clinking_dest ]
+             @ List.map fp_to_string depfiles
              in
-    match run_with_outputs gconf args with
+    match run_with_outputs args with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
-let runAr gconf dest deps =
-    let args = [ "ar"; "rc"; dest ] @ deps in
-    match run_with_outputs gconf args with
+let runAr dest deps =
+    let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
+    match run_with_outputs args with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
-let runRanlib gconf dest =
-    match run_with_outputs gconf [ "ranlib"; dest ] with
+let runRanlib dest =
+    match run_with_outputs [ Prog.getRanlib (); fp_to_string dest ] with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
 
-let runOcamlLinking gconf lopt libs modules =
+let runOcamlLinking lopt libs modules =
     let commonOpts = lopt.linking_common in
-    let args = [ (if commonOpts.common_build_native then "ocamlopt" else "ocamlc") ^
-                 (if commonOpts.common_use_withopt then ".opt" else "") ]
+    let args = [ if commonOpts.common_build_native then Prog.getOcamlOpt () else Prog.getOcamlC () ]
              @ (if lopt.linking_use_thread then ["-thread"] else [])
              @ (if lopt.linking_lib then ["-a"] else [])
              @ [ "-o"; lopt.linking_dest.filepath ]
              @ (Utils.to_include_path_options lopt.linking_include_paths)
-             @ (List.map filepath_to_string libs)
-             @ (List.map filename_to_string $ List.map (cmc_of_module commonOpts.common_build_native) modules)
+             @ (List.map fp_to_string libs)
+             @ (List.map fn_to_string $ List.map (cmc_of_module commonOpts.common_build_native false false) modules)
              @ (List.concat (List.map (fun x -> [ "-cclib"; x ]) lopt.linking_cclibs))
              in
-    match run_with_outputs gconf args with
+    match run_with_outputs args with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
-let check_compile_needed copt modules_deps modname =
-    let module_desc = Hashtbl.find modules_deps modname in
-
-    let srcMTime = module_desc.module_src_mtime in
-    let intfMTime = module_desc.module_intf_mtime in
-
-    let cmc_of_module = cmc_of_module copt.compile_common.common_build_native in
-    (* cmx/cmo file *)
-    let moduleCmcFile = with_optpath copt.compile_dest_dir (cmc_of_module modname) in
-    let dstFileCMI = with_optpath copt.compile_dest_dir (cmi_of_module modname) in
-
-    let dstExists = Filesystem.exists moduleCmcFile in
-    let dstMTime = Filesystem.getModificationTime moduleCmcFile in
-    let dstCMIMTime = Filesystem.getModificationTime dstFileCMI in
-
-    let depSources = module_desc.dep_cwd_modules in
-    let depDestTime =
-        List.map (fun dep ->
-            let path = with_optpath copt.compile_dest_dir (cmc_of_module dep) in
-            (dep, Filesystem.getModificationTime path)
-        ) depSources in
-
-    let rec loopAbort l =
-        match l with
-        | []        -> None
-        | (f,r)::xs -> let failed = f () in if failed then Some r else loopAbort xs
+let check_destination_valid cstate filety (dest:filepath) =
+    let children =
+        try Dag.getChildren cstate.compilation_filesdag (file_id (filety, dest))
+        with Dag.DagNode_Not_found ->
+            raise (Internal_Inconsistancy ((file_type_to_string filety), ("missing destination: " ^ fp_to_string dest)))
         in
+    let fps = List.map (fun x -> x.fdep_path) children in
+    if Filesystem.exists dest
+        then (
+            let destTime = Filesystem.getModificationTime dest in
+            try Some (List.find (fun path ->
+                let mtime = Filesystem.getModificationTime path in
+                destTime < mtime
+                ) fps)
+            with Not_found -> None
+        ) else
+            Some (fp "")
 
-    let checks =
-        [ (fun () -> not dstExists), ""
-        ; (fun () -> srcMTime >= dstMTime), "source changed"
-        ; (fun () -> intfMTime >= dstCMIMTime), "interface changed"
-        ] @
-        List.map (fun (dep, mt) -> ((fun () -> dstMTime < mt), dep.modname ^ " changed")) depDestTime
-        in
-    loopAbort checks
+(* get a nice reason out of 2 filepath *)
+let reason_from_paths dest changedSrc =
+    if changedSrc.filepath = ""
+        then ""
+        else (
+            let bdest = path_basename dest in
+            let bsrc  = path_basename changedSrc  in
+            match Filetype.get_extension bdest with
+            | FileCMX | FileCMO ->
+                let bml = Filetype.replace_extension bdest FileML in
+                let bmli = Filetype.replace_extension bdest FileMLI in
+                if bml = bsrc then "source changed"
+                else if bmli = bsrc then "interface changed"
+                else ("module " ^ (module_of_filename bsrc).modname ^ " changed")
+            | FileO ->
+                let bc = Filetype.replace_extension bdest FileC in
+                let bh = Filetype.replace_extension bdest FileH in
+                if bc = bsrc then ("C file " ^ fn_to_string bsrc ^ " changed")
+                else if bh = bsrc then ("H file " ^ fn_to_string bsrc ^ " changed")
+                else ("file changed " ^ fp_to_string changedSrc)
+            | _ ->
+                fp_to_string changedSrc ^ " changed"
+        )
 
-let separate_deps gstate =
+let separate_deps project =
     let internal = ref [] in
     let system = ref [] in
-    Hashtbl.iter (fun k v ->
-        if v.dep_type = Internal
+    Hashtbl.iter (fun k dep_type ->
+        if dep_type = Internal
             then internal := k :: !internal
             else system   := k :: !system
-    ) gstate.data_deps;
+    ) project.project_dep_data;
     (!internal, !system)
 
-let get_caml_include_path gstate =
-    try List.assoc "standard_library" gstate.data_gconf.conf_setup
+let get_caml_include_path (project: project_config) =
+    try fp (Hashtbl.find project.project_ocamlcfg "standard_library")
     with Not_found -> raise (CCompilationFailed "no standard_library returned by ocaml")
 
-let get_dep_path gstate dep =
-    let camlIncludePath = get_caml_include_path gstate in
-    match (Hashtbl.find gstate.data_deps dep.dep_name).dep_type with
+let get_dep_path (bstate: build_state) dep =
+    let camlIncludePath = get_caml_include_path bstate.bstate_config in
+    match (Hashtbl.find bstate.bstate_config.project_dep_data dep.dep_name) with
     | Internal -> Dist.createBuildDest (Dist.Library dep.dep_name)
-    | System   -> with_path camlIncludePath (wrap_filename dep.dep_name)
+    | System _ -> with_path camlIncludePath (fn dep.dep_name)
 
 (* compile will process the compilation DAG,
  * which will compile all C sources and OCaml modules.
  *)
-let compile gstate target cstate =
-    let camlIncludePath = get_caml_include_path gstate in
+let compile (bstate: build_state) (cstate: compilation_state) target =
+    let compileDebug = true in
+    let compileProfile = true in
 
-    let extraPaths = List.map (fun (dep,_) -> get_dep_path gstate dep) target.target_builddeps in
+    let camlIncludePath = get_caml_include_path bstate.bstate_config in
+
+    let extraPaths = List.map (fun (dep,_) -> get_dep_path bstate dep) target.target_builddeps in
 
     let compiledModules = ref [] in
-    let nbStep = Dag.length cstate.compilation_dag in
 
-    let taskdep = Dag.taskdep_init (cstate.compilation_dag) in
+    let nbStep = Dag.length cstate.compilation_dag in
+    let taskdep = Dag.taskdep_init cstate.compilation_dag in
 
     let on_task_finish task =
         Dag.taskdep_markDone taskdep task;
@@ -196,26 +214,33 @@ let compile gstate target cstate =
         in
 
     let cCopt =
-        { ccompile_common        = gstate.data_commonopts
-        ; ccompile_opts          = []
+        { ccompile_common        = bstate.bstate_config.project_commonopts
+        ; ccompile_opts          = target.target_copts
         ; ccompile_include_paths = (maybe [] (fun x -> [x]) target.target_cdir) @ [camlIncludePath]
-        ; ccompile_dest_dir      = Some cstate.compilation_builddir.filepath
+        ; ccompile_dest_dir      = cstate.compilation_builddir
         ; ccompile_src_dir       = target.target_cdir
         }
         in
     let moduleCopt =
-        { compile_common        = gstate.data_commonopts
-        ; compile_dest_dir      = Some cstate.compilation_builddir.filepath
+        { compile_common        = bstate.bstate_config.project_commonopts
+        ; compile_dest_dir      = cstate.compilation_builddir
         ; compile_src_dir       = target.target_srcdir
         ; compile_use_thread    = false
-        ; compile_include_paths = List.map filepath_to_string (cstate.compilation_paths @ extraPaths)
+        ; compile_include_paths = cstate.compilation_paths @ extraPaths
         }
         in
 
     (* add a C compilation process *)
     let compile_c taskIndex task cFile =
-        verbose gstate.data_gconf Report "[%d of %d] Compiling C %s\n%!" taskIndex nbStep cFile.filename;
-        AddProcess (task, runCCompile gstate.data_gconf cCopt cFile)
+        let dest = cCopt.ccompile_dest_dir </> o_from_cfile cFile in
+        (match check_destination_valid cstate FileO dest with
+        | None            -> on_task_finish task; Retry
+        | Some srcChanged ->
+            let reason = reason_from_paths dest srcChanged in
+            verbose Report "[%d of %d] Compiling C %s%s\n%!" taskIndex nbStep (fn_to_string cFile)
+                    (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+            AddProcess (task, runCCompile bstate.bstate_config cCopt cFile)
+        )
         in
 
     (* add a OCaml module or interface compilation process *)
@@ -223,27 +248,37 @@ let compile gstate target cstate =
         let useThreads = (Hashtbl.find cstate.compilation_modules m).module_use_threads in
         let copt = if useThreads then { moduleCopt with compile_use_thread = true } else moduleCopt in
 
-        (match check_compile_needed copt cstate.compilation_modules m with
-        | None        -> on_task_finish task; Retry
-        | Some reason -> (
+        (*match check_dest_is_valid *)
+        let dest = copt.compile_dest_dir </> cmx_of_module false false m in
+        (match check_destination_valid cstate FileCMX dest with
+        | None            -> on_task_finish task; Retry
+        | Some srcChanged -> (
+                let reason = reason_from_paths dest srcChanged in
                 let verb = if isIntf then "Intfing" else "Compiling" in
-                verbose gstate.data_gconf Report "[%d of %d] %s %s%s\n%!" taskIndex nbStep verb (m.modname)
+                verbose Report "[%d of %d] %s %s%s\n%!" taskIndex nbStep verb (m.modname)
                     (if reason <> "" then "    ( " ^ reason ^ " )" else "");
-                AddProcess (task, runOcamlCompile gstate.data_gconf copt isIntf m)
+                if isIntf
+                    then AddProcess (task, runOcamlCompile copt isIntf false false m)
+                    else AddTask (task,
+                              [fun () -> runOcamlCompile copt isIntf false false m]
+                            @ (if compileDebug then [fun () -> runOcamlCompile copt isIntf true false m] else [])
+                            @ (if compileProfile then [fun () -> runOcamlCompile copt isIntf false true m] else [])
+                            )
                 )
-        );
+        )
         in
     (* a compilation task has finished, terminate the process,
      * and process the result
      *)
-    let schedule_finish (task, st) =
+    let schedule_finish (task, st) isDone =
         (match terminate_process (task, st) with
-        | Success (_, warnings) -> print_warnings warnings
+        | Success (_, warnings) -> if isDone then print_warnings warnings
         | Failure er            -> match task with
                                    | CompileC _ -> raise (CCompilationFailed er)
                                    | _          -> raise (CompilationFailed er)
         );
-        on_task_finish task
+        if isDone then
+            on_task_finish task
         in
 
     (* when the scheduler has some room, we get the next task from
@@ -264,65 +299,105 @@ let compile gstate target cstate =
         if Dag.taskdep_isComplete taskdep
             then Terminate
             else match Dag.taskdep_getnext taskdep with
-                 | None      -> WaitingProcess
+                 | None      -> WaitingTask
                  | Some task -> dispatch task
         in
 
-    schedule gstate.data_buildopts.opt_nb_jobs_par schedule_idle schedule_finish;
+    schedule bstate.bstate_config.project_buildopts.opt_nb_jobs_par schedule_idle schedule_finish;
     List.rev !compiledModules
 
-let linkCStuff gstate cstate clibName =
-    let soFile = with_path cstate.compilation_builddir.filepath (wrap_filename ("dll" ^ clibName ^ ".so")) in
-    let aFile = cstate.compilation_builddir.filepath </> ("lib" ^ clibName ^ ".a") in
+let linkCStuff bstate cstate clibName =
+    let soFile = cstate.compilation_builddir </> fn ("dll" ^ clibName ^ ".so") in
+    let aFile = cstate.compilation_builddir </> fn ("lib" ^ clibName ^ ".a") in
 
-    let clopts = { clinking_common = gstate.data_commonopts
+    let clopts = { clinking_common = bstate.bstate_config.project_commonopts
                  ; clinking_shared = true
                  ; clinking_dest   = soFile
                  } in
-    let cdepFiles = List.map (fun x -> cstate.compilation_builddir.filepath </> (x.filename ^ ".o")) cstate.compilation_csources in
-    let warnings = runCLinking gstate.data_gconf clopts cdepFiles in
-    print_warnings warnings;
-    print_warnings (runAr gstate.data_gconf aFile cdepFiles);
-    print_warnings (runRanlib gstate.data_gconf aFile);
+    let cdepFiles = List.map (fun x -> cstate.compilation_builddir </> fn (fn_to_string x ^ ".o")) cstate.compilation_csources in
+    print_warnings (runCLinking clopts cdepFiles);
+    print_warnings (runAr aFile cdepFiles);
+    print_warnings (runRanlib aFile);
     ()
+
+let linking bstate cstate target compiled =
+    let extraPaths =
+        if is_target_lib target
+            then []
+            else List.map (fun (dep,_) -> get_dep_path bstate dep) target.target_builddeps
+        in
+
+    let (selfDeps, systemDeps) = separate_deps bstate.bstate_config in
+    let selfLibDirs = List.map (fun dep -> Dist.createBuildDest (Dist.Library dep)) selfDeps in
+
+    let dest =
+        if is_target_lib target
+            then (
+                with_path cstate.compilation_builddir (cmxa_of_lib target.target_name)
+            ) else (
+                let outputName = Utils.to_exe_name target.target_name in
+                cstate.compilation_builddir </> outputName
+            )
+        in
+    verbose Report "Linking %s\n%!" (fp_to_string dest);
+
+    let useThreadLib = List.mem "threads" $ List.map (fun (dep,_) -> dep.dep_name) target.target_builddeps in
+    let useThreads = Hashtbl.fold (fun _ v a -> v.module_use_threads || a) cstate.compilation_modules useThreadLib in
+
+    let cclibs =
+        if is_target_lib target
+            then (if cstate.compilation_csources <> [] then [target.target_name] else [])
+            else []
+        in
+
+    let lopts = { linking_common        = bstate.bstate_config.project_commonopts
+                ; linking_lib           = is_target_lib target
+                ; linking_dest          = dest
+                ; linking_use_thread    = useThreads
+                ; linking_cclibs        = List.map (fun x -> "-L" ^ fp_to_string x) selfLibDirs
+                                        @ List.map (fun x -> "-l" ^ x) (target.target_clibs @ cclibs)
+                ; linking_include_paths = [cstate.compilation_builddir] @ extraPaths
+                } in
+
+    let childrenDeps_wrapped = Dag.getChildren_full bstate.bstate_config.project_deps_dag (Prepare.Target target.target_name) in
+    let childrenDeps =
+        List.fold_left (fun acc t ->
+            match t with
+            | Prepare.Target _       -> acc
+            | Prepare.Dependency dep -> dep :: acc
+        ) [] childrenDeps_wrapped
+        in
+
+    let buildDeps =
+        if is_target_lib target
+            then []
+            else List.map (fun dep ->
+                    (* map to include path and a cma/cmxa *)
+                    let path = get_dep_path bstate dep in
+                    (* FIXME. file name is "hardcoded"
+                     * proper way is not to call cmxa_of_lib, but look into the META file
+                     * for the archive line for native or bytecode
+                     *)
+                    in_current_dir (cmxa_of_lib dep.dep_name)
+                ) childrenDeps
+        in
+    if is_target_lib target then (
+        if cstate.compilation_csources <> []
+            then linkCStuff bstate cstate target.target_name; (* FIXME should be only the library subname *)
+    );
+
+    print_warnings (runOcamlLinking lopts buildDeps compiled)
 
 (* compile and link a library
  *)
-let compileLib gstate lib =
-    let linklib cstate compiled =
-        let dest = with_path cstate.compilation_builddir.filepath (cmxa_of_lib lib.lib_name) in
-
-        let useThreadLib = List.mem "threads" $ List.map (fun (x,_) -> x.dep_name) lib.lib_builddeps in
-        let useThreads = Hashtbl.fold (fun _ v a -> v.module_use_threads || a) cstate.compilation_modules useThreadLib in
-
-        let cclibs = if cstate.compilation_csources <> [] then [lib.lib_name] else [] in
-        let lopts = { linking_common        = gstate.data_commonopts
-                    ; linking_lib           = true
-                    ; linking_dest          = dest
-                    ; linking_use_thread    = useThreads
-                    ; linking_cclibs        = List.map (fun x -> "-l" ^ x) cclibs 
-                    ; linking_include_paths = [cstate.compilation_builddir.filepath]
-                    } in
-        if cstate.compilation_csources <> []
-            then linkCStuff gstate cstate gstate.data_projFile.obuild_name;
-
-        let warnings = runOcamlLinking gstate.data_gconf lopts [] compiled in
-        print_warnings warnings;
-        ()
-        in
-
-    verbose gstate.data_gconf Report "Building library %s\n" lib.lib_name;
-    let buildDir = Dist.createBuildDest (Dist.Library lib.lib_name) in
-    let target = { target_name      = "lib-" ^ lib.lib_name
-                 ; target_srcdir    = lib.lib_srcdir
-                 ; target_cdir      = lib.lib_cdir
-                 ; target_csources  = lib.lib_csources
-                 ; target_builddeps = lib.lib_builddeps
-                 } in
-    let cstate = prepare_compilation gstate buildDir target lib.lib_modules in
-    let compiled = compile gstate target cstate in
-    verbose gstate.data_gconf Report "Linking library %s\n" lib.lib_name;
-    linklib cstate compiled;
+let buildLib bstate lib =
+    verbose Report "Building library %s\n" lib.Project.lib_name;
+    let target = Project.lib_to_target lib in
+    let buildDir = Dist.createBuildDest (Dist.Library lib.Project.lib_name) in
+    let cstate = prepare_target bstate buildDir target lib.Project.lib_modules in
+    let compiled = compile bstate cstate target in
+    verbose Report "Linking library %s\n" lib.Project.lib_name;
+    linking bstate cstate target compiled;
     ()
 
 (* compile and link an executable
@@ -331,66 +406,12 @@ let compileLib gstate lib =
  * here we compile every modules and link the result at the end.
  *
  *)
-let compileExe gstate exe =
-    verbose gstate.data_gconf Report "Building executable %s\n" (exe.exe_name);
-
-    let buildDir = Dist.createBuildDest (Dist.Executable exe.exe_name) in
-
-    let extraPaths = List.map (fun (dep,_) -> get_dep_path gstate dep) exe.exe_builddeps in
-
-    let (selfDeps, systemDeps) = separate_deps gstate in
-    let selfLibDirs = List.map (fun dep -> Dist.createBuildDest (Dist.Library dep)) selfDeps in
-
-    let linking cstate compiled =
-        let outputName = wrap_filename (exe.exe_name ^ (if Utils.is_windows then ".exe" else "")) in
-        let dest = with_path cstate.compilation_builddir.filepath outputName in
-        verbose gstate.data_gconf Report "Linking %s\n%!" dest.filepath;
-
-        let useThreadLib =
-            try let _ = List.find (fun (dep,_) -> dep.dep_name = "threads") exe.exe_builddeps in true
-            with _ -> false
-            in
-        let useThreads = Hashtbl.fold (fun _ v a -> v.module_use_threads || a) cstate.compilation_modules useThreadLib in
-        let lopts = { linking_common        = gstate.data_commonopts
-                    ; linking_lib           = false
-                    ; linking_dest          = dest
-                    ; linking_cclibs        = List.map (fun x -> "-L" ^ x.filepath) selfLibDirs
-                    ; linking_use_thread    = useThreads
-                    ; linking_include_paths = List.map filepath_to_string ([cstate.compilation_builddir] @ extraPaths)
-                    } in
-
-        List.iter (fun (dep,_) ->
-            verbose gstate.data_gconf Report "Depending on %s(%s)\n%!" dep.dep_name  (String.concat "." dep.dep_subname)
-        ) exe.exe_builddeps;
-
-        let buildDeps =
-            List.map (fun (dep,_) ->
-                let path = get_dep_path gstate dep in
-                with_path "" (cmxa_of_lib dep.dep_name)
-            ) exe.exe_builddeps
-            in
-        (*
-        let extraSystemDeps = List.map (fun sysdep ->
-            match (Hashtbl.find gstate.data_deps sysdep).dep_meta with
-            | None      -> failwith ("internal error: system library without a meta " ^ sysdep)
-            | Some meta -> (*Meta.find meta*)
-        ) systemDeps in
-                      (*@ (List.map (fun libDir -> with_path libDir (cmxa_of_lib
-                       * gstate.data_projFile.obuild_name)) libDirs)*)
-                      in
-                      *)
-        let warnings = runOcamlLinking gstate.data_gconf lopts buildDeps compiled in
-        print_warnings warnings;
-        ()
-        in
+let buildExe bstate exe =
+    verbose Report "Building executable %s\n" (exe.Project.exe_name);
+    let target = Project.exe_to_target exe in
+    let buildDir = Dist.createBuildDest (Dist.Executable exe.Project.exe_name) in
     (* get modules dependencies *)
-    let target = { target_name      = "exe-" ^ exe.exe_name
-                 ; target_srcdir    = exe.exe_srcdir
-                 ; target_cdir      = exe.exe_cdir
-                 ; target_csources  = exe.exe_csources
-                 ; target_builddeps = exe.exe_builddeps
-                 } in
-    let cstate   = prepare_compilation gstate buildDir target [module_of_filename (wrap_filename exe.exe_main)] in
-    let compiled = compile gstate target cstate in
-    linking cstate compiled;
+    let cstate   = prepare_target bstate buildDir target [module_of_filename (fn exe.Project.exe_main)] in
+    let compiled = compile bstate cstate target in
+    linking bstate cstate target compiled;
     ()

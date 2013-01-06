@@ -31,6 +31,36 @@ let removeDirContent wpath =
 
 let removeDir path = removeDirContent path; Unix.rmdir path.filepath; ()
 
+let list_dir path =
+    let accum = ref [] in
+    let dirhandle = Unix.opendir path.filepath in
+    (try
+        while true do
+            let ent = Unix.readdir dirhandle in
+            if ent <> ".."
+                then accum := fn ent :: !accum
+        done;
+    with End_of_file ->
+        ()
+    );
+    Unix.closedir dirhandle;
+    !accum
+
+let list_dir_path path =
+    let accum = ref [] in
+    let dirhandle = Unix.opendir path.filepath in
+    (try
+        while true do
+            let ent = Unix.readdir dirhandle in
+            if ent <> ".."
+                then accum := (path </> fn ent) :: !accum
+        done;
+    with End_of_file ->
+        ()
+    );
+    Unix.closedir dirhandle;
+    !accum
+
 let getModificationTime path =
    try (Unix.stat path.filepath).Unix.st_mtime
    with _ -> 0.0

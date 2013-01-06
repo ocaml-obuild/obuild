@@ -4,7 +4,7 @@ description:
   o'build o'build ye source
   .
   simple completly declarative build system
-license: GPL
+license: BSD
 author: Vincent Hanquez <tab@snarc.org>
 obuild-ver: 1
 homepage: http://github.com/vincenthz/obuild

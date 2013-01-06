@@ -1,6 +1,6 @@
 #!/bin/sh
 
-modules="types ext dag utils filepath project helper filesystem meta dist prog prepare configure build obuild"
+modules="gconf types ext dag filepath filetype modname utils target project helper process filesystem tracker meta dist prog prepare configure building build obuild"
 libs="unix"
 OCAMLOPT=ocamlopt.opt
 

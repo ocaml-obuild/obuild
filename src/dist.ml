@@ -6,11 +6,11 @@ exception NotADirectory
 exception DoesntExist
 exception SetupDoesntExist
 
-let distPath = wrap_filepath "dist"
-let setupPath = wrap_filepath (distPath.filepath </> "setup")
+let distPath = fp "dist"
+let setupPath = distPath </> fn "setup"
 
 let check f =
-    if Sys.file_exists distPath.filepath
+    if Filesystem.exists distPath
         then (if Sys.is_directory distPath.filepath
                 then ()
                 else raise NotADirectory
@@ -18,19 +18,19 @@ let check f =
             f ()
 
 let checkOrFail () = check (fun () -> raise DoesntExist)
-let checkOrCreate () = check (fun () -> Unix.mkdir distPath.filepath 0o755)
+let checkOrCreate () = check (fun () -> let _ = Filesystem.mkdirSafe distPath 0o755 in ())
 
 type buildType = Autogen | Dot | Library of string | Executable of string
 
 let createBuildDest buildtype =
-    let buildDir = wrap_filepath (distPath.filepath </> "build") in
+    let buildDir = distPath </> fn "build" in
     let _ = Filesystem.mkdirSafe buildDir 0o755 in
     let destDir =
         match buildtype with
-        | Library l    -> wrap_filepath (buildDir.filepath </> "lib-" ^ l)
-        | Dot          -> wrap_filepath (buildDir.filepath </> "dot")
-        | Autogen      -> wrap_filepath (buildDir.filepath </> "autogen")
-        | Executable e -> wrap_filepath (buildDir.filepath </> e)
+        | Library l    -> buildDir </> fn ("lib-" ^ l)
+        | Dot          -> buildDir </> fn ("dot")
+        | Autogen      -> buildDir </> fn ("autogen")
+        | Executable e -> buildDir </> fn e
         in
     let _ = Filesystem.mkdirSafe destDir 0o755 in
     destDir

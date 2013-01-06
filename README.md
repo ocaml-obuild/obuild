@@ -6,7 +6,6 @@ A parallel, incremental and declarative build system for ocaml.
 Design
 ------
 
-The design is completely based on the building part of cabal-install.
 The goal is to make a very simple build system for users and developers
 of OCaml library and programs.
 
@@ -14,10 +13,23 @@ Obuild acts as building black box: user declares only what they want to
 build and with which sources, and the build system will consistantly
 build it.
 
-There's no way to build things that obuild have no been designed to do, on
+The design is based on cabal, and borrow most of the layout and way of
+working, adapting parts where necessary to support OCaml fully.
+
+There's no way to build things that obuild have not been designed to do, on
 purpose, so that the experience provided is consistant, and all future
 improvements to obuild benefits every single programs and libraries using the
 obuild build system.
+
+Feature
+-------
+
+* Incremental & Parallel build system. only rebuild what's necessary, consistently.
+* Descriptive configuration file.
+* Easy for developers: no rules to mess about, just describe what you want.
+* No building dependency apart from ocaml's stdlib: easy to build
+* No binary dependencies apart from ocaml compilers
+* Ocamlfind like support integrated for faster compilation
 
 How to build a project using obuild
 -----------------------------------
@@ -70,7 +82,7 @@ Declaring an executable
       src-dir: src
       build-deps: unix
 
-Declarating a library
+Declaring a library
 
     library mylib
       modules: Module1, Module2
