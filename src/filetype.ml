@@ -3,6 +3,7 @@ open Filepath
 type filetype = FileML
               | FileMLI
               | FileMLY
+              | FileMLL
               | FileH
               | FileC
               | FileCMX
@@ -10,6 +11,7 @@ type filetype = FileML
               | FileCMI
               | FileCMA
               | FileCMXA
+              | FileCMXS
               | FileO
               | FileA
               | FileSO
@@ -21,6 +23,7 @@ let file_type_of_string s =
     | "ml"   -> FileML
     | "mli"  -> FileMLI
     | "mly"  -> FileMLY
+    | "mll"  -> FileMLL
     | "h"    -> FileH
     | "c"    -> FileC
     | "cmx"  -> FileCMX
@@ -28,6 +31,7 @@ let file_type_of_string s =
     | "cmi"  -> FileCMI
     | "cma"  -> FileCMA
     | "cmxa" -> FileCMXA
+    | "cmxs" -> FileCMXS
     | "o"    -> FileO
     | "a"    -> FileA
     | "so"   -> FileSO
@@ -39,6 +43,7 @@ let file_type_to_string fty =
     | FileML      -> "ml"
     | FileMLI     -> "mli"
     | FileMLY     -> "mly"
+    | FileMLL     -> "mll"
     | FileH       -> "h"
     | FileC       -> "c"
     | FileCMX     -> "cmx"
@@ -46,6 +51,7 @@ let file_type_to_string fty =
     | FileCMI     -> "cmi"
     | FileCMA     -> "cma"
     | FileCMXA    -> "cmxa"
+    | FileCMXS    -> "cmxs"
     | FileO       -> "o"
     | FileA       -> "a"
     | FileSO      -> "so"
@@ -56,6 +62,7 @@ type file_id = { fdep_ty   : filetype
                ; fdep_path : filepath
                }
 let file_id (ty,p) = { fdep_ty = ty; fdep_path = p }
+let un_file_id fdep = (fdep.fdep_ty, fdep.fdep_path)
 
 let get_extension (name : filename) : filetype =
     try

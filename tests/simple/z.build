@@ -1,0 +1,3 @@
+#!/bin/sh
+
+${OBUILDSIMPLE} --cfile z_stubs.c --clib z z.ml

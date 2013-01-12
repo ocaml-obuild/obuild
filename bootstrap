@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
-modules="gconf types ext dag filepath filetype modname utils target project helper process filesystem tracker meta dist prog prepare configure building build obuild"
+modules="gconf ext types dag taskdep dagutils filepath filetype modname hier filesystem expr pp utils helper process findlibConf prog dependencies target project meta dist analyze sdist doc configure install prepare buildprogs build init exception help obuild"
 libs="unix"
-OCAMLOPT=ocamlopt.opt
+OCAMLOPT="ocamlopt.opt -g"
 
 set -e 
 time (cd src;
@@ -17,7 +17,10 @@ time (cd src;
 	rm *.cmi *.cmx *.o
 	mv obuild.bootstrap ..
 )
+export OCAMLRUNPARAM=b
 ./obuild.bootstrap clean
 ./obuild.bootstrap configure
 time ./obuild.bootstrap build
-# rm obuild.bootstrap
+if [ -x dist/build/obuild/obuild ]; then
+	rm obuild.bootstrap
+fi

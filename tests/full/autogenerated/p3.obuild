@@ -1,0 +1,6 @@
+name: p3
+version: 9.1.23
+obuild-ver: 1
+
+executable p3
+  main-is: p3.ml

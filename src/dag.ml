@@ -1,14 +1,17 @@
 (* simple bi-directional DAG implementation using shallow link*)
 open Printf
-open Ext
 
 (* represent a node that point shallowly to children and parents *)
-type 'a dagnode = { mutable parents  : 'a list
-                  ; mutable children : 'a list
-                  }
+type 'a dagnode =
+    { mutable parents  : 'a list
+    ; mutable children : 'a list
+    }
 
-(* TODO add a 'a <-> int table, so that indexing can be done on int instead *)
-type 'a t = { nodes : ('a, 'a dagnode) Hashtbl.t }
+(* TODO add a 'a <-> int table, so that indexing can be done on int instead and
+   that lists can be replaced by set *)
+type 'a t =
+    { nodes : ('a, 'a dagnode) Hashtbl.t
+    }
 
 let init () = { nodes = Hashtbl.create 16 }
 
@@ -19,15 +22,18 @@ let addEdge a b dag =
     let maNode = try Some (Hashtbl.find dag.nodes a) with Not_found -> None in
     let mbNode = try Some (Hashtbl.find dag.nodes b) with Not_found -> None in
     (match (maNode, mbNode) with
-    | None, None       -> Hashtbl.add dag.nodes a { parents = []; children = [b] };
-                          Hashtbl.add dag.nodes b { parents = [a]; children = [] }
-    | Some aNode, None -> aNode.children <- b :: aNode.children;
-                          Hashtbl.add dag.nodes b { parents = [a]; children = [] }
-    | None, Some bNode -> bNode.parents <- a :: bNode.parents;
-                          Hashtbl.add dag.nodes a { parents = []; children = [b] }
+    | None, None       ->
+        Hashtbl.add dag.nodes a { parents = []; children = [b] };
+        Hashtbl.add dag.nodes b { parents = [a]; children = [] }
+    | Some aNode, None ->
+        if not (List.mem b aNode.children) then aNode.children <- b :: aNode.children;
+        Hashtbl.add dag.nodes b { parents = [a]; children = [] }
+    | None, Some bNode ->
+        if not (List.mem a bNode.children) then bNode.parents <- a :: bNode.parents;
+        Hashtbl.add dag.nodes a { parents = []; children = [b] }
     | Some aNode, Some bNode ->
-                          aNode.children <- b :: aNode.children;
-                          bNode.parents <- a :: bNode.parents
+        if not (List.mem b aNode.children) then aNode.children <- b :: aNode.children;
+        if not (List.mem a bNode.children) then bNode.parents <- a :: bNode.parents
     );
     ()
 
@@ -41,6 +47,24 @@ let addNode a dag =
 let addNode_exclusive a dag =
     try let _ = Hashtbl.find dag.nodes a in raise DagNode_Already_Exists
     with Not_found -> Hashtbl.add dag.nodes a { parents = []; children = [] }
+
+(* has edge from a to b *)
+let hasEdge a b dag =
+    let maNode = try Some (Hashtbl.find dag.nodes a) with Not_found -> None in
+    let mbNode = try Some (Hashtbl.find dag.nodes b) with Not_found -> None in
+    match (maNode, mbNode) with
+    | Some aNode, Some bNode -> List.mem b aNode.children && List.mem a bNode.parents
+    | _                      -> false
+
+let delEdge a b dag =
+    let maNode = try Some (Hashtbl.find dag.nodes a) with Not_found -> None in
+    let mbNode = try Some (Hashtbl.find dag.nodes b) with Not_found -> None in
+    (match (maNode, mbNode) with
+    | Some aNode, Some bNode ->
+        aNode.children <- List.filter (fun x -> x <> b) aNode.children;
+        bNode.parents  <- List.filter (fun x -> x <> a) bNode.parents
+    | _ -> ()
+    )
 
 let addEdges l dag =
     List.iter (fun (n1, n2) -> addEdge n1 n2 dag) l
@@ -96,96 +120,43 @@ let rec isChildren_full dag a b =
         acc || isChildren_full dag child b
     ) false children
 
-(* this is a simple task dependency 'scheduler' *)
-type 'a taskdep =
-    { taskdep_dag               : 'a t
-    ; taskdep_nbSteps           : int
-    ; taskdep_done              : ('a, unit) Hashtbl.t
-    ; mutable taskdep_curStep   : int
-    ; mutable taskdep_nextTasks : 'a list
-    }
-
-(* init a new taskdep from a dag *)
-let taskdep_init dag =
-    { taskdep_dag       = dag
-    ; taskdep_nbSteps   = length dag
-    ; taskdep_curStep   = 1
-    ; taskdep_done      = Hashtbl.create 16
-    ; taskdep_nextTasks = getLeaves dag
-    }
-
-let taskdep_getnext_index taskdep =
-    let c = taskdep.taskdep_curStep in
-    taskdep.taskdep_curStep <- taskdep.taskdep_curStep + 1;
-    c
-
-(* get next task from the task dependency, and removes it from the next list *)
-let taskdep_getnext taskdep =
-    let nexts = taskdep.taskdep_nextTasks in
-    match nexts with
-    | []       -> None
-    | task::xs ->
-        taskdep.taskdep_nextTasks <- xs;
-        Some (taskdep_getnext_index taskdep, task)
-
-(* just like taskdep_getnext except we let a user function choose
- * the next elements between all the possible tasks
- *)
-let taskdep_getnext_choice f taskdep =
-    let nexts = taskdep.taskdep_nextTasks in
-    match nexts with
-    | [] -> None
-    | l  ->
-        let task = f l in
-        taskdep.taskdep_nextTasks <- list_remove task l;
-        Some (taskdep_getnext_index taskdep, task)
-    
-let taskdep_markDone taskdep step =
-    Hashtbl.add taskdep.taskdep_done step ();
-    (* check if any parents is now free to complete *)
-    let parents = getParents taskdep.taskdep_dag step in
-    List.iter (fun parent ->
-        let children = getChildren taskdep.taskdep_dag parent in
-        let allDone  = List.for_all (fun child -> Hashtbl.mem taskdep.taskdep_done child) children in
-        if allDone then
-            taskdep.taskdep_nextTasks <- taskdep.taskdep_nextTasks @ [parent]
-    ) parents
-
-let taskdep_isComplete taskdep =
-    Hashtbl.length taskdep.taskdep_done = taskdep.taskdep_nbSteps
-
-let taskdep_dump a_to_string taskdep =
-    printf "tasks done: [%s]\n" (String.concat "," (List.map a_to_string (hashtbl_keys taskdep.taskdep_done)));
-    printf "tasks next: [%s]\n" (String.concat "," (List.map a_to_string taskdep.taskdep_nextTasks))
-
-let iter f dag =
-    let tdep = taskdep_init dag in
-    while not (taskdep_isComplete tdep) do
-        match taskdep_getnext tdep with
-        | None          -> failwith "taskdep dag next didn't work"
-        | Some (_,task) -> f task; taskdep_markDone tdep task
-    done
-
-let iteri f dag =
-    let tdep = taskdep_init dag in
-    while not (taskdep_isComplete tdep) do
-        match taskdep_getnext tdep with
-        | None            -> failwith "taskdep dag next didn't work"
-        | Some (idx,task) -> f idx task; taskdep_markDone tdep task
-    done
-
-let linearize dag =
-    let tdep = taskdep_init dag in
-    let rec loop () =
-        if taskdep_isComplete tdep
-            then []
-            else (
-                match taskdep_getnext tdep with
-                | None            -> failwith "taskdep dag next didn't work"
-                | Some (idx,task) -> task :: loop ()
-            )
+let subset dag roots =
+    let subdag = init () in
+    let rec loop node =
+        addNode node subdag;
+        let children = getChildren dag node in
+        List.iter (fun child -> addEdge node child subdag; loop child) children
         in
-    loop ()
+    List.iter (fun root -> loop root) roots;
+    subdag
+
+let copy dag =
+    let nodes = Hashtbl.fold (fun k _ acc -> k :: acc) dag.nodes [] in
+    let dag2 = init () in
+    let copy_node node =
+        addNode node dag2;
+        let children = getChildren dag node in
+        addChildrenEdges node children dag2
+        in
+    List.iter (fun node -> copy_node node) nodes;
+    dag2
+
+(* o(v^3) use with care *)
+let transitive_reduction dag =
+    let reducedDag = copy dag in
+    (* this is sub optimal, as we re-lookup nodes everytimes in hasEdge AND delEdge.
+     * would go away automatically when having the lookup dict with sets. *)
+    let nodes = Hashtbl.fold (fun k _ acc -> k :: acc) dag.nodes [] in
+    List.iter (fun x ->
+        List.iter (fun y ->
+            List.iter (fun z ->
+                if hasEdge x y dag && hasEdge y z dag
+                    then delEdge x z reducedDag
+                    else ()
+            ) nodes
+        ) nodes
+    ) nodes;
+    reducedDag
 
 (* this is for debugging the DAG.
  * dump the dag links and node in a textual format *)
@@ -211,6 +182,15 @@ let toDot a_to_string name fromLeaf dag =
     done;
 
     append ("digraph " ^ sanitizeName ^ " {\n");
+
+    let list_iteri f list =
+        let rec loop i l =
+            match l with
+            | []    -> ()
+            | x::xs -> f i x; loop (i+1) xs
+            in
+        loop 1 list
+        in
 
     list_iteri (fun i n ->
         Hashtbl.add dotIndex n i;

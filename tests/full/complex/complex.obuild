@@ -1,0 +1,23 @@
+name: complex
+version: 1.0
+obuild-ver: 1
+
+
+library complex
+  src-dir: lib
+  modules: Math, Imaginary
+  
+  sub real
+    src-dir: lib_real
+    modules: Foo, Bar
+    build-deps: complex
+
+executable complex
+  src-dir: src
+  main-is: main1.ml
+  build-deps: complex.real
+
+executable complex2
+  src-dir: src
+  main-is: main.ml
+  build-deps: complex

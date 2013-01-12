@@ -1,0 +1,7 @@
+name: with-c
+version: 1.0
+obuild-ver: 1
+
+executable withc
+  main-is: ccall.ml
+  c-sources: cbits.c

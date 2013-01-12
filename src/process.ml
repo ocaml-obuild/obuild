@@ -20,7 +20,8 @@ type spawn = unit -> process_state
  * and returns a new process_state
  *)
 let spawn args =
-    verbose DebugPlus "  [CMD]: %s\n%!" (String.concat " " args);
+    let maybeEscape s = try let _ = String.index s ' ' in "\"" ^ s ^ "\"" with Not_found -> s in
+    verbose DebugPlus "  [CMD]: %s\n%!" (String.concat " " (List.map maybeEscape args));
     let (r1,w1) = Unix.pipe () in
     let (r2,w2) = Unix.pipe () in
     let argv = Array.of_list args in
@@ -106,7 +107,7 @@ let run_with_outputs args =
 type 'a schedule_op = Terminate
                     | WaitingTask
                     | AddProcess of ('a * process_state)
-                    | AddTask of ('a * spawn list)
+                    | AddTask of ('a * (spawn list list))
                     | Retry
 
 let schedule_op_to_string op =
@@ -116,6 +117,16 @@ let schedule_op_to_string op =
     | AddProcess (_,_) -> "add-process"
     | AddTask    (_,_) -> "add-task"
     | Retry            -> "retry"
+
+type 'a schedule_task_group =
+    { mutable group_completion : int
+    ; mutable group_next : ('a * spawn) list list
+    }
+
+type schedule_stats =
+    { mutable max_runqueue : int
+    ; mutable nb_processes : int
+    }
 
 (* this is a simple one thread loop to schedule
  * multiple tasks (forked) until they terminate
@@ -141,19 +152,40 @@ let schedule j idle finish =
         | WaitingTask    -> waitingTask := true
         | Terminate      -> terminate := true
         | AddTask (t,ps) ->
-                tasks := (t,ref (List.length ps)) :: !tasks;
-                waitqueue := List.map (fun p -> (t,p)) ps @ !waitqueue;
+            (match List.map (List.map (fun p -> (t, p))) ps with
+            | []           -> failwith "internal error: empty task added to the scheduler"
+            | psFirst::pss ->
+                let tg =
+                    { group_completion = List.length psFirst
+                    ; group_next       = pss
+                    }
+                    in
+                tasks := (t,tg) :: !tasks;
+                waitqueue := psFirst @ !waitqueue;
+            )
+        in
+    let stats =
+        { max_runqueue = 0
+        ; nb_processes = 0
+        }
+        in
+    let incr_process () = stats.nb_processes <- stats.nb_processes + 1 in
+    let set_max () =
+        let m = List.length !runqueue in
+        if stats.max_runqueue < m then (
+            stats.max_runqueue <- m
+        )
         in
 
-    (* add more bulletprofing to prevent busy looping for no reason
+    (* add more bulletproofing to prevent busy looping for no reason
      * if user of this api is not behaving properly *)
     while not !terminate || !runqueue <> [] || !waitqueue <> [] do
-
         while not !terminate && not !waitingTask && List.length !runqueue < j do
             match !waitqueue with
             | []        -> retry_idle ()
-            | (t,p)::xs -> runqueue := (t,p ()) :: !runqueue; waitqueue := xs;
+            | (t,p)::xs -> incr_process (); runqueue := (t,p ()) :: !runqueue; waitqueue := xs;
         done;
+        set_max ();
 
         if List.length !runqueue > 0
             then
@@ -161,11 +193,21 @@ let schedule j idle finish =
                 let (doneTask,_) = doneSt in
                 let finishedTask =
                     try
-                        let r = List.assoc doneTask !tasks in
-                        r := !r-1;
-                        if !r = 0
-                            then (tasks := List.filter (fun (t,_) -> t <> doneTask) !tasks; true)
-                            else false
+                        let tg = List.assoc doneTask !tasks in
+                        tg.group_completion <- tg.group_completion - 1;
+                        if tg.group_completion = 0
+                            then (
+                                match tg.group_next with
+                                | [] -> 
+                                    tasks := List.filter (fun (t,_) -> t <> doneTask) !tasks;
+                                    true
+                                | g :: gs ->
+                                    tg.group_completion <- List.length g;
+                                    tg.group_next <- gs;
+                                    waitqueue := g @ !waitqueue;
+                                    false
+                            ) else
+                                false
                     with Not_found ->
                         true
                     in
@@ -175,4 +217,4 @@ let schedule j idle finish =
             else
                 assert (!terminate)
     done;
-    ()
+    stats

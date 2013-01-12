@@ -1,22 +1,47 @@
+open Ext
+
+exception EmptyLibName
+
 type flag_tweak = SetFlag of string | ClearFlag of string
 
-type dep_expr = Eq of string
-              | Gt of string
-              | Ge of string
-              | Le of string
-              | Lt of string
-              | And of (dep_expr * dep_expr)
-              | Or of (dep_expr * dep_expr)
+type flag_name = string
 
-type dep_constraint = dep_expr
+type exe_name = string
 
-type dep_main_name = string
+(* represent a library in a form abc[.def.xyz] *)
+type lib_name = { lib_main_name : string; lib_subnames : string list } 
 
-(* represent a dependency in a form abc[.def.xyz] *)
-type dep_name = { dep_name : dep_main_name
-                ; dep_subname : string list
-                }
+let lib_name_of_string s =
+    match string_split '.' s with
+    | []    -> raise EmptyLibName
+    | x::xs -> { lib_main_name = x; lib_subnames = xs }
 
-type lib_name = { lib_name : string } 
+let lib_name_to_string lname = String.concat "." (lname.lib_main_name :: lname.lib_subnames)
+let lib_name_to_string_nodes lname = lname.lib_main_name :: lname.lib_subnames
 
-type dependency = dep_name * (dep_constraint option)
+let lib_name_append lname sub = { lname with lib_subnames = lname.lib_subnames @ [sub] }
+
+type name =
+      LibName of lib_name
+    | ExeName of exe_name
+    | TestName of exe_name
+    | BenchName of exe_name
+    | ExampleName of exe_name
+
+let name_to_string name =
+    match name with
+    | ExeName e   -> "exe-" ^ e
+    | BenchName e -> "bench-" ^ e
+    | TestName e  -> "test-" ^ e
+    | ExampleName e -> "example-" ^ e
+    | LibName l   -> "lib-" ^ lib_name_to_string l
+
+type ocaml_compilation_option = Normal | WithDebug | WithProf
+type ocaml_compiled_type = ByteCode | Native
+type ocaml_compilation_mode = Interface | Compiled of ocaml_compiled_type
+
+let extDP compileType =
+    match compileType with
+    | Normal    -> ""
+    | WithDebug -> ".d"
+    | WithProf  -> ".p"

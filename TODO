@@ -1,9 +1,0 @@
-* flag support in project description (if support)
-* configure storing / build checking of system state (e.g. digest of libraries)
-* debug/profiling versions
-* support for camlp4/syntax
-* install support, generate META
-* check .opt compilers before using
-* replace Digest by a much faster digest module from cryptohash
-* ocamlyacc/lex supports.
-* add platform and architecture tests in project file: i.e. "if arch(x86) && ..."

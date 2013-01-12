@@ -1,0 +1,7 @@
+name: p2
+version: 1.0
+obuild-ver: 1
+
+executable p2
+  main-is: p2.ml
+  build-deps: uri

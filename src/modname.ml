@@ -1,6 +1,7 @@
 open Filepath
+open Types
 
-type modname = { modname : string }
+type modname = { _modname : string }
 
 exception InvalidModuleName of string
 exception EmptyModuleName
@@ -21,25 +22,40 @@ let wrap_module x =
     if String.length x = 0 then (raise EmptyModuleName)
     else if not (string_all char_is_valid_modchar x) then (raise (InvalidModuleName x))
     else if Char.uppercase x.[0] <> x.[0] then (raise (InvalidModuleName x))
-    else { modname = x }
+    else { _modname = x }
 
-let modname_to_string x = x.modname
+let modname_of_string x = wrap_module x
+let modname_to_string x = x._modname
+let modname_to_dir x = String.uncapitalize x._modname
 
-let cmxa_of_lib lib = fn (lib ^ ".cmxa")
-let cma_of_lib lib = fn (lib ^ ".cma")
+let to_libstring lib = String.concat "_" (lib_name_to_string_nodes lib)
+let cmxa_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cmxa")
+let cma_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cma")
+let cmca_of_lib b = if b = Native then cmxa_of_lib else cma_of_lib
 
-let extDP useDebug useProf =
-    (if useDebug then ".d" else "") ^ (if useProf then ".p" else "")
+(* only used for stdlib stuff *)
+let lib_of_cmca b file =
+    let suffix = if b = Native then ".cmxa" else ".cma" in
+    Filename.chop_suffix (fn_to_string file) suffix
 
-let cmx_of_module useDebug useProf modname = fn (String.uncapitalize modname.modname ^ extDP useDebug useProf ^ ".cmx")
-let cmo_of_module useDebug useProf modname = fn (String.uncapitalize modname.modname ^ extDP useDebug useProf ^ ".cmo")
-let cmc_of_module b = if b then cmx_of_module else cmo_of_module
-let cmi_of_module modname = fn (String.uncapitalize modname.modname ^ ".cmi")
-let o_of_module modname = fn (String.uncapitalize modname.modname ^ ".o")
+let cmx_of_module modname = fn (String.uncapitalize modname._modname ^ ".cmx")
+let cmo_of_module modname = fn (String.uncapitalize modname._modname ^ ".cmo")
+let cmc_of_module b = if b = Native then cmx_of_module else cmo_of_module
+let cmi_of_module modname = fn (String.uncapitalize modname._modname ^ ".cmi")
+let o_of_module modname = fn (String.uncapitalize modname._modname ^ ".o")
 
-let filename_of_module modname = fn (String.uncapitalize modname.modname ^ ".ml")
-let interface_of_module modname = fn (String.uncapitalize modname.modname ^ ".mli")
+let directory_of_module modname = fn (String.uncapitalize modname._modname)
+let filename_of_module modname = fn (String.uncapitalize modname._modname ^ ".ml")
+let parser_of_module modname = fn (String.uncapitalize modname._modname ^ ".mly")
+let lexer_of_module modname = fn (String.uncapitalize modname._modname ^ ".mll")
+let interface_of_module modname = fn (String.uncapitalize modname._modname ^ ".mli")
 
+let module_lookup_methods = [ directory_of_module; parser_of_module; lexer_of_module; filename_of_module ]
+
+let module_of_directory filename = wrap_module (String.capitalize filename.filename)
+let module_of_parser filename = wrap_module (String.capitalize (Filename.chop_extension filename.filename))
+let module_of_lexer filename = wrap_module (String.capitalize (Filename.chop_extension filename.filename))
 let module_of_filename filename =
     try wrap_module (String.capitalize (Filename.chop_extension filename.filename))
-    with Invalid_argument _ -> raise (ModuleFilenameNotValid filename.filename)
+    with EmptyModuleName -> raise (ModuleFilenameNotValid filename.filename)
+       | Invalid_argument _ -> raise (ModuleFilenameNotValid filename.filename)

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+export OBUILDSIMPLE=$(pwd)/../../dist/build/obuild-simple/obuild-simple
+
+for BUILD in *.build
+do
+	name=${BUILD/.build/}
+	echo "======== $name ========================="
+	sh ./${BUILD}
+	if [ ! -f $name ]; then
+		echo "[FAILED] building $name "
+	else
+		echo "[SUCCESS] building $name "
+	fi
+done

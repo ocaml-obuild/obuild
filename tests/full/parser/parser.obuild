@@ -1,0 +1,6 @@
+name: parser
+version: 1.0
+obuild-ver: 1
+
+executable main
+  main-is: main.ml

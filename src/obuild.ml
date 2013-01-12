@@ -11,59 +11,93 @@ let minor = 0
 let programName = "obuild"
 let usageStr cmd = "\nusage: " ^ programName ^ " " ^ cmd ^ " <options>\n\noptions:\n"
 
+let project_read () =
+    try Project.read gconf.conf_strict
+    with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn); raise exn
+
 let mainConfigure argv =
-    let useBytecode = ref false in
-    let useNative   = ref false in
     let userFlagSettings = ref [] in
     let userSetFlagSettings s =
         let tweak =
-            if String.length s > 0 && s.[0] = '-'
+            if string_startswith "-" s
                 then ClearFlag (string_drop 1 s)
                 else SetFlag s
             in
         userFlagSettings := tweak :: !userFlagSettings
         in
+
+    let enable_disable_opt opt_name f doc =
+        [ ("--enable-" ^ opt_name, Arg.Unit (f true), " enable " ^ doc)
+        ; ("--disable-" ^ opt_name, Arg.Unit (f false), "disable " ^ doc)
+        ]
+        in
+
+    let opts =
+        [ ("--flag", Arg.String userSetFlagSettings, "enable or disable a project's flag")
+        ; ("--executable-as-obj", Arg.Unit (Configure.set_exe_as_obj true), "output executable as obj file")
+        ]
+        in
     Arg.parse_argv (Array.of_list argv)
-        [ ("--enable-bytecode", Arg.Set useBytecode, "enable compilation as bytecode")
-        ; ("--enable-native", Arg.Set useNative, "enable compilation as native")
-        ; ("--disable-bytecode", Arg.Clear useBytecode, "disable compilation as bytecode")
-        ; ("--disable-native", Arg.Clear useNative, "disable compilation as native")
-        ; ("--flag", Arg.String userSetFlagSettings, "enable or disable a project's flag")
-        ] (fun s -> failwith ("unknown option: " ^ s))
+        ( enable_disable_opt "library-bytecode" Configure.set_lib_bytecode "library compilation as bytecode"
+        @ enable_disable_opt "library-native" Configure.set_lib_native "library compilation as native"
+        @ enable_disable_opt "executable-bytecode" Configure.set_exe_bytecode "executable compilation as bytecode"
+        @ enable_disable_opt "executable-native" Configure.set_exe_native "executable compilation as native"
+        @ enable_disable_opt "library-profiling" Configure.set_lib_profiling "library profiling"
+        @ enable_disable_opt "library-debugging" Configure.set_lib_debugging "library debugging"
+        @ enable_disable_opt "executable-profiling" Configure.set_exe_profiling "executable profiling"
+        @ enable_disable_opt "executable-debugging" Configure.set_exe_debugging "executable debugging"
+        @ enable_disable_opt "examples" Configure.set_build_examples "building examples"
+        @ enable_disable_opt "benchs" Configure.set_build_benchs "building benchs"
+        @ enable_disable_opt "tests" Configure.set_build_tests "building tests"
+        @ opts
+        ) (fun s -> failwith ("unknown option: " ^ s))
         (usageStr "configure");
 
+    FindlibConf.load ();
     let projFile = Project.read gconf.conf_strict in
     verbose Report "Configuring %s-%s...\n" projFile.Project.name projFile.Project.version;
     Configure.run projFile !userFlagSettings;
     (* check build deps of everything buildables *)
     ()
 
+let build_options =
+    [ ("-j", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
+    ; ("--jobs", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
+    ]
+
 let mainBuild argv =
-    let projFile = Project.read gconf.conf_strict in
-
-    Configure.check ();
-
-    let jopt = ref None in
-    let dotopt = ref false in
-    Arg.parse_argv (Array.of_list argv)
-        [ ("-j", Arg.Int (fun i -> jopt := Some i), "maximum number of jobs in parallel")
-        ; ("--dot", Arg.Set dotopt, "dump dependencies dot files during build")
-        ] (fun s -> failwith ("unknown option: " ^ s))
+    Arg.parse_argv (Array.of_list argv) (build_options @
+        [ ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build")
+        ]) (fun s -> failwith ("unknown option: " ^ s))
         (usageStr "build");
 
-    let build_opts = { Prepare.opt_nb_jobs_par = default 2 !jopt
-                     ; Prepare.opt_dump_dot    = !dotopt
-                     }
-        in
-    let project = Prepare.prepare projFile build_opts in
-    let bstate = Building.init project in
-    List.iter (Build.buildLib bstate) projFile.Project.libs;
-    List.iter (Build.buildExe bstate) projFile.Project.exes;
+    Configure.check ();
+    let projFile = project_read () in
+    FindlibConf.load ();
+    let project = Analyze.prepare projFile in
+    let bstate = Prepare.init project in
+
+    let taskdep = Taskdep.init project.Analyze.project_targets_dag in
+    while not (Taskdep.isComplete taskdep) do
+        (match Taskdep.getnext taskdep with
+        | None -> failwith "no free task in targets"
+        | Some (step,ntask) ->
+            verbose Verbose "building target %s\n%!" (name_to_string ntask);
+            (match ntask with
+            | ExeName name   -> Build.buildExe bstate (Project.find_exe projFile name)
+            | LibName name   -> Build.buildLib bstate (Project.find_lib projFile name)
+            | BenchName name -> Build.buildBench bstate (Project.find_bench projFile name)
+            | TestName name  -> Build.buildTest bstate (Project.find_test projFile name)
+            | ExampleName name -> Build.buildExample bstate (Project.find_example projFile name)
+            );
+            Taskdep.markDone taskdep ntask
+        )
+    done;
     ()
 
 let mainClean argv =
-    if Filesystem.exists Dist.distPath
-        then Filesystem.removeDir Dist.distPath
+    if Filesystem.exists (Dist.getDistPath ())
+        then Filesystem.removeDir (Dist.getDistPath ())
         else ()
 
 let mainSdist argv =
@@ -74,52 +108,64 @@ let mainSdist argv =
            (usageStr "sdist");
     Dist.check (fun () -> ());
 
-    let projFile = Project.read gconf.conf_strict in
-    let name = projFile.Project.name in
-    let ver = projFile.Project.version in
-    let sdistDir = name ^ "-" ^ ver in
-    let sdistName = sdistDir ^ ".tar.gz" in
-    ignore sdistName;
-
-    (*let dest = Dist.distPath </> sdistDir in*)
-
-    (*
-    Dist.with_temporary_dir (fun dir ->
-        Unix.chdir dir
-    );
-    *)
-
-    (*
-    Unix.mkdir dest 0o755;
-    (*List.iter (fun x -> ()) obuild.obuild_lib *)
-
-    Unix.chdir dest;
-    Prog.runTar sdistName sdistDir;
-    *)
+    let projFile = project_read () in
+    Sdist.run projFile !isSnapshot;
     ()
 
-let mainHelp argv =
-    ()
-
-let mainInstall argv =
-    Dist.check (fun () -> ());
+let mainDoc argv =
     Arg.parse_argv (Array.of_list argv)
            [
            ] (fun s -> failwith ("unknown option: " ^ s))
+           (usageStr "doc");
+
+    let projFile = project_read () in
+    Doc.run projFile;
+    ()
+
+let mainInstall argv =
+    let destdir = ref "" in
+    Dist.check (fun () -> ());
+    Arg.parse_argv (Array.of_list argv)
+           [ ("destdir", Arg.Set_string destdir, "override destination where to install (default coming from findlib configuration)")
+           ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "install");
-    let projFile = Project.read gconf.conf_strict in
-    ignore projFile
+    FindlibConf.load ();
+
+    let projFile = project_read () in
+    List.iter (fun target ->
+        let buildDir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+        let files = Build.get_destination_files target in
+        Build.sanity_check buildDir target;
+        verbose Report "installing: %s\n" (Utils.showList "," fn_to_string files)
+    ) (Project.get_all_buildable_targets projFile);
+    ()
 
 let mainTest argv =
-    Dist.check (fun () -> ());
     Arg.parse_argv (Array.of_list argv)
            [
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "test");
-    let projFile = Project.read gconf.conf_strict in
-    ignore projFile
 
-let knownCommands = [ "configure"; "build"; "clean"; "sdist"; "install"; "test"; "help" ]
+    Dist.check (fun () -> ());
+    let projFile = project_read () in
+    if not gconf.conf_build_tests then (
+        eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
+        exit 1
+    );
+    let testTargets = List.map Project.test_to_target projFile.Project.tests in
+    List.iter (fun testTarget ->
+        if true then (
+            eprintf "error: %s doesn't appears built, make sure build has been run first\n" (Target.get_target_name testTarget);
+            exit 1
+        );
+        ()
+    ) testTargets
+
+let mainInit argv =
+    let project = Init.run () in
+    let name = fn (project.Project.name) <.> "obuild" in
+    Project.write (in_current_dir name) project
+
 let usageCommands = String.concat "\n"
     [ "Commands:"
     ; ""
@@ -127,10 +173,21 @@ let usageCommands = String.concat "\n"
     ; "  build        Make this package ready for installation."
     ; "  clean        Clean up after a build."
     ; "  sdist        Generate a source distribution file (.tar.gz)."
+    ; "  doc          Generate documentation."
     ; "  install      Install this package."
     ; "  test         Run the tests"
     ; "  help         Help about commands"
     ]
+
+let mainHelp argv =
+    match argv with
+    | []         -> eprintf "usage: obuild help <command>\n\n";
+    | command::_ ->
+        try
+            let msgs = List.assoc command Help.helpMessages in
+            List.iter (eprintf "%s\n") msgs
+        with Not_found ->
+            eprintf "no helpful documentation for %s\n" command
 
 (* parse the global args up the first non option <command>
  * <exe> -opt1 -opt2 <command> <...>
@@ -155,15 +212,19 @@ let parseGlobalArgs () =
                             | "--help"    -> printHelp ()
                             | "--version" -> printVersion ()
                             | "--verbose" -> gconf.conf_verbosity <- Verbose; xs
+                            | "--color"   -> gconf.conf_color <- true; xs
                             | "--debug"   -> gconf.conf_verbosity <- Debug; xs
+                            | "--debug+"  -> gconf.conf_verbosity <- DebugPlus; xs
                             | "--debug-with-cmd" -> gconf.conf_verbosity <- DebugPlus; xs
                             | "--silent"  -> gconf.conf_verbosity <- Silent; xs
                             | "--strict"  -> gconf.conf_strict    <- true; xs
+                            | "--findlib-conf" -> expect_param1 x xs (fun p -> gconf.conf_findlib_path <- Some p)
                             | "--ocamlopt" -> expect_param1 x xs (fun p -> gconf.conf_prog_ocamlopt <- Some p)
                             | "--ocamldep" -> expect_param1 x xs (fun p -> gconf.conf_prog_ocamldep <- Some p)
                             | "--ocamlc"   -> expect_param1 x xs (fun p -> gconf.conf_prog_ocamlc <- Some p)
                             | "--cc"       -> expect_param1 x xs (fun p -> gconf.conf_prog_cc <- Some p)
                             | "--ar"       -> expect_param1 x xs (fun p -> gconf.conf_prog_ar <- Some p)
+                            | "--pkg-config"-> expect_param1 x xs (fun p -> gconf.conf_prog_pkgconfig <- Some p)
                             | "--ranlib"   -> expect_param1 x xs (fun p -> gconf.conf_prog_ranlib <- Some p)
                             | _           -> failwith ("unknown global option: " ^ x)
                             in
@@ -175,6 +236,18 @@ let parseGlobalArgs () =
 
     processGlobalArgs (List.tl (Array.to_list Sys.argv))
 
+let knownCommands =
+    [ ("configure", mainConfigure)
+    ; ("build", mainBuild)
+	; ("clean", mainClean)
+	; ("sdist", mainSdist)
+	; ("install", mainInstall)
+	; ("init", mainInit)
+	; ("test", mainTest)
+	; ("doc", mainDoc)
+	; ("help", mainHelp)
+    ]
+
 let defaultMain () =
     let args = parseGlobalArgs () in
 
@@ -184,44 +257,15 @@ let defaultMain () =
         exit 1
     );
 
-    match List.nth args 0 with
-    | "configure" -> mainConfigure args
-    | "build"     -> mainBuild args
-    | "clean"     -> mainClean args
-    | "sdist"     -> mainSdist args
-    | "install"   -> mainInstall args
-    | "test"      -> mainTest args
-    | "help"      -> mainHelp args
-    | cmd         -> eprintf "error: unknown command: %s\n\n  known commands:\n" cmd;
-                     List.iter (eprintf "    %s\n") knownCommands;
-                     exit 1
+    let cmd = List.nth args 0 in
+    try
+        let mainF = List.assoc cmd knownCommands in
+        mainF args
+    with Not_found ->
+        eprintf "error: unknown command: %s\n\n  known commands:\n" cmd;
+        List.iter (eprintf "    %s\n") (List.map fst knownCommands);
+        exit 1
 
 let () =
     try defaultMain ()
-    with
-        | Arg.Bad err       -> eprintf "%s\n" err; exit 2
-        (* project file related *)
-        | Project.NoConfFile        -> eprintf "error: couldn't find obuild file\n"; exit 3
-        | Project.MultipleConfFiles -> eprintf "error: multiples obuild files found\n"; exit 3
-        | Project.SublibNotCorrect (sn,ms,cs) ->
-                eprintf "error: sublib %s referencing unknown files\n" sn;
-                (if ms <> [] then eprintf "    modules : %s\n" (Utils.showList "," Modname.modname_to_string ms));
-                (if cs <> [] then eprintf "    csources: %s\n" (Utils.showList "," fn_to_string cs));
-                exit 3;
-        (* dist directory related *)
-        | Dist.NotADirectory -> eprintf "error: dist is not a directory\n"; exit 4
-        | Dist.DoesntExist   -> eprintf "error: run the configure command first\n"; exit 4
-        (* reconfigure *)
-        | Configure.ConfigChanged r ->
-                (match r with
-                | "digest" -> eprintf "error: project file changed. run the configure command again\n"; exit 4
-                | _        -> eprintf "error: config changed (reason=%s). run the configure command again\n" r; exit 4
-                )
-        (* build related failure *)
-        | Building.ModuleDependsItself m  -> eprintf "error: cyclic dependency module detected in module %s\n" m.Modname.modname; exit 5
-        | Build.CompilationFailed e       -> eprintf "\n%s\n%!" e; exit 6
-        | Prepare.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 7
-        | Build.LinkingFailed e           -> eprintf "\n%s\n%!" e; exit 8
-        (* others exception *)
-        | Exit              -> ()
-        | e                 -> eprintf "uncaught exception\n"; raise e
+    with exn -> Exception.show exn

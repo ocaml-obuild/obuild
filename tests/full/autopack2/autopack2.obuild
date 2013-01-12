@@ -1,0 +1,7 @@
+name: autopack2
+version: 1.0
+obuild-ver: 1
+
+executable autopack2
+  src-dir: src
+  main-is: main.ml

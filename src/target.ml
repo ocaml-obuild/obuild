@@ -1,48 +1,110 @@
 open Filepath
+open Ext
 open Modname
 open Types
+open Gconf
+open Dependencies
+open Hier
 
 type target_type = Lib | Exe | Test | Bench
+type target_stdlib = Stdlib_None | Stdlib_Standard | Stdlib_Core
+
+type runtime_bool = BoolConst of bool
+                  | BoolVariable of string
+
+let runtime_def v = BoolConst v
+
+type target_cbits =
+    { target_cdir      : filepath
+    ; target_csources  : filename list
+    ; target_cflags    : string list (* CFLAGS *)
+    ; target_clibs     : string list
+    ; target_clibpaths : filepath list
+    ; target_cpkgs     : cdependency list (* pkg-config name *)
+    }
+
+type target_obits =
+    { target_srcdir    : filepath
+    ; target_builddeps : dependency list
+    ; target_oflags    : string list
+    ; target_pp        : Pp.pp_type option
+    ; target_extradeps : (hier * hier) list
+    ; target_stdlib    : target_stdlib
+    }
 
 type target =
-    { target_name      : string
-    ; target_srcdir    : filepath option
-    ; target_cdir      : filepath option
-    ; target_csources  : filename list
-    ; target_copts     : string list
-    ; target_clibs     : string list
-    ; target_type      : target_type
-    ; target_buildable : bool
-    ; target_builddeps : dependency list
+    { target_name        : name
+    ; target_type        : target_type
+    ; target_cbits       : target_cbits
+    ; target_obits       : target_obits
+    ; target_buildable   : runtime_bool
+    ; target_installable : runtime_bool
     }
 
-let newTarget n ty buildable =
-    { target_name      = n
-    ; target_buildable = buildable
-    ; target_type      = ty
-    ; target_builddeps = []
-    ; target_srcdir    = None
+let newTargetCbits =
+    { target_cdir      = currentDir
     ; target_csources  = []
-    ; target_copts     = []
+    ; target_cflags    = []
     ; target_clibs     = []
-    ; target_cdir      = None
+    ; target_clibpaths = []
+    ; target_cpkgs     = []
     }
 
-let get_target_name target =
-    let pre =
-        match target.target_type with
-        | Exe  -> "exe"
-        | Lib  -> "lib"
-        | Test -> "test"
-        | Bench -> "bench"
-        in
-    pre ^ "-" ^ target.target_name
+let newTargetObits =
+    { target_oflags    = []
+    ; target_builddeps = []
+    ; target_pp        = None
+    ; target_srcdir    = currentDir
+    ; target_extradeps = []
+    ; target_stdlib    = Stdlib_Standard
+    }
+
+let newTarget n ty buildable installable =
+    { target_name        = n
+    ; target_buildable   = runtime_def buildable
+    ; target_installable = runtime_def installable
+    ; target_type        = ty
+    ; target_cbits       = newTargetCbits
+    ; target_obits       = newTargetObits
+    }
+
+let get_target_name target = name_to_string target.target_name
+
+let get_target_clibname target =
+    match target.target_name with
+    | ExeName e     -> "stubs_" ^ e
+    | BenchName e   -> "stubs_" ^ e
+    | TestName  e   -> "stubs_" ^ e
+    | ExampleName e -> "stubs_" ^ e
+    | LibName l     -> "stubs_" ^ list_last (lib_name_to_string_nodes l)
+
+(* get the core name of the final object representing the object
+ * for an executable/test/bench it will be the name of the executable apart from the extension
+ * for a test it will be the name of the library created (.cmxa/.cma) apart from the extension
+ *)
+let get_target_dest_name target =
+    match target.target_name with
+    | ExeName e   -> e
+    | BenchName e -> "bench-" ^ e
+    | TestName e  -> "test-" ^ e
+    | ExampleName e  -> "example-" ^ e
+    | LibName l   -> String.concat "_" (lib_name_to_string_nodes l)
 
 let is_target_lib target = target.target_type = Lib
 
-let get_target_filenames target =
-    match target.target_type with
-    | Lib ->
-        [cmxa_of_lib target.target_name; cma_of_lib target.target_name]
-    | _   ->
-        [Utils.to_exe_name target.target_name]
+let get_ocaml_compiled_types target =
+    let (nat,byte) =
+        if is_target_lib target
+            then (gconf.conf_library_native, gconf.conf_library_bytecode)
+            else (gconf.conf_executable_native, gconf.conf_executable_bytecode)
+        in
+    (if nat then [Native] else []) @ (if byte then [ByteCode] else [])
+
+let get_debug_profile target =
+    if is_target_lib target
+        then (gconf.conf_library_debugging, gconf.conf_library_profiling)
+        else (gconf.conf_executable_debugging, gconf.conf_executable_profiling)
+
+let get_compilation_opts target =
+    let (debug, prof) = get_debug_profile target in
+    Normal :: (if debug then [WithDebug] else []) @ (if prof then [WithProf] else [])
