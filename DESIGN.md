@@ -4,32 +4,32 @@ OBuild Design
 Genesis
 -------
 
-Obuild started on a bank holiday after xmas, as an expirement to make the
-simplest ocaml build system. The mains goals :
+Obuild started on a bank holiday after xmas, as an experiment to make the
+simplest OCaml build system. The mains goals are to:
 
 * provide a good user experience.
 * provide a building black box, no mocking around generic rules.
-* provide feature in the highest level possible.
-* do the cleanest build possible, by-product are hidden from user sights.
-* provide good defaults, and standardize names as much as possible
-* everything that the user of the build system need exposed in one central place.
-* be the simplest possible to build, to prevent any bootstrapping problem.
+* provide features in the highest level possible.
+* the cleanest build possible, with by-products hidden from the user.
+* provide good defaults, and standardize names as much as possible.
+* expose everything that the user of the build system needs in one place.
+* be simple to build to prevent any bootstrapping problem.
 
-One of the main influence was haskell cabal, which provide to all haskellers
-a simple way to provide a build system to a project with a single file. This does not
-prevent providing all ocaml options needed to be exposed.
+One of the main influences was Haskell Cabal, which provides to all Haskellers
+a simple way to provide a build system to a project with a single file. This
+applies well for the myriad of OCaml options too.
 
 Simple to build
 ---------------
 
-Obuild is buildable with just the compiler and the compiler stdlib provided.
-This make bootstrapping very easy : all you need is the ocaml compiler installed.
+Obuild is buildable with just the compiler and the compiler standard library.
+This make bootstrapping very easy: all you need is the OCaml compiler installed.
 
-This create some pain for developers of obuild, as lots of basic functions
-available in others libraries, need to written again as part of obuild.
-As the initial development was done really quickly, some functions are not
-as performant (cpu or memory wise) as they could be. This is can be fixed
-as problem becomes apparent in scaling.
+This creates some pain for developers of obuild, as lots of basic functions
+available in others libraries need to written again as part of obuild.  As the
+initial development was done really quickly, some functions are not as
+performant (CPU or memory-wise) as they could be. This can be fixed as problem
+becomes apparent in scaling.
 
 Simple to use
 -------------
