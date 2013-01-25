@@ -257,7 +257,7 @@ let parse strict lines =
         match k with
         | "builddepends"
         | "build-deps" -> Handled { t with target_builddeps = parseDeps lib_name_of_string value @ t.target_builddeps }
-        | "path"
+        | "path" | "srcdir"
         | "src-dir"    -> Handled { t with target_srcdir    = fp value }
         | "preprocessor"
         | "pp"         -> Handled { t with target_pp = Some (Pp.pp_type_of_string value) }
@@ -500,12 +500,12 @@ let write file proj =
         let show_target iStr target =
             let obits = target.target_obits in
             let cbits = target.target_cbits in
-            add (sprintf "%ssrcdir: %s\n" iStr (fp_to_string obits.target_srcdir));
+            add (sprintf "%ssrc-dir: %s\n" iStr (fp_to_string obits.target_srcdir));
             add_string (iStr ^ "build-deps") (Utils.showList ", " (fun (l,_) -> lib_name_to_string l) obits.target_builddeps);
             add_string (iStr ^ "oflags") (Utils.showList " " id obits.target_oflags);
             add_string (iStr ^ "pp") (maybe "" (fun ppty -> Pp.pp_type_to_string ppty) obits.target_pp);
 
-            add (sprintf "%scdir: %s\n" iStr (fp_to_string cbits.target_cdir));
+            add (sprintf "%sc-dir: %s\n" iStr (fp_to_string cbits.target_cdir));
             add_string (iStr ^ "c-sources") (Utils.showList ", " fn_to_string cbits.target_csources);
             add_string (iStr ^ "c-flags") (Utils.showList " " id cbits.target_cflags);
             add_string (iStr ^ "c-libs") (Utils.showList "," id cbits.target_clibs);
