@@ -150,6 +150,14 @@ let list_filter_map (f: 'a -> 'b option) (l: 'a list) : 'b list =
         in
     loop l
 
+let list_mem_many needles haystack =
+    let rec loop l =
+        match l with
+        | []    -> false
+        | x::xs -> if List.mem x needles then true else loop xs
+        in
+    loop haystack
+
 let rec list_uniq l =
     match l with
     | []    -> []
