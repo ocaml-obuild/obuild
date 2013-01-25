@@ -308,7 +308,13 @@ camlp4 '-I' '/usr/lib/ocaml/camlp4' '-I' '/usr/lib/ocaml/camlp4' '-I' '/usr/lib/
                             Utils.FilesNotFoundInPaths _ -> false
                         ) allDeps in
                     verbose Debug "  %s internally depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string cwdDepsInDir));
-                    let use_thread = if List.mem (wrap_module "Thread") otherDeps then WithThread else NoThread in
+                    let use_thread =
+                        if List.mem (wrap_module "Thread") otherDeps
+                        || List.mem (wrap_module "Condition") otherDeps
+                        || List.mem (wrap_module "Mutex") otherDeps
+                            then WithThread
+                            else NoThread
+                        in
                     let cwdDeps = List.map (fun x -> maybe (Hier.hier [x]) (fun z -> hier_append z x) (hier_parent hier)) cwdDepsInDir in
                     (if List.mem hier cwdDeps then
                         raise (ModuleDependsItself hier)
