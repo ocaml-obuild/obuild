@@ -163,12 +163,15 @@ let prepare projFile =
                     try Meta.find dep.lib_subnames meta
                     with Not_found -> raise (SublibraryDoesntExists dep)
                     in
-                List.iter (fun (_, reqDeps) ->
-                    List.iter (fun reqDep ->
-                        verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
-                        Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
-                        loop reqDep
-                    ) reqDeps
+                List.iter (fun (preds, reqDeps) ->
+                    match preds with
+                    | Some [Meta.Pred_Toploop] -> ()
+                    | _ ->
+                        List.iter (fun reqDep ->
+                            verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
+                            Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
+                            loop reqDep
+                        ) reqDeps
                 ) pkg.Meta.package_requires;
                 System
             )
