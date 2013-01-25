@@ -13,6 +13,7 @@ type predicate =
     | Pred_Plugin
     | Pred_Mt
     | Pred_Mt_vm
+    | Pred_Mt_posix
     | Pred_Gprof
     | Pred_Autolink
     | Pred_Syntax
@@ -47,6 +48,7 @@ let predicate_to_string p =
     | Pred_Plugin -> "plugin"
     | Pred_Mt -> "mt"
     | Pred_Mt_vm -> "mt_vm"
+    | Pred_Mt_posix -> "mt_posix"
     | Pred_Gprof -> "gprof"
     | Pred_Autolink -> "autolink"
     | Pred_Syntax -> "syntax"
@@ -63,6 +65,7 @@ let predicate_of_string s =
     | "plugin"         -> Pred_Plugin
     | "mt"             -> Pred_Mt
     | "mt_vm"          -> Pred_Mt_vm
+    | "mt_posix"       -> Pred_Mt_posix
     | "gprof"          -> Pred_Gprof
     | "autolink"       -> Pred_Autolink
     | "syntax"         -> Pred_Syntax
