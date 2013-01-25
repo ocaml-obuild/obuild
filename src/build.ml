@@ -321,7 +321,6 @@ let linking bstate cstate target =
     let compiledTypes = Target.get_ocaml_compiled_types target in
 
     let cbits = target.target_cbits in
-    let obits = target.target_obits in
 
     let compiled = get_compilation_order cstate in
     verbose Debug "  compilation order: %s\n" (Utils.showList "," hier_to_string compiled);
@@ -337,19 +336,6 @@ let linking bstate cstate target =
     verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
     let selfLibDirs = List.map (fun dep -> Dist.getBuildDest (Dist.Target (LibName dep))) selfDeps in
 
-    let useThreadLib =
-        if List.mem (lib_name_of_string "threads") (List.map fst obits.target_builddeps)
-        || List.mem (lib_name_of_string "threads.posix") (List.map fst obits.target_builddeps)
-            then WithThread
-            else NoThread
-        in
-        (*
-    let useThreads = Hashtbl.fold (fun _ v a -> match v.module_use_threads with
-                                                | WithThread -> WithThread
-                                                | _          -> a) cstate.compilation_modules useThreadLib in
-*)
-    let useThreads = useThreadLib in
-
     let internal_cclibs =
         if cstate.compilation_csources <> []
             then [Target.get_target_clibname target]
@@ -362,6 +348,14 @@ let linking bstate cstate target =
 
     let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
     verbose Verbose "package deps: [%s]\n" (Utils.showList "," lib_name_to_string pkgDeps);
+
+    let useThreadLib =
+        if List.mem (lib_name_of_string "threads") pkgDeps
+        || List.mem (lib_name_of_string "threads.posix") pkgDeps
+            then WithThread
+            else NoThread
+        in
+    let useThreads = useThreadLib in
 
     if cstate.compilation_csources <> [] then (
         let cname = Target.get_target_clibname target in
