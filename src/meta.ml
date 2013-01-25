@@ -361,6 +361,10 @@ let pkg_isSyntax pkg = List.length (pkg_getSyntaxes pkg) > 0
 
 let isSyntax (path, rootPkg) dep = pkg_isSyntax (find dep.lib_subnames rootPkg)
 
+let getArchiveWithFilter (path, rootPkg) dep pred =
+    let pkg = find dep.lib_subnames rootPkg in
+    List.find_all (fun (preds,a) -> List.mem pred preds) pkg.package_archives
+
 let getArchive (path, rootPkg) dep csv =
     let pkg = find dep.lib_subnames rootPkg in
     try

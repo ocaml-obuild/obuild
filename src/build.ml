@@ -339,6 +339,7 @@ let linking bstate cstate target =
 
     let useThreadLib =
         if List.mem (lib_name_of_string "threads") (List.map fst obits.target_builddeps)
+        || List.mem (lib_name_of_string "threads.posix") (List.map fst obits.target_builddeps)
             then WithThread
             else NoThread
         in
@@ -378,13 +379,23 @@ let linking bstate cstate target =
                             | Internal -> Some (in_current_dir (cmca_of_lib compiledType compileOpt dep))
                             | System   ->
                                 let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
-                                let preds = match compiledType with
-                                            | Native    -> [Meta.Pred_Native]
-                                            | ByteCode  -> [Meta.Pred_Byte]
+                                let pred =
+                                    match compiledType with
+                                    | Native    -> Meta.Pred_Native
+                                    | ByteCode  -> Meta.Pred_Byte
                                     in
                                 if Meta.isSyntax meta dep
                                     then None
-                                    else Some (in_current_dir (fn (Meta.getArchive meta dep preds)))
+                                    else (
+                                        let archives = Meta.getArchiveWithFilter meta dep pred in
+                                        let archiveFile =
+                                            match archives with
+                                            | []    -> raise (Meta.ArchiveNotFound ((fst meta),dep,[pred]))
+                                            | [x]   -> fn $ snd x
+                                            | x::xs -> fn $ snd x
+                                            in
+                                        Some (in_current_dir archiveFile)
+                                    )
                         ) pkgDeps
                 in
 
