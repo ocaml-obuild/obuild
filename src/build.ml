@@ -388,13 +388,9 @@ let linking bstate cstate target =
                                     then None
                                     else (
                                         let archives = Meta.getArchiveWithFilter meta dep pred in
-                                        let archiveFile =
-                                            match archives with
-                                            | []    -> raise (Meta.ArchiveNotFound ((fst meta),dep,[pred]))
-                                            | [x]   -> fn $ snd x
-                                            | x::xs -> fn $ snd x
-                                            in
-                                        Some (in_current_dir archiveFile)
+                                        match archives with
+                                        | []              -> None
+                                        | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
                                     )
                         ) pkgDeps
                 in
