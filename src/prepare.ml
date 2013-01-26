@@ -168,9 +168,6 @@ let get_modules_desc bstate target toplevelModules =
     verbose Verbose " | syntax packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxSystemPkgs);
     verbose Verbose " | build  packages : [%s]\n%!" (Utils.showList "," lib_name_to_string otherSystemPkgs);
 *)
-(*
-camlp4 '-I' '/usr/lib/ocaml/camlp4' '-I' '/usr/lib/ocaml/camlp4' '-I' '/usr/lib/ocaml/camlp4' '-parser' 'o' '-parser' 'op' '-printer' 'p' '-parser' 'Camlp4QuotationCommon' '-parser' 'Camlp4OCamlRevisedQuotationExpander' '-parser' 'Camlp4GrammarParser' 
-*)
     let targetPP =
         (match target.target_obits.target_pp with
         | None -> pp_none
