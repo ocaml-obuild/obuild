@@ -118,6 +118,21 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
 
     let buildModes = Target.get_ocaml_compiled_types target in
 
+    let buildmode_to_filety bmode = if bmode = Native then FileCMX else FileCMO in
+
+    let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
+    let internalLibsPathsAllModes =
+        List.map (fun (compileOpt,compileType) ->
+            ((compileOpt,compileType), List.map (fun dep ->
+                let dirname = Dist.getBuildDest (Dist.Target (LibName dep)) in
+                let filety = buildmode_to_filety compileType in
+                let libpath = dirname </> cmca_of_lib compileType compileOpt dep in
+                (filety, libpath)
+            ) selfDeps)
+        ) [ (Normal,Native);(Normal,ByteCode);(WithProf,Native);(WithProf,ByteCode);(WithDebug,Native);(WithDebug,ByteCode)]
+
+        in
+
     (* add a OCaml module or interface compilation process *)
     let compile_module taskIndex task isIntf h =
         let packOpt = hier_parent h in
@@ -148,29 +163,31 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                     in
                 List.map (fun compOpt ->
                     let dest = (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier h) in
-                    let src  = (FileMLI, intfDesc.module_intf_path) in
+                    let src  = [ (FileMLI, intfDesc.module_intf_path) ] in
                     let mDeps = List.map (fun moduleDep ->
                         (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier moduleDep)
                     ) moduleDeps in
-                    (dest,Interface,compOpt,src::mDeps)
+                    let internalDeps = List.assoc (compOpt,ByteCode) internalLibsPathsAllModes in
+                    (dest,Interface,compOpt, src @ internalDeps @ mDeps)
                 ) compileOpts
             ) else (
                 (* TODO: need way to not do debug/profile per (native|bytecode) mode *)
                 let allModes = List.concat
-                    (List.map (fun buildMode -> List.map (fun cmode -> (buildMode, cmode)) compileOpts) buildModes)
+                    (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
                     in
-                List.map (fun (buildMode, compOpt) ->
-                    let fileCompileTy = if buildMode = Native then FileCMX else FileCMO in
-                    let dest = (fileCompileTy, cstate.compilation_builddir_ml compOpt <//> cmc_of_hier buildMode h) in
+                List.map (fun (compiledTy, compOpt) ->
+                    let fileCompileTy = buildmode_to_filety compiledTy in
+                    let dest = (fileCompileTy, cstate.compilation_builddir_ml compOpt <//> cmc_of_hier compiledTy h) in
                     let src  =
                           (match hdesc.module_intf_desc with None -> [] | Some intf -> [FileMLI,intf.module_intf_path])
                         @ [(FileML, hdesc.module_src_path)] in
                     let mDeps = List.concat (List.map (fun moduleDep ->
-                        [(fileCompileTy, cstate.compilation_builddir_ml compOpt <//> cmc_of_hier buildMode moduleDep)
+                        [(fileCompileTy, cstate.compilation_builddir_ml compOpt <//> cmc_of_hier compiledTy moduleDep)
                         ;(FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier moduleDep)
                         ]
                     ) moduleDeps) in
-                    (dest,Compiled buildMode,compOpt,src@mDeps)
+                    let internalDeps = List.assoc (compOpt,compiledTy) internalLibsPathsAllModes in
+                    (dest,Compiled compiledTy,compOpt,src @ internalDeps @ mDeps)
                 ) allModes
             )
             in
