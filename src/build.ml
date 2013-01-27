@@ -327,14 +327,7 @@ let linking bstate cstate target =
     let compiled = get_compilation_order cstate in
     verbose Debug "  compilation order: %s\n" (Utils.showList "," hier_to_string compiled);
 
-    let selfDeps =
-        let internalDeps = Dag.getChildren bstate.bstate_config.project_targets_dag target.target_name in
-        list_filter_map (fun name ->
-            match name with
-            | LibName lname -> Some lname
-            | _             -> None
-        ) internalDeps
-        in
+    let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
     verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
     let selfLibDirs = List.map (fun dep -> Dist.getBuildDest (Dist.Target (LibName dep))) selfDeps in
 

@@ -68,6 +68,14 @@ let get_pkg_meta lib project =
     try Hashtbl.find project.project_pkg_meta lib.lib_main_name
     with Not_found -> failwith (sprintf "package %s not found in the hashtbl: internal error" (lib_name_to_string lib))
 
+let get_internal_library_deps project target =
+    let internalDeps = Dag.getChildren project.project_targets_dag target.target_name in
+    list_filter_map (fun name ->
+        match name with
+        | LibName lname -> Some lname
+        | _             -> None
+    ) internalDeps
+
 (* all the standard libraries shipped with ocaml, comes *without* META files, so
  * we pre-populate the META cache with whatever we need by scanning the
  * directory that ocaml use as standard_library (found by running ocamlc -config).
