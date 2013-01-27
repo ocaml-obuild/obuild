@@ -1,0 +1,10 @@
+name: test
+version: 0.1
+obuild-ver: 1
+
+library abc
+  modules: X
+
+test abc
+  main-is: testX.ml
+  build-deps: abc
