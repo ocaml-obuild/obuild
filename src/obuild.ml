@@ -153,13 +153,37 @@ let mainTest argv =
         exit 1
     );
     let testTargets = List.map Project.test_to_target projFile.Project.tests in
-    List.iter (fun testTarget ->
-        if true then (
-            eprintf "error: %s doesn't appears built, make sure build has been run first\n" (Target.get_target_name testTarget);
-            exit 1
-        );
-        ()
-    ) testTargets
+    if testTargets <> []
+        then (
+            let results =
+                List.map (fun test ->
+                    let testTarget = Project.test_to_target test in
+                    let outputName = Utils.to_exe_name Normal Native (Target.get_target_dest_name testTarget) in
+                    let dir = Dist.getBuildDest (Dist.Target testTarget.Target.target_name) in
+                    let exePath = dir </> outputName in
+                    if not (Filesystem.exists exePath) then (
+                        eprintf "error: %s doesn't appears built, make sure build has been run first\n" (Target.get_target_name testTarget);
+                        exit 1
+                    );
+                    (match Process.run_with_outputs [ fp_to_string exePath ] with
+                    | Process.Success _   -> (test.Project.test_name, true)
+                    | Process.Failure err ->
+                        print_warnings err;
+                        (test.Project.test_name, false)
+                    )
+                ) projFile.Project.tests
+                in
+            (* this is just a mockup. expect results displayed in javascript and 3d at some point *)
+            let failed = List.filter (fun (_,x) -> false = x) results in
+            let successes = List.filter (fun (_,x) -> true = x) results in
+            let total = List.length failed + List.length successes in
+            printf "SUCCESS: %d/%d\n" (List.length successes) total;
+            printf "FAILED : %d/%d\n" (List.length failed) total;
+            List.iter (fun (n,_) -> printf "  %s\n" n) failed;
+            if failed <> [] then exit 1
+
+        ) else
+            printf "warning: no tests defined: not doing anything.\n"
 
 let mainInit argv =
     let project = Init.run () in
