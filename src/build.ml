@@ -258,8 +258,10 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             then (
                 verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nbStepLen taskIndex nbStep (hier_to_string h) reason;
                 AddTask (task, ops)
-            ) else
+            ) else (
+                on_task_finish task;
                 Retry
+            )
         in
     (* a compilation task has finished, terminate the process,
      * and process the result
