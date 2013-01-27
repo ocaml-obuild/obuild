@@ -146,7 +146,7 @@ let mainTest argv =
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "test");
 
-    Dist.check (fun () -> ());
+    Configure.check ();
     let projFile = project_read () in
     if not gconf.conf_build_tests then (
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
