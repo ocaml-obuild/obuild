@@ -145,7 +145,7 @@ let emptyExe (name : string) : obuild_exe =
 let emptyTest (name : string) : obuild_test =
     { test_name   = name
     ; test_main   = { filename = "" }
-    ; test_target = newTarget (TestName name) Test false false
+    ; test_target = newTarget (TestName name) Test gconf.conf_build_tests false
     ; test_rundir = None
     ; test_runopt = []
     ; test_type   = TestType_ExitCode
