@@ -40,6 +40,7 @@ extra-srcs: bootstrap
      , tests/simple/z_stubs.c
      , tests/simple/gtk_stubs.c
      , README.md
+     , DESIGN.md
      , TODO.md
 
 # a comment
