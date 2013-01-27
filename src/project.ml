@@ -159,7 +159,7 @@ let emptyExample (name : string) : obuild_example =
 
 let findPath () =
     let ents = Array.to_list (Sys.readdir ".") in
-    match List.find_all (fun ent -> Filename.check_suffix ent ".obuild") ents with
+    match List.find_all (fun ent -> not (string_startswith "." ent) && string_endswith ".obuild" ent) ents with
     | []  -> raise NoConfFile
     | [x] -> fp x
     | _   -> raise MultipleConfFiles
