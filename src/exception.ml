@@ -50,8 +50,12 @@ let show exn =
     (* build related failure *)
     | Prepare.ModuleDependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.hier_to_string m); exit 5
     | Prepare.ModuleNotFound (paths,m) ->
-        error "module not found %s - search paths:\n" (Modname.modname_to_string m);
+        error "module not found %s - search paths:\n" (Hier.hier_to_string m);
         List.iter (fun path -> eprintf "\t%s\n" (fp_to_string path)) paths;
+        exit 5
+    | Prepare.ModuleDependenciesProblem l ->
+        error "cyclic dependency detected. cannot infer dependencies between modules:\n";
+        eprintf "\t%s\n" (Utils.showList ", " Hier.hier_to_string l);
         exit 5
     | Build.CompilationFailed e       -> eprintf "\n%s\n%!" e; exit 6
     | Build.CCompilationFailed e      -> eprintf "\n%s\n%!" e; exit 6

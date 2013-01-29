@@ -16,8 +16,9 @@ open Pp
 open Hier
 
 exception ModuleDependsItself of hier
+exception ModuleDependenciesProblem of hier list
 exception ModuleDependencyNoOutput
-exception ModuleNotFound of (filepath list * modname)
+exception ModuleNotFound of (filepath list * hier)
 exception YaccFailed of string
 exception LexFailed of string
 
@@ -232,7 +233,7 @@ let get_modules_desc bstate target toplevelModules =
         verbose Verbose "Analysing %s\n%!" moduleName;
         let srcPath =
             try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f (hier_leaf hier)) module_lookup_method)
-            with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths,hier_leaf hier))
+            with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths, hier))
             in
         let srcDir = srcPath </> directory_of_module (hier_leaf hier) in
 
@@ -404,7 +405,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
         while Hashtbl.length h > 0 do
             let freeModules = Hashtbl.fold (fun k v acc -> if v = [] then k :: acc else acc) h [] in
             if freeModules = []
-                then failwith "internal error in dependencies"
+                then raise (ModuleDependenciesProblem (hashtbl_keys h))
                 else ();
             List.iter (fun m ->
                 let mdep = Hashtbl.find modulesDeps m in
