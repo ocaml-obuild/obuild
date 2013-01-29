@@ -11,7 +11,7 @@ OCaml library and programs.
 
 `obuild` acts as building black box: user declare only what they want to build
 and with which sources, and it will be consistently built.  The design is based
-on Haskell's Cabal, and borroasw most of the layout and way of working,
+on Haskell's Cabal, and borrow most of the layout and way of working,
 adapting parts where necessary to support OCaml fully.
 
 There's no way to build things that `obuild` has not been designed to do on
@@ -88,8 +88,8 @@ The different target types:
 * library: create a library that is going to be installed.
 * test: create an executable that will not be installed, and will interact with
         obuild according to the test_type field. cabal test will run every built tests
-        in a row. for the exit test_type, the exit code is used to signal error (0 = success, any = failure)
-* bench: create an executable that will not be install, and will allow to benchmarks,
+        in a row. for the exit test_type, the exit code is used to signal error (0 = success, anything else = failure)
+* bench: create an executable that will not be installed, and will allow to benchmarks,
          some part of the project. This is largely unimplemented and just a placeholder for future development.
 * example: create an executable that is not installed, nor compiled by default. you need
            to use configure with --enable-examples. This allow to make sure that examples are compiled with
