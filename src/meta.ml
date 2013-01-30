@@ -178,6 +178,8 @@ let parse name content =
                         let (s, no) = parseString o in S s :: loop no
                     ) else if Hashtbl.mem simpleChar s.[o] then (
                         Hashtbl.find simpleChar s.[o] :: loop (o+1)
+                    ) else if s.[o] == '+' && (o+1) < len && s.[o+1] == '=' then (
+                        PLUSEQ :: loop (o+2)
                     ) else if (s.[o] >= 'a' && s.[o] <= 'z') ||
                             (s.[o] >= 'A' && s.[o] <= 'Z') then (
                         let (id, no) = parseIdent o in I id :: loop no
@@ -236,6 +238,7 @@ let parse name content =
             (let (ss, xs2) = parseCSVtail xs in
             let preds = List.map predicate_of_string (s::ss) in
             match xs2 with
+            | RPAREN :: PLUSEQ :: S v :: xs3
             | RPAREN :: EQ :: S v :: xs3 ->
                 let nacc = { acc with package_archives = acc.package_archives @ [(preds, v)] } in
                 parse nacc xs3
