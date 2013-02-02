@@ -33,6 +33,8 @@ type gconf =
     ; mutable conf_build_tests    : bool
     ; mutable conf_build_benchs   : bool
     ; mutable conf_user_flags : (string * bool) list (* TODO moved not as global variable *)
+    ; mutable conf_annot : bool
+    ; mutable conf_bin_annot : bool
     }
 
 let gconf =
@@ -68,4 +70,6 @@ let gconf =
     ; conf_build_tests          = false
     ; conf_build_benchs         = false
     ; conf_user_flags           = []
+    ; conf_annot                = false
+    ; conf_bin_annot            = false
     }
