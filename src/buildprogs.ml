@@ -14,6 +14,7 @@ open Hier
 open Pp
 
 exception LinkingFailed of string
+exception InferFailed of string
 
 type c_linking_mode = LinkingNoShared | LinkingShared
 
@@ -61,6 +62,16 @@ let runOcamlPack srcDir dstDir buildMode packOpt dest modules =
              @ List.map (fun m -> fp_to_string (srcDir <//> cmc_of_hier buildMode m)) modules
         in
     spawn args
+
+let runOcamlInfer srcDir includes pp modname =
+    let args = [Prog.getOcamlC (); "-i"]
+             @ pp_to_params pp
+             @ (Utils.to_include_path_options includes)
+             @ [fp_to_string (srcDir <//> filename_of_hier modname)]
+        in
+    match run_with_outputs args with
+    | Success (mli, _) -> mli
+    | Failure er       -> raise (InferFailed er)
 
 let o_from_cfile file = file <.> "o"
 
