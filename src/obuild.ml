@@ -122,6 +122,17 @@ let mainDoc argv =
     Doc.run projFile;
     ()
 
+let mainInfer argv =
+    let anon = ref [] in
+    Arg.parse_argv (Array.of_list argv)
+            [
+            ] (fun s -> anon := s :: !anon)
+            (usageStr "infer");
+
+    if !anon = []
+    then (printf "no modules to infer\n"; exit 0);
+
+    ()
 let mainInstall argv =
     let destdir = ref "" in
     Dist.check (fun () -> ());
@@ -263,13 +274,14 @@ let parseGlobalArgs () =
 let knownCommands =
     [ ("configure", mainConfigure)
     ; ("build", mainBuild)
-	; ("clean", mainClean)
-	; ("sdist", mainSdist)
-	; ("install", mainInstall)
-	; ("init", mainInit)
-	; ("test", mainTest)
-	; ("doc", mainDoc)
-	; ("help", mainHelp)
+    ; ("clean", mainClean)
+    ; ("sdist", mainSdist)
+    ; ("install", mainInstall)
+    ; ("init", mainInit)
+    ; ("infer", mainInfer)
+    ; ("test", mainTest)
+    ; ("doc", mainDoc)
+    ; ("help", mainHelp)
     ]
 
 let defaultMain () =
