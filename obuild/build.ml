@@ -398,14 +398,10 @@ let linking bstate cstate target =
                                     | Native    -> Meta.Pred_Native
                                     | ByteCode  -> Meta.Pred_Byte
                                     in
-                                if Meta.isSyntax meta dep
-                                    then None
-                                    else (
-                                        let archives = Meta.getArchiveWithFilter meta dep pred in
-                                        match archives with
-                                        | []              -> None
-                                        | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
-                                    )
+                                let archives = Meta.getArchiveWithFilter meta dep pred in
+                                match archives with
+                                | []              -> None
+                                | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
                         ) pkgDeps
                 in
 
