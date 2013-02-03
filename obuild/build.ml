@@ -49,7 +49,7 @@ let check_destination_valid cstate (filety, dest) =
  * the source filepath that triggered the unvalid check.
  *
  * if source filepath is empty, it means that destination doesn't exists *)
-let reason_from_paths (_,dest) (_,changedSrc) =
+let reason_from_paths (_,dest) (srcTy,changedSrc) =
     let trim_pd_exts z =
         let n = fn_to_string z in
         if string_endswith ".d" n then fn (Filename.chop_suffix n ".d")
@@ -62,12 +62,19 @@ let reason_from_paths (_,dest) (_,changedSrc) =
             let bdest = path_basename dest in
             let bsrc  = path_basename changedSrc  in
             match Filetype.get_extension bdest with
-            | FileCMX | FileCMO ->
-                let bml = Filetype.replace_extension bdest FileML in
-                let bmli = Filetype.replace_extension bdest FileMLI in
-                if bml = bsrc then "Source changed"
-                else if bmli = bsrc then "Interface changed"
-                else ("Dependency " ^ modname_to_string (module_of_filename (trim_pd_exts bsrc)) ^ " changed")
+            | FileCMX | FileCMO -> (
+                match srcTy with
+                | FileCMX | FileCMO ->
+                    let bml = Filetype.replace_extension bdest FileML in
+                    let bmli = Filetype.replace_extension bdest FileMLI in
+                    if bml = bsrc then "Source changed"
+                    else if bmli = bsrc then "Interface changed"
+                    else ("Dependency " ^ modname_to_string (module_of_filename (trim_pd_exts bsrc)) ^ " changed " ^ fp_to_string changedSrc)
+                | FileCMXA | FileCMA ->
+                    "Library changed " ^ fp_to_string changedSrc
+                | _ ->
+                    "Dependencies changed " ^ fp_to_string changedSrc
+                )
             | FileO ->
                 let bc = Filetype.replace_extension bdest FileC in
                 let bh = Filetype.replace_extension bdest FileH in
@@ -119,13 +126,14 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
     let buildModes = Target.get_ocaml_compiled_types target in
 
     let buildmode_to_filety bmode = if bmode = Native then FileCMX else FileCMO in
+    let buildmode_to_library_filety bmode = if bmode = Native then FileCMXA else FileCMA in
 
     let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
     let internalLibsPathsAllModes =
         List.map (fun (compileOpt,compileType) ->
             ((compileOpt,compileType), List.map (fun dep ->
                 let dirname = Dist.getBuildDest (Dist.Target (LibName dep)) in
-                let filety = buildmode_to_filety compileType in
+                let filety = buildmode_to_library_filety compileType in
                 let libpath = dirname </> cmca_of_lib compileType compileOpt dep in
                 (filety, libpath)
             ) selfDeps)
