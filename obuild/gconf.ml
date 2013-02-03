@@ -71,5 +71,5 @@ let gconf =
     ; conf_build_benchs         = false
     ; conf_user_flags           = []
     ; conf_annot                = false
-    ; conf_bin_annot            = false
+    ; conf_bin_annot            = true
     }
