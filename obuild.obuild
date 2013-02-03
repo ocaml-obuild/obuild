@@ -43,13 +43,17 @@ extra-srcs: bootstrap
      , DESIGN.md
      , TODO.md
 
-# a comment
-executable obuild
-  main-is: obuild.ml
-  src-dir: src
+library obuild
+  modules: obuild
   build-deps: unix
 
-executable obuild-simple
-  main-is: obuildSimple.ml
+# a comment
+executable obuild
+  main-is: main.ml
   src-dir: src
-  build-deps: unix
+  build-deps: unix, obuild
+
+executable obuild-simple
+  main-is: simple.ml
+  src-dir: src
+  build-deps: unix, obuild

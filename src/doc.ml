@@ -1,5 +1,6 @@
-open Ext
-open Gconf
+open Obuild.Ext
+open Obuild.Gconf
+open Obuild
 
 exception DocumentationBuildingFailed of string
 

@@ -1,11 +1,12 @@
 open Printf
-open Ext
-open Types
-open Helper
-open Filepath
-open Filetype
-open Target
-open Gconf
+open Obuild.Ext
+open Obuild.Types
+open Obuild.Helper
+open Obuild.Filepath
+open Obuild.Filetype
+open Obuild.Target
+open Obuild.Gconf
+open Obuild
 
 let run projFile isSnapshot =
     let name = projFile.Project.name in

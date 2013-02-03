@@ -62,9 +62,6 @@ let show exn =
     | Buildprogs.LinkingFailed e           -> eprintf "\n%s\n%!" e; exit 7
     | Dependencies.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 8
     | Dependencies.DependencyMissing e     -> error "missing dependency '%s'\n" e; exit 9
-    (* init *)
-    | Init.ProjectAlreadyExists -> error "found another project file in this directory. cannot run init in an already existing project\n"; exit 12
-    | Init.AbortedByUser -> eprintf "init aborted. nothing written\n"; exit 0
     (* others exception *)
     | Unix.Unix_error (err, fname, params) ->
         error "unexpected unix error: \"%s\" during %s(%s)\n" (Unix.error_message err) fname params;

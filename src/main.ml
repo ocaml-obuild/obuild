@@ -1,9 +1,10 @@
 open Printf
-open Ext
-open Types
-open Helper
-open Filepath
-open Gconf
+open Obuild.Ext
+open Obuild.Types
+open Obuild.Helper
+open Obuild.Filepath
+open Obuild.Gconf
+open Obuild
 
 let major = 0
 let minor = 0
@@ -304,4 +305,7 @@ let defaultMain () =
 
 let () =
     try defaultMain ()
-    with exn -> Exception.show exn
+    with
+    | Init.ProjectAlreadyExists -> eprintf "error: found another project file in this directory. cannot run init in an already existing project\n"; exit 12
+    | Init.AbortedByUser -> eprintf "init aborted. nothing written\n"; exit 0
+    | exn -> Exception.show exn

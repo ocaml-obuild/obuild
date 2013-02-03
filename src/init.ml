@@ -1,10 +1,11 @@
-open Ext
-open Filepath
 open Printf
-open Helper
-open Target
-open Project
-open Modname
+open Obuild.Ext
+open Obuild.Filepath
+open Obuild.Helper
+open Obuild.Target
+open Obuild.Project
+open Obuild.Modname
+open Obuild
 
 exception ProjectAlreadyExists
 exception CannotRunNotInteractive

@@ -1,11 +1,12 @@
 (* simple builder *)
 open Printf
-open Ext
-open Project
-open Target
-open Types
-open Filepath
-open Gconf
+open Obuild.Ext
+open Obuild.Project
+open Obuild.Target
+open Obuild.Types
+open Obuild.Filepath
+open Obuild.Gconf
+open Obuild
 
 exception NoMain
 exception TooManyArgs
