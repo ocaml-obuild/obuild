@@ -417,8 +417,6 @@ let linking bstate cstate target =
                     let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
                     cstate.compilation_builddir_ml Normal </> outputName
                 in
-            verbose Report "Linking %s %s\n%!" (if is_target_lib target then "library" else "executable") (fp_to_string dest);
-
             let linking_paths_of compileOpt =
                 match compileOpt with
                 | Normal    -> cstate.compilation_linking_paths
@@ -426,16 +424,25 @@ let linking bstate cstate target =
                 | WithProf  -> cstate.compilation_linking_paths_p
                 in
 
-            print_warnings (runOcamlLinking
-                (linking_paths_of compileOpt)
-                compiledType
-                (if is_target_lib target then LinkingLibrary else LinkingExecutable)
-                compileOpt
-                useThreads
-                cclibs
-                buildDeps
-                compiled
-                dest)
+            let destTime = Filesystem.getModificationTime dest in
+            let depsTime =
+                try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p) (List.map (fun m -> cstate.compilation_builddir_ml compileOpt <//> cmc_of_hier compiledType m) compiled))
+                with Not_found -> None
+                in
+            if depsTime <> None then (
+                verbose Report "Linking %s %s\n%!" (if is_target_lib target then "library" else "executable") (fp_to_string dest);
+
+                print_warnings (runOcamlLinking
+                    (linking_paths_of compileOpt)
+                    compiledType
+                    (if is_target_lib target then LinkingLibrary else LinkingExecutable)
+                    compileOpt
+                    useThreads
+                    cclibs
+                    buildDeps
+                    compiled
+                    dest)
+            )
         ) compile_opts
     ) compiledTypes
 
