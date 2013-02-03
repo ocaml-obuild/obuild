@@ -89,6 +89,12 @@ let reason_from_paths (_,dest) (srcTy,changedSrc) =
  * which will compile all C sources and OCaml modules.
  *)
 let compile_ (bstate: build_state) (cstate: compilation_state) target =
+    let annotMode =
+        if gconf.conf_annot && gconf.conf_bin_annot then AnnotationBoth
+        else if gconf.conf_annot then AnnotationText
+        else if gconf.conf_bin_annot then AnnotationBin
+        else AnnotationNone
+        in
     let compileOpts = Target.get_compilation_opts target in
     let cbits = target.target_cbits in
 
@@ -208,7 +214,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                                             ; include_dirs = cstate.compilation_include_paths compOpt h } in
                 let fcompile =
                     (buildMode,
-                    (fun () -> runOcamlCompile rDirSpec useThread buildMode compOpt packOpt hdesc.module_use_pp (hier_leaf h))) in
+                    (fun () -> runOcamlCompile rDirSpec useThread annotMode buildMode compOpt packOpt hdesc.module_use_pp (hier_leaf h))) in
                 if invalid
                     then (
                         let (_, ys) = check invalid xs in

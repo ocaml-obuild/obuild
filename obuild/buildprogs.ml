@@ -20,9 +20,11 @@ type c_linking_mode = LinkingNoShared | LinkingShared
 
 type linking_mode = LinkingLibrary | LinkingExecutable
 
+type annotation_mode = AnnotationNone | AnnotationBin | AnnotationText | AnnotationBoth
+
 type packopt = hier option
 
-let runOcamlCompile dirSpec useThread buildMode compileOpt packopt pp modname =
+let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp modname =
     let dstdir = dirSpec.dst_dir in
     let (prog, srcFile, dstFile) =
         match buildMode with
@@ -46,6 +48,11 @@ let runOcamlCompile dirSpec useThread buildMode compileOpt packopt pp modname =
                 | Normal    -> []
                 | WithDebug -> ["-g"]
                 | WithProf  -> ["-p"])
+             @ (match annotMode with
+                | AnnotationNone -> []
+                | AnnotationBin  -> ["-bin-annot"]
+                | AnnotationText -> ["-annot"]
+                | AnnotationBoth -> ["-bin-annot";"-annot"])
              @ pp_to_params pp
              @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; hier_to_string x ] else []) packopt
 
