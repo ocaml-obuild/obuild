@@ -281,13 +281,13 @@ let write path package =
     let rec write_one indent pkg =
         let indentStr = String.make indent ' ' in
         if pkg.package_description <> ""
-            then append (sprintf "%sdescription = \"%s\" (\n" indentStr pkg.package_description);
+            then append (sprintf "%sdescription = \"%s\"\n" indentStr pkg.package_description);
         if pkg.package_version <> ""
-            then append (sprintf "%sversion = \"%s\" (\n" indentStr pkg.package_version);
+            then append (sprintf "%sversion = \"%s\"\n" indentStr pkg.package_version);
         if pkg.package_browse_interface <> ""
-            then append (sprintf "%sbrowse_interfaces = \"%s\" (\n" indentStr pkg.package_browse_interface);
+            then append (sprintf "%sbrowse_interfaces = \"%s\"\n" indentStr pkg.package_browse_interface);
         if pkg.package_exists_if <> ""
-            then append (sprintf "%sexists_if = \"%s\" (\n" indentStr pkg.package_exists_if);
+            then append (sprintf "%sexists_if = \"%s\"\n" indentStr pkg.package_exists_if);
 
         List.iter (fun (mpred,deps) ->
             let predStr =
@@ -297,12 +297,12 @@ let write path package =
                 in
             let depStr = String.concat "," (List.map (fun dep -> lib_name_to_string dep) deps)
                 in
-            append (sprintf "%srequires%s = \"%s\" (\n" indentStr predStr depStr);
+            append (sprintf "%srequires%s = \"%s\"\n" indentStr predStr depStr);
         ) pkg.package_requires;
 
         List.iter (fun (csv,v) ->
             let k = String.concat "," (List.map predicate_to_string csv) in
-            append (sprintf "%sarchive(%s) = \"%s\" (\n" indentStr k v)
+            append (sprintf "%sarchive(%s) = \"%s\"\n" indentStr k v)
         ) pkg.package_archives;
         List.iter (fun spkg ->
             append (sprintf "%spackage \"%s\" (\n" indentStr spkg.package_name);
