@@ -1,6 +1,8 @@
+open Obuild
 open Ext
 open Printf
 open Filepath
+open Modname
 open Project
 open Types
 open Meta
@@ -33,26 +35,31 @@ let opam_install_file projFile =
     )
 
 let lib_to_meta projFile lib =
-
-    (* TODO hardcoded tests *)
-    let fileCma = "a.cma" in
-    let fileCmxa = "a.cmxa" in
+    let requires_of_lib lib =
+        let deps = lib.lib_target.target_obits.target_builddeps in
+        [ (None, List.map (fun d -> fst d) deps) ]
+        in
+    let set_meta_field_from_lib pkg lib =
+        { pkg with
+              package_requires    = requires_of_lib lib
+            ; package_description = if lib.lib_description <> "" then lib.lib_description else projFile.description
+            ; package_archives    =
+                [ ([Pred_Byte]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name))
+                ; ([Pred_Native], fn_to_string (cmca_of_lib Native Normal lib.lib_name))
+                ]
+        }
+        in
 
     let subPkgs =
         List.map (fun sub ->
-            newPkg (list_last (lib_name_to_string_nodes sub.lib_name))
+            let npkg = newPkg (list_last (lib_name_to_string_nodes sub.lib_name)) in
+            set_meta_field_from_lib npkg sub
         ) lib.lib_subs
         in
 
-    let pkg = newPkg "" in
+    let pkg = set_meta_field_from_lib (newPkg "") lib in
     { pkg with
           package_version          = projFile.version
-        ; package_description      = if lib.lib_description <> "" then lib.lib_description else projFile.description
-        ; package_requires         = []
-        ; package_archives         =
-            [ ([Pred_Byte]  , fileCma)
-            ; ([Pred_Native], fileCmxa)
-            ]
         ; package_subs             = subPkgs
     }
 
