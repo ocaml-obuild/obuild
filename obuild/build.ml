@@ -454,9 +454,7 @@ let get_destination_files target =
     match target.Target.target_name with
     | LibName libname ->
         List.concat (List.map (fun compiledType ->
-            List.map (fun compileOpt ->
-                cmca_of_lib compiledType compileOpt libname
-            ) compileOpts
+            List.map (fun compileOpt -> cmca_of_lib compiledType compileOpt libname) compileOpts
         ) compiledTypes)
     | ExeName e | TestName e | BenchName e | ExampleName e ->
         List.concat (List.map (fun compiledType ->
