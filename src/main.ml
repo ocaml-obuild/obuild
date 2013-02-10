@@ -113,6 +113,9 @@ let mainSdist argv =
     Sdist.run projFile !isSnapshot;
     ()
 
+let unimplemented () =
+    eprintf "sorry, you've reached an unimplemented part ! please be patient or send a patch.\n"
+
 let mainDoc argv =
     Arg.parse_argv (Array.of_list argv)
            [
@@ -121,6 +124,7 @@ let mainDoc argv =
 
     let projFile = project_read () in
     Doc.run projFile;
+    unimplemented ();
     ()
 
 let mainInfer argv =
@@ -133,23 +137,30 @@ let mainInfer argv =
     if !anon = []
     then (printf "no modules to infer\n"; exit 0);
 
+    unimplemented ();
     ()
+
 let mainInstall argv =
     let destdir = ref "" in
-    Dist.check (fun () -> ());
     Arg.parse_argv (Array.of_list argv)
-           [ ("destdir", Arg.Set_string destdir, "override destination where to install (default coming from findlib configuration)")
+           [ ("--destdir", Arg.Set_string destdir, "override destination where to install (default coming from findlib configuration)")
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "install");
+
+    Configure.check ();
+    let projFile = project_read () in
     FindlibConf.load ();
 
-    let projFile = project_read () in
+    List.iter (fun lib ->
+        Install.write_lib_meta projFile lib
+    ) (projFile.Project.libs);
     List.iter (fun target ->
         let buildDir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
         let files = Build.get_destination_files target in
         Build.sanity_check buildDir target;
         verbose Report "installing: %s\n" (Utils.showList "," fn_to_string files)
     ) (Project.get_all_buildable_targets projFile);
+    unimplemented ();
     ()
 
 let mainTest argv =
