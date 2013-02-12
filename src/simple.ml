@@ -107,6 +107,7 @@ let main () =
             Dist.checkOrCreate ();
             let _ = Dist.createBuildDest (Dist.Autogen) in
             let buildDir = Dist.createBuildDest (Dist.Target exe.exe_target.target_name) in
+            FindlibConf.load ();
             let project = Analyze.prepare project_config in
             let bstate = Prepare.init project in
             Build.buildExe bstate exe;
