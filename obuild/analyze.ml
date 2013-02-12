@@ -131,9 +131,10 @@ let prepare projFile =
 
     (* check for findlib / ocaml configuration mismatch *)
     let () =
-        let stdlibPath = get_ocaml_config_key_hashtbl "standard_library" ocamlCfg in
-        if not (List.exists (fun p -> string_startswith (fp_to_string p) stdlibPath) (FindlibConf.get_paths ())) then
-           Meta.meta_path_warning := true
+        let stdlibPath = fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg) in
+        if not (List.exists (fun p -> string_startswith (fp_to_string p) (fp_to_string stdlibPath)) (FindlibConf.get_paths ())) then (
+            Meta.meta_path_warning := true
+        )
         in
 
     let internalLibs = List.map (fun lib -> lib.Project.lib_name.lib_main_name) projFile.Project.libs in
