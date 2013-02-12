@@ -161,8 +161,30 @@ let parse name content =
             in
         let parseString o =
             let i = ref (o+1) in
-            while !i < len && s.[!i] <> '"' do i := !i+1 done;
-            (String.sub s (o+1) (!i-(o+1)),!i+1)
+            let buf = Buffer.create 32 in
+            let inEscape = ref false in
+            while !i < len && (!inEscape || s.[!i] <> '"') do
+                if not !inEscape && s.[!i] = '\\'
+                    then inEscape := true
+                    else (
+                        let c =
+                            if !inEscape
+                                then
+                                    match s.[!i] with
+                                    | '\\' -> '\\'
+                                    | 'n' -> '\n'
+                                    | 't' -> '\t'
+                                    | 'r' -> '\r'
+                                    | '"' -> '"'
+                                    | _   -> s.[!i]
+                                else s.[!i]
+                            in
+                        inEscape := false;
+                        Buffer.add_char buf c
+                    );
+                i := !i+1
+            done;
+            (Buffer.contents buf, !i+1)
             in
         let rec loop o =
             if o >= len
