@@ -219,15 +219,9 @@ let parse strict lines =
         { acc with flags = flag :: acc.flags }
         in
     let parseDeps keyParse value =
-        let parseConstraint l =
-            (* TODO proper lexer/parser to parse real expressions. *)
-            None
-            in
         let parseDependency w =
-            match string_words_noempty w with
-            | []     -> failwith "empty dependency"
-            | k :: l -> let depname = keyParse k in
-                        (depname, parseConstraint l)
+            let (d,c) = Expr.parse_builddep w in
+            (keyParse d, c)
             in
         List.map parseDependency (Utils.parseCSV value)
         in

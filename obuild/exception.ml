@@ -29,6 +29,9 @@ let show exn =
         error "trying to define a section %s using parameter syntax:\n" s;
         eprintf "  spurious colon between section definition and section name\n";
         exit 3
+    | Expr.CannotParseContraints (builddep, s) ->
+        error "cannot parse contraints for build dependency '%s': %s\n" builddep s;
+        exit 3
     (* dist directory related *)
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
     | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4

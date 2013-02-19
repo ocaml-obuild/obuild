@@ -11,7 +11,7 @@ exception BuildCDepAnalyzeFailed of string
 exception DependencyMissing of string
 exception DependencyFailedParsing of string
 
-type dep_constraint = string * Expr.expr
+type dep_constraint = Expr.expr
 
 type dep_main_name = string
 
