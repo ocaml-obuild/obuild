@@ -114,6 +114,12 @@ let run projFile tweakFlags =
     verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flagsVal);
     gconf.conf_user_flags <- flagsVal;
 
+    let syspath = Utils.get_system_paths () in
+    List.iter (fun tool ->
+        try let _ = Utils.find_in_paths syspath tool in ()
+        with Utils.FileNotFoundInPaths _ -> raise (ToolNotFound tool)
+    ) projFile.Project.extra_tools;
+
     let project = Analyze.prepare projFile in
 
     let currentSetup = makeSetup digestKV project in
