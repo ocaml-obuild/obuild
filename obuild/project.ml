@@ -102,6 +102,7 @@ type obuild =
     ; benchs      : obuild_bench list
     ; examples    : obuild_example list
     ; extra_srcs  : filepath list
+    ; extra_tools : filename list
     }
 
 let emptyObuild =
@@ -114,6 +115,7 @@ let emptyObuild =
     ; authors     = []
     ; obuild_ver  = 0
     ; homepage    = ""
+    ; extra_tools = []
     ; flags       = []
     ; libs        = []
     ; exes        = []
@@ -403,6 +405,7 @@ let parse strict lines =
             | "license-file"
             | "licence-file" -> { acc with license_file = Some (fp value) }
             | "homepage"    -> { acc with homepage = value }
+            | "tools"       -> { acc with extra_tools = List.map fn (string_words_noempty value) @ acc.extra_tools }
             | "authors"     -> { acc with authors = Utils.parseCSV value }
             | "author"      -> { acc with authors = [value] }
             | "extra-srcs"  -> { acc with extra_srcs = List.map fp (Utils.parseCSV value) @ acc.extra_srcs }

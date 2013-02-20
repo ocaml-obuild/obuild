@@ -6,6 +6,7 @@ open Filepath
 open Gconf
 
 exception ConfigChanged of string
+exception ToolNotFound of filename
 
 let set_lib_profiling v () = gconf.conf_library_profiling <- v
 let set_lib_debugging v () = gconf.conf_library_debugging <- v
