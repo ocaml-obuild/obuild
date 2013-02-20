@@ -218,13 +218,14 @@ let parse name content =
         in
     let parse_requires_eq mpreds tokens =
         match tokens with
+        | PLUSEQ :: S reqs :: xs
         | EQ :: S reqs :: xs ->
             let deps = List.map (fun r -> lib_name_of_string r)
                 $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
                 in
             ((mpreds, deps), xs)
         | _ ->
-            metaFailed ("requires_eq failed")
+            metaFailed ("expecting '+=' or '=' after requires")
         in
     let rec parse acc tokens =
         match tokens with
