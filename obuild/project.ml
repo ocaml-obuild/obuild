@@ -103,6 +103,7 @@ type obuild =
     ; examples    : obuild_example list
     ; extra_srcs  : filepath list
     ; extra_tools : filename list
+    ; configure_script : filepath option
     }
 
 let emptyObuild =
@@ -123,6 +124,7 @@ let emptyObuild =
     ; benchs      = []
     ; examples    = []
     ; extra_srcs  = []
+    ; configure_script = None
     }
 
 let emptyLibLname lname : obuild_lib =
@@ -410,6 +412,7 @@ let parse strict lines =
             | "author"      -> { acc with authors = [value] }
             | "extra-srcs"  -> { acc with extra_srcs = List.map fp (Utils.parseCSV value) @ acc.extra_srcs }
             | "obuild-ver"  -> { acc with obuild_ver = user_int_of_string "obuild-ver" value }
+            | "configure-script" -> { acc with configure_script = Some (fp value) }
             (* for better error reporting *)
             | "executable" | "library" | "test" | "bench" | "example" -> raise (BlockSectionAsValue k)
             | k             -> raise_if_strict ("unknown key: " ^ k); acc
