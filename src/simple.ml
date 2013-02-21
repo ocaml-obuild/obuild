@@ -82,6 +82,7 @@ let main () =
             }
         ; target_buildable   = BoolConst true
         ; target_installable = BoolConst true
+        ; target_extras      = []
         }
         in
     let exe =

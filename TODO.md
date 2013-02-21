@@ -23,6 +23,7 @@ Perf Improvement
 * remove redundant mtime checks by using a invaliding mtime hashtbl caching mechanism.
 * improve change detection with a digest after mtime change.
 * improve compilation with .mli by moving the dag pointer of its parents to the compiled interface, not the compiled module.
+* ocamldep parallelization & multiples
 
 Completeness
 -----------
@@ -31,7 +32,7 @@ Completeness
 * generate HTML documentation
 * generate cmxs
 * generate opam files (.install and .config)
-* tests / benchs
+* benchs
 
 Misc
 ----
@@ -44,3 +45,4 @@ Misc
 * better portability (windows)
 * add a way to refresh a .mli from scratch. for example obuild generate-mli src/ext.ml will (re-)write src/ext.mli
 * add a simple way to switch stdlib so that core can be used instead of the compiler stdlib for any target. (project field parsing done already)
+* have test (re-)build themselves when doing obuild test, instead of doing 'obuild build; obuild test'.

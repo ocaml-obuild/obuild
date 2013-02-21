@@ -57,3 +57,8 @@ executable obuild-simple
   main-is: simple.ml
   src-dir: src
   build-deps: unix, obuild
+
+test dag
+  src-dir: tests
+  main-is: test_dag.ml
+  build-deps: obuild

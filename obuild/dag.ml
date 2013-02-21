@@ -17,7 +17,11 @@ let init () = { nodes = Hashtbl.create 16 }
 
 let length dag = Hashtbl.length dag.nodes
 
-(* add an directed edge from a to b *)
+(* Add an directed edge from a to b.
+ *
+ * 'a' is the parent of 'b'
+ * 'b' is the child of 'a'
+ *)
 let addEdge a b dag =
     let maNode = try Some (Hashtbl.find dag.nodes a) with Not_found -> None in
     let mbNode = try Some (Hashtbl.find dag.nodes b) with Not_found -> None in

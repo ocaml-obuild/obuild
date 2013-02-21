@@ -301,6 +301,21 @@ let parse strict lines =
         let name = getContextName ty args in
         accu (processChunk parseM (mempty name) cont)
         in
+    let doBlock2 ty mempty parseM accu args cont =
+        accu (processChunk parseM (mempty args) cont)
+        in
+
+    let parsePer (acc: target_extra) line cont =
+        match Utils.toKV line with
+        | (k, None) ->
+           raise_if_strict ("no block in per"); acc
+        | (k, Some v) ->
+            let (value: string) = String.concat "\n" (v :: List.map snd cont) in
+            match String.lowercase k with
+            | "builddepends" | "builddeps"
+            | "build-deps" -> { acc with target_extra_builddeps = parseDeps lib_name_of_string value @ acc.target_extra_builddeps }
+            | _            -> raise_if_strict ("unexpected item in : " ^ k); acc
+        in
 
     (*************    library parsing     ***************************)
     let rec parseLibrary (acc: obuild_lib) line cont =
@@ -316,6 +331,12 @@ let parse strict lines =
                         in
                     doSub args cont
                     )
+                | "per" -> (
+                    let t = acc.lib_target in
+                    let doPer = doBlock2 "per" newTargetExtra parsePer
+                                (fun obj -> { acc with lib_target = { t with target_extras = obj :: t.target_extras } }) in
+                    doPer args cont
+                )
                 | _                            -> raise_if_strict ("unexpected block name in library: " ^ blockName); acc
             )
         | (k, Some v) ->
@@ -335,7 +356,20 @@ let parse strict lines =
     (*************    executable parsing    *************************)
     let parseExecutabloid sectionName setMain setTarget myTarget other acc line cont =
         match Utils.toKV line with
-        | (k, None) -> raise_if_strict ("unexpected item in " ^ sectionName ^ " " ^ k); acc
+        | (k, None) ->
+            (match string_words_noempty k with
+            | []                -> raise_if_strict ("unknown empty block in " ^ sectionName ^ " " ^ k); acc
+            | blockName :: args -> (
+                match String.lowercase blockName with
+                | "per" -> (
+                    let t = myTarget in
+                    let doPer = doBlock2 "per" (newTargetExtra) parsePer
+                                (fun obj -> setTarget acc { t with target_extras = obj :: t.target_extras }) in
+                    doPer args cont
+                    )
+                | _                            -> raise_if_strict ("unexpected block name in library: " ^ blockName); acc
+                )
+            )
         | (k, Some v) ->
             let (value: string) = String.concat "\n" (v :: List.map snd cont) in
             (match String.lowercase k with

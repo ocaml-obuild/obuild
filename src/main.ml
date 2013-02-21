@@ -164,8 +164,9 @@ let mainInstall argv =
     ()
 
 let mainTest argv =
+    let showTest = ref false in
     Arg.parse_argv (Array.of_list argv)
-           [
+           [ ("--output", Arg.Set showTest, "show test outputs")
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "test");
 
@@ -189,7 +190,9 @@ let mainTest argv =
                         exit 1
                     );
                     (match Process.run_with_outputs [ fp_to_string exePath ] with
-                    | Process.Success _   -> (test.Project.test_name, true)
+                    | Process.Success (out,_) ->
+                        if !showTest then print_warnings out;
+                        (test.Project.test_name, true)
                     | Process.Failure err ->
                         print_warnings err;
                         (test.Project.test_name, false)
@@ -200,8 +203,8 @@ let mainTest argv =
             let failed = List.filter (fun (_,x) -> false = x) results in
             let successes = List.filter (fun (_,x) -> true = x) results in
             let total = List.length failed + List.length successes in
-            printf "SUCCESS: %d/%d\n" (List.length successes) total;
-            printf "FAILED : %d/%d\n" (List.length failed) total;
+            printf "%sSUCCESS%s: %d/%d\n" (color_green()) (color_white()) (List.length successes) total;
+            printf "%sFAILED%s : %d/%d\n" (color_red()) (color_white()) (List.length failed) total;
             List.iter (fun (n,_) -> printf "  %s\n" n) failed;
             if failed <> [] then exit 1
 

@@ -32,11 +32,19 @@ type target_obits =
     ; target_stdlib    : target_stdlib
     }
 
+type target_extra =
+    { target_extra_objects   : string list     (* targets of those extra settings *)
+    ; target_extra_builddeps : dependency list
+    ; target_extra_oflags    : string list
+    ; target_extra_cflags    : string list
+    }
+
 type target =
     { target_name        : name
     ; target_type        : target_type
     ; target_cbits       : target_cbits
     ; target_obits       : target_obits
+    ; target_extras      : target_extra list
     ; target_buildable   : runtime_bool
     ; target_installable : runtime_bool
     }
@@ -64,8 +72,16 @@ let newTarget n ty buildable installable =
     ; target_buildable   = runtime_def buildable
     ; target_installable = runtime_def installable
     ; target_type        = ty
+    ; target_extras      = []
     ; target_cbits       = newTargetCbits
     ; target_obits       = newTargetObits
+    }
+
+let newTargetExtra objs =
+    { target_extra_objects   = objs
+    ; target_extra_builddeps = []
+    ; target_extra_oflags    = []
+    ; target_extra_cflags    = []
     }
 
 let get_target_name target = name_to_string target.target_name
@@ -108,3 +124,11 @@ let get_debug_profile target =
 let get_compilation_opts target =
     let (debug, prof) = get_debug_profile target in
     Normal :: (if debug then [WithDebug] else []) @ (if prof then [WithProf] else [])
+
+let get_all_builddeps target =
+    let targetWideDeps = target.target_obits.target_builddeps in
+    let fileSpecificDeps = List.map (fun extra -> extra.target_extra_builddeps) target.target_extras in
+    targetWideDeps @ List.concat fileSpecificDeps
+
+let find_extra_matching target s =
+    List.filter (fun extra -> List.mem s extra.target_extra_objects) target.target_extras

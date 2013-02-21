@@ -130,6 +130,44 @@ let get_compilation_order cstate =
         in
     list_filter_map filterModules (Dagutils.linearize cstate.compilation_dag)
 
+let camlp4Libname = lib_name_of_string "camlp4"
+let syntaxPredsCommon = [Meta.Pred_Syntax;Meta.Pred_Preprocessor]
+
+let get_p4pred preprocessor =
+    match preprocessor with
+    | CamlP4O -> Meta.Pred_Camlp4o
+    | CamlP4R -> Meta.Pred_Camlp4r
+
+let get_syntax_pp bstate preprocessor buildDeps =
+    let conf = bstate.bstate_config in
+    let p4pred = get_p4pred preprocessor in
+    let stdlib = fp (get_ocaml_config_key "standard_library" conf) in
+    list_filter_map (fun spkg ->
+        if Analyze.is_pkg_internal conf spkg
+            then (
+                let lib = Project.find_lib bstate.bstate_config.project_file spkg in
+                if lib.Project.lib_syntax
+                    then (
+                        (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
+                        let dir = Dist.getBuildDest (Dist.Target (LibName lib.Project.lib_name)) in
+                        Some { pp_pkg_strs = [fp_to_string (dir </> cmca_of_lib ByteCode Normal lib.Project.lib_name) ]}
+                    ) else None
+            ) else (
+                let meta = Analyze.get_pkg_meta spkg conf in
+                let preds =
+                    if spkg = camlp4Libname
+                        then p4pred :: syntaxPredsCommon
+                        else syntaxPredsCommon
+                    in
+                if Meta.isSyntax meta spkg
+                    then (
+                        let includePath = Meta.getIncludeDir stdlib meta in
+                        Some { pp_pkg_strs = ["-I"; fp_to_string includePath; Meta.getArchive meta spkg preds] }
+                    ) else
+                        None
+            )
+    ) buildDeps
+
 (* get every module description
  * and their relationship with each other
  *)
@@ -142,39 +180,11 @@ let get_modules_desc bstate target toplevelModules =
         ]
         in
 
-(*
-    let allPkgs = Analyze.get_pkg_deps target bstate.bstate_config in 
-    let (systemPkgs, internalPkgs) =
-        List.partition (fun pkg ->
-            Hashtbl.find bstate.bstate_config.project_dep_data pkg = System
-        ) allPkgs
-        in
-    let (syntaxSystemPkgs, otherSystemPkgs) =
-        List.partition (fun pkg ->
-            let meta = Analyze.get_pkg_meta pkg bstate.bstate_config in
-            Meta.isSyntax meta pkg
-        ) systemPkgs
-        in
-    let (syntaxInternalPkgs, otherInternalPkgs) =
-        List.partition (fun pkg ->
-            let lib = Project.find_lib bstate.bstate_config.project_file pkg in
-            lib.Project.lib_syntax
-        ) internalPkgs
-        in
-    verbose Verbose " internal packages : [%s]\n%!" (Utils.showList "," lib_name_to_string internalPkgs);
-    verbose Verbose " | syntax packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxInternalPkgs);
-    verbose Verbose " | build  packages : [%s]\n%!" (Utils.showList "," lib_name_to_string otherInternalPkgs);
-
-    verbose Verbose " system packages   : [%s]\n%!" (Utils.showList "," lib_name_to_string systemPkgs);
-    verbose Verbose " | syntax packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxSystemPkgs);
-    verbose Verbose " | build  packages : [%s]\n%!" (Utils.showList "," lib_name_to_string otherSystemPkgs);
-*)
     let targetPP =
         (match target.target_obits.target_pp with
-        | None -> pp_none
+        | None    -> pp_none
         | Some pp ->
             let conf = bstate.bstate_config in
-            let stdlib = fp (get_ocaml_config_key "standard_library" conf) in
             let nodes = List.rev (Taskdep.linearize bstate.bstate_config.project_pkgdeps_dag Taskdep.FromParent
                                     [Analyze.Target target.target_name]) in
             let syntaxPkgs =
@@ -184,47 +194,15 @@ let get_modules_desc bstate target toplevelModules =
                     | _              -> None
                 ) nodes
                 in
-            verbose Verbose " syntax packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxPkgs);
-            let p4pred =
-                match pp with
-                | CamlP4O -> Meta.Pred_Camlp4o
-                | CamlP4R -> Meta.Pred_Camlp4r
-                in
-            let predsCommon = [Meta.Pred_Syntax;Meta.Pred_Preprocessor] in
-            let camlp4Libname = lib_name_of_string "camlp4" in
+            verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxPkgs);
+            let p4pred = get_p4pred pp in
+            let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
             let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
             let preproc = (snd p4Meta).Meta.package_preprocessor in
-            let camlp4Strs =
-                list_filter_map (fun spkg ->
-                    if Analyze.is_pkg_internal conf spkg
-                        then (
-                            let lib = Project.find_lib bstate.bstate_config.project_file spkg in
-                            if lib.Project.lib_syntax
-                                then (
-                                    (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
-                                    let dir = Dist.getBuildDest (Dist.Target (LibName lib.Project.lib_name)) in
-                                    Some (fp_to_string (dir </> cmca_of_lib ByteCode Normal lib.Project.lib_name))
-                                ) else None
-                        ) else (
-                            let meta = Analyze.get_pkg_meta spkg conf in
-                            let preds =
-                                if spkg = camlp4Libname
-                                    then p4pred :: predsCommon
-                                    else predsCommon
-                                in
-                            if Meta.isSyntax meta spkg
-                                then (
-                                    let includePath = Meta.getIncludeDir stdlib meta in
-                                    Some ("-I " ^ fp_to_string includePath ^ " "  ^ Meta.getArchive meta spkg preds)
-                                ) else
-                                    None
-                        )
-                ) syntaxPkgs
-                in
-            let archive = Meta.getArchive p4Meta camlp4Libname (p4pred::predsCommon) in
+            let archive = { pp_pkg_strs = [Meta.getArchive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] } in
 
             (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
-            pp_some (preproc ^ " " ^ archive ^ " " ^ String.concat " " camlp4Strs)
+            pp_some preproc (archive :: camlp4Strs)
         ) in
 
     let module_lookup_method = [filename_of_module; lexer_of_module; parser_of_module; directory_of_module] in
@@ -284,7 +262,19 @@ let get_modules_desc bstate target toplevelModules =
                     let modTime = Filesystem.getModificationTime srcFile in
                     let hasInterface = Filesystem.exists intfFile in
                     let intfModTime = Filesystem.getModificationTime intfFile in
-                    let pp = targetPP in
+
+                    (* augment pp if needed with per-file dependencies *)
+                    let pp =
+                        match target.target_obits.target_pp with
+                        | None              -> pp_none
+                        | Some preprocessor ->
+                            (* FIXME: we should re-use the dependency DAG here, otherwise we might end up in the case
+                             * where the extra dependencies are depending not in the correct order
+                             *)
+                            let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) (find_extra_matching target (hier_to_string hier))) in
+                            pp_append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
+                        in
+
                     verbose Debug "  %s has mtime %f\n%!" moduleName modTime;
                     if hasInterface then
                         verbose Debug "  %s has interface (mtime=%f)\n%!" moduleName intfModTime;

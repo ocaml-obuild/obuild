@@ -137,22 +137,28 @@ let prepare projFile =
         )
         in
 
-    let internalLibs = List.map (fun lib -> lib.Project.lib_name.lib_main_name) projFile.Project.libs in
-
     let allTargets = Project.get_all_buildable_targets projFile in
 
+    let internalLibs = List.map (fun lib -> lib.Project.lib_name.lib_main_name) projFile.Project.libs in
     let isInternal lib = List.mem lib.lib_main_name internalLibs in
 
+    (* establish inter-dependencies in the project.
+     * only consider internal libraries *)
     List.iter (fun target ->
         Dag.addNode target.target_name targetsDag;
         List.iter (fun (dep, _) ->
             if isInternal dep then (
-                verbose Debug "  internal depend: %s\n" (lib_name_to_string dep);
+                verbose Debug "  internal depends: %s\n" (lib_name_to_string dep);
                 Dag.addEdge target.target_name (LibName dep) targetsDag;
             )
-        ) target.target_obits.target_builddeps
+        ) (Target.get_all_builddeps target);
     ) allTargets;
 
+    (* load every dependencies META files and at the same time generate the
+     * graph of inter-dependencies.
+     *
+     * This recursively load all dependencies and dependencies's dependencies.
+     *)
     let rec loop dep =
         let dataDep () =
             if isInternal dep then (
@@ -205,7 +211,7 @@ let prepare projFile =
             Dag.addEdge nodeTarget (Dependency dep) depsDag;
             insertEdgeForDependency (Dependency dep) depsDag;
             loop dep;
-        ) target.target_obits.target_builddeps;
+        ) (Target.get_all_builddeps target);
 
         List.iter (fun (cpkg, cconstr) ->
             let ver = Prog.runPkgConfigVersion cpkg in
