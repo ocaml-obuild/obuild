@@ -253,7 +253,7 @@ let parse strict lines =
 
     let parseTargetObits t k value =
         match k with
-        | "builddepends"
+        | "builddepends" | "builddeps"
         | "build-deps" -> Handled { t with target_builddeps = parseDeps lib_name_of_string value @ t.target_builddeps }
         | "path" | "srcdir"
         | "src-dir"    -> Handled { t with target_srcdir    = fp value }
