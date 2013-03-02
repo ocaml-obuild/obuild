@@ -1,6 +1,5 @@
 open Printf
 open Ext
-open Types
 open Filepath
 
 exception UnexpectedFileType
