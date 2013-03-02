@@ -1,4 +1,4 @@
-open Ext
+open Ext.Fugue
 open Helper
 open Types
 open Printf

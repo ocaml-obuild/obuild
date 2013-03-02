@@ -1,4 +1,4 @@
-open Ext
+open Ext.Fugue
 open Obuild.Gconf
 open Obuild
 

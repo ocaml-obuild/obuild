@@ -1,5 +1,5 @@
 open Printf
-open Ext
+open Ext.Fugue
 open Filepath
 
 exception UnexpectedFileType

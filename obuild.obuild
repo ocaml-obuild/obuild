@@ -43,14 +43,14 @@ extra-srcs: bootstrap
      , DESIGN.md
      , TODO.md
 
-library obuild_ext
-  modules: ext
-  src-dir: ext
-  build-deps: unix
 
 library obuild
   modules: obuild
-  build-deps: unix, obuild_ext
+  build-deps: unix, obuild.ext
+
+  library ext
+    modules: ext
+    build-deps: unix
 
 # a comment
 executable obuild
@@ -62,6 +62,11 @@ executable obuild-simple
   main-is: simple.ml
   src-dir: src
   build-deps: unix, obuild
+
+executable obuild-from-oasis
+  main-is: assimilate_oasis.ml
+  src-dir: tools
+  build-deps: obuild, obuild.ext
 
 test dag
   src-dir: tests

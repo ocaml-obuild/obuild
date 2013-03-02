@@ -1,4 +1,4 @@
-open Ext
+open Ext.Fugue
 
 exception EmptyFilename
 exception InvalidFilename of string

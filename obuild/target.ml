@@ -1,5 +1,5 @@
 open Filepath
-open Ext
+open Ext.Fugue
 open Modname
 open Types
 open Gconf

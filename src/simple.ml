@@ -1,6 +1,6 @@
 (* simple builder *)
 open Printf
-open Ext
+open Ext.Fugue
 open Obuild.Project
 open Obuild.Target
 open Obuild.Types

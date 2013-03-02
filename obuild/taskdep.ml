@@ -1,5 +1,5 @@
 open Printf
-open Ext
+open Ext.Fugue
 
 type taskdep_direction = FromChildren | FromParent
 

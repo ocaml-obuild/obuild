@@ -1,4 +1,4 @@
-open Ext
+open Ext.Fugue
 open Printf
 
 exception UnknownSymbol of (string * string)

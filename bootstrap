@@ -4,6 +4,7 @@
 libs="unix.cmxa"
 OCAMLOPT="ocamlopt.opt -g"
 
+extmodules="fugue"
 libmodules="gconf types dag taskdep dagutils filepath filetype modname hier filesystem expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
 mainmodules="sdist doc init help install main"
 
@@ -14,11 +15,19 @@ set -e
 ########################################################################
 # build ext
 cd ext
-$OCAMLOPT -c ext.ml
+rm -f *.cmi *.cmx *.o
+APPEND=""
+for mod in $extmodules
+do
+	echo "COMPILING $mod"
+	$OCAMLOPT -for-pack Ext -I ../ext/ -c ${mod}.ml
+	APPEND+="ext/${mod}.cmx "
+done;
 cd ..
 
 echo "BUILDING library obuild_ext.cmxa"
-$OCAMLOPT -a -o obuild_ext.cmxa ext/ext.cmx
+$OCAMLOPT -pack -o ext.cmx -I ext/ $APPEND
+$OCAMLOPT -a -o obuild_ext.cmxa ext.cmx
 
 ########################################################################
 ########################################################################
@@ -31,7 +40,7 @@ APPEND=""
 for mod in $libmodules
 do
 	echo "COMPILING $mod"
-	$OCAMLOPT -for-pack Obuild -I ../ext/ -c ${mod}.ml
+	$OCAMLOPT -for-pack Obuild -I ../ -c ${mod}.ml
 	APPEND+="obuild/${mod}.cmx "
 done;
 cd ..
@@ -45,7 +54,7 @@ APPEND=""
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
-	$OCAMLOPT -I ../ -I ../ext -c ${mod}.ml
+	$OCAMLOPT -I ../ -c ${mod}.ml
 	APPEND+="${mod}.cmx "
 done
 echo "LINKING obuild.bootstrap"

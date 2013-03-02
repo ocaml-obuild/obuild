@@ -1,5 +1,5 @@
 open Types
-open Ext
+open Ext.Fugue
 open Modname
 open Filepath
 open Helper

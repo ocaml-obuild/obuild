@@ -1,5 +1,5 @@
 open Obuild
-open Ext
+open Ext.Fugue
 open Printf
 open Filepath
 open Modname

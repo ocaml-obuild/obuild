@@ -2,7 +2,7 @@
  * gather dependencies in hashtable and DAGs
  * and create compilation state for one target
  *)
-open Ext
+open Ext.Fugue
 open Analyze
 open Types
 open Filepath

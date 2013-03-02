@@ -1,6 +1,6 @@
 open Filepath
 open Types
-open Ext
+open Ext.Fugue
 open Modname
 
 exception EmptyModuleHierarchy
