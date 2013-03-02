@@ -196,12 +196,12 @@ let get_modules_desc bstate target toplevelModules =
                 in
             verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxPkgs);
             let p4pred = get_p4pred pp in
-            let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
             let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
             let preproc = (snd p4Meta).Meta.package_preprocessor in
             let archive = { pp_pkg_strs = [Meta.getArchive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] } in
 
             (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
+            let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
             pp_some preproc (archive :: camlp4Strs)
         ) in
 
