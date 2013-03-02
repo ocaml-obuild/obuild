@@ -1,7 +1,7 @@
 open Types
 open Ext.Fugue
+open Ext.Filepath
 open Modname
-open Filepath
 open Helper
 open Pp
 

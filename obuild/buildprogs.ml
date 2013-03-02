@@ -3,7 +3,7 @@ open Ext.Fugue
 open Helper
 open Process
 open Printf
-open Filepath
+open Ext.Filepath
 open Filetype
 open Analyze
 open Target

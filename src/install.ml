@@ -1,7 +1,7 @@
 open Obuild
 open Ext.Fugue
+open Ext.Filepath
 open Printf
-open Filepath
 open Modname
 open Project
 open Types

@@ -1,8 +1,9 @@
 open Ext.Fugue
+open Ext.Filepath
+open Ext
 open Helper
 open Types
 open Printf
-open Filepath
 open Gconf
 open Target
 open Dependencies

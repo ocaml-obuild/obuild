@@ -1,7 +1,8 @@
-open Types
 open Ext.Fugue
+open Ext.Filepath
+open Ext
+open Types
 open Printf
-open Filepath
 open Modname
 open Hier
 open Target

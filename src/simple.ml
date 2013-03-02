@@ -1,10 +1,11 @@
 (* simple builder *)
 open Printf
 open Ext.Fugue
+open Ext.Filepath
+open Ext
 open Obuild.Project
 open Obuild.Target
 open Obuild.Types
-open Obuild.Filepath
 open Obuild.Gconf
 open Obuild
 

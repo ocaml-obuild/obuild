@@ -1,4 +1,4 @@
-open Filepath
+open Ext.Filepath
 open Types
 
 type modname = { _modname : string }

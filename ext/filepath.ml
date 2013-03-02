@@ -1,4 +1,4 @@
-open Ext.Fugue
+open Fugue
 
 exception EmptyFilename
 exception InvalidFilename of string

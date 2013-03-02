@@ -3,9 +3,10 @@
  * and create compilation state for one target
  *)
 open Ext.Fugue
+open Ext.Filepath
+open Ext
 open Analyze
 open Types
-open Filepath
 open Filetype
 open Helper
 open Gconf

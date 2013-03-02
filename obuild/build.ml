@@ -1,9 +1,10 @@
-open Types
 open Ext.Fugue
+open Ext.Filepath
+open Ext
+open Types
 open Helper
 open Process
 open Printf
-open Filepath
 open Filetype
 open Analyze
 open Target

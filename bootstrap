@@ -1,11 +1,10 @@
 #!/bin/bash
 
-#modules="gconf ext types dag taskdep dagutils filepath filetype modname hier filesystem expr pp utils helper process findlibConf prog dependencies target project meta dist analyze sdist doc configure install prepare buildprogs build init exception help obuild"
 libs="unix.cmxa"
 OCAMLOPT="ocamlopt.opt -g"
 
-extmodules="fugue"
-libmodules="gconf types dag taskdep dagutils filepath filetype modname hier filesystem expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
+extmodules="fugue filepath filesystem"
+libmodules="gconf types dag taskdep dagutils filetype modname hier expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
 mainmodules="sdist doc init help install main"
 
 set -e 

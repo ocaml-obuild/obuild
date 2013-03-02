@@ -1,5 +1,6 @@
 open Ext.Fugue
-open Filepath
+open Ext.Filepath
+open Ext
 
 type findlib_conf =
     { conf_path : filepath list

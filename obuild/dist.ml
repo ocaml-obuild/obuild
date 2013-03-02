@@ -1,6 +1,7 @@
-open Types
 open Ext.Fugue
-open Filepath
+open Ext.Filepath
+open Ext
+open Types
 open Gconf
 
 type buildType = Autogen | Dot | Target of name

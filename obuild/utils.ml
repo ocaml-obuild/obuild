@@ -1,5 +1,6 @@
 open Ext.Fugue
-open Filepath
+open Ext.Filepath
+open Ext
 open Types
 open Gconf
 
