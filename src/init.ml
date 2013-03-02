@@ -1,5 +1,5 @@
 open Printf
-open Obuild.Ext
+open Ext
 open Obuild.Filepath
 open Obuild.Helper
 open Obuild.Target

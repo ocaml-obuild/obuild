@@ -1,5 +1,5 @@
 open Printf
-open Obuild.Ext
+open Ext
 open Obuild.Types
 open Obuild.Helper
 open Obuild.Filepath

@@ -1,4 +1,4 @@
-open Obuild.Ext
+open Ext
 open Obuild.Gconf
 open Obuild
 
