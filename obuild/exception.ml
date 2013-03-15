@@ -64,7 +64,12 @@ let show exn =
     | Build.CCompilationFailed e      -> eprintf "\n%s\n%!" e; exit 6
     | Buildprogs.LinkingFailed e           -> eprintf "\n%s\n%!" e; exit 7
     | Dependencies.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 8
-    | Dependencies.DependencyMissing e     -> error "missing dependency '%s'\n" e; exit 9
+    | Dependencies.DepenenciesMissing missing ->
+        begin match List.length missing with
+        | 0 -> assert false
+        | 1 -> error "missing dependency '%s'\n" (List.hd missing); exit 9
+        | _ -> eprintf "missing dependencies:\n%s\n" (Utils.showList "\n" (fun x -> x) missing); exit 9
+        end 
     (* others exception *)
     | Unix.Unix_error (err, fname, params) ->
         error "unexpected unix error: \"%s\" during %s(%s)\n" (Unix.error_message err) fname params;

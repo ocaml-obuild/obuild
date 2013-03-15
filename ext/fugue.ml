@@ -208,3 +208,11 @@ let user_int_of_string loc s =
 
 let user_bool_of_string loc s =
     try bool_of_string s with _ -> raise (ConversionBoolFailed (loc,s))
+
+module StringSet = struct
+  include Set.Make(struct
+    type t = string
+    let compare = Pervasives.compare
+  end)
+  let to_list t = fold (fun elt l -> elt::l) t []
+end 
