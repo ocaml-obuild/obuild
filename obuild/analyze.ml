@@ -221,7 +221,7 @@ let prepare projFile =
         ) (Target.get_all_builddeps target);
 
         if not (StringSet.is_empty !missingDeps) then
-          raise (DepenenciesMissing (StringSet.to_list !missingDeps));
+          raise (DependenciesMissing (StringSet.to_list !missingDeps));
 
         List.iter (fun (cpkg, cconstr) ->
             let ver = Prog.runPkgConfigVersion cpkg in

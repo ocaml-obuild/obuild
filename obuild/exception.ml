@@ -64,7 +64,7 @@ let show exn =
     | Build.CCompilationFailed e      -> eprintf "\n%s\n%!" e; exit 6
     | Buildprogs.LinkingFailed e           -> eprintf "\n%s\n%!" e; exit 7
     | Dependencies.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 8
-    | Dependencies.DepenenciesMissing missing ->
+    | Dependencies.DependenciesMissing missing ->
         begin match List.length missing with
         | 0 -> assert false
         | 1 -> error "missing dependency '%s'\n" (List.hd missing); exit 9
