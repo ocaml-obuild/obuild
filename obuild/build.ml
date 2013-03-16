@@ -271,7 +271,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                             (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier m)
                         ) modules in
                     let dir = cstate.compilation_builddir_ml compOpt in
-                    let fcompile = (fun () -> runOcamlPack dir dir buildMode packOpt h modules) in
+                    let fcompile = (fun () -> runOcamlPack dir dir annotMode buildMode packOpt h modules) in
                     match check_destination_valid_with mdeps cstate dest with
                     | None            -> None
                     | Some srcChanged -> Some (reason_from_paths dest srcChanged, fcompile)

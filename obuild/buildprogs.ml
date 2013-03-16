@@ -24,6 +24,13 @@ type annotation_mode = AnnotationNone | AnnotationBin | AnnotationText | Annotat
 
 type packopt = hier option
 
+let annotToOpts annotMode =
+    match annotMode with
+    | AnnotationNone -> []
+    | AnnotationBin  -> ["-bin-annot"]
+    | AnnotationText -> ["-annot"]
+    | AnnotationBoth -> ["-bin-annot";"-annot"]
+
 let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp modname =
     let dstdir = dirSpec.dst_dir in
     let (prog, srcFile, dstFile) =
@@ -48,11 +55,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
                 | Normal    -> []
                 | WithDebug -> ["-g"]
                 | WithProf  -> ["-p"])
-             @ (match annotMode with
-                | AnnotationNone -> []
-                | AnnotationBin  -> ["-bin-annot"]
-                | AnnotationText -> ["-annot"]
-                | AnnotationBoth -> ["-bin-annot";"-annot"])
+             @ annotToOpts annotMode
              @ pp_to_params pp
              @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; hier_to_string x ] else []) packopt
 
@@ -61,10 +64,11 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
         in
     spawn args
 
-let runOcamlPack srcDir dstDir buildMode packOpt dest modules =
+let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
     let args = [prog]
              @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; hier_to_string x ] else []) packOpt
+             @ annotToOpts annotMode
              @ [ "-pack"; "-o"; fp_to_string (dstDir <//> cmc_of_hier buildMode dest); ]
              @ List.map (fun m -> fp_to_string (srcDir <//> cmc_of_hier buildMode m)) modules
         in
