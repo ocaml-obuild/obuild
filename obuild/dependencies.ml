@@ -9,6 +9,7 @@ exception BuildDepAnalyzeFailed of string
 exception BuildCDepAnalyzeFailed of string
 
 exception DependencyMissing of string
+exception DepenenciesMissing of string list
 exception DependencyFailedParsing of string
 
 type dep_constraint = Expr.expr

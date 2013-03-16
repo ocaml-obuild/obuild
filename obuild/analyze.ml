@@ -127,6 +127,8 @@ let prepare projFile =
     let depsDag    = Dag.init () in
     let targetsDag = Dag.init () in
 
+    let missingDeps = ref StringSet.empty in
+
     let metaTable  = Hashtbl.create 8 in
     initializeSystemStdlib ocamlCfg metaTable;
 
@@ -155,6 +157,8 @@ let prepare projFile =
         ) (Target.get_all_builddeps target);
     ) allTargets;
 
+    let add_missing dep = missingDeps := StringSet.add dep (!missingDeps) in
+
     (* load every dependencies META files and at the same time generate the
      * graph of inter-dependencies.
      *
@@ -173,23 +177,25 @@ let prepare projFile =
                 ) iLib.Project.lib_target.target_obits.target_builddeps;
                 Internal
             ) else (
-                let (_, meta) = get_meta_cache metaTable dep in
-                Dag.addNode (Dependency dep) depsDag;
-                let pkg =
-                    try Meta.find dep.lib_subnames meta
-                    with Not_found -> raise (SublibraryDoesntExists dep)
-                    in
-                List.iter (fun (preds, reqDeps) ->
-                    match preds with
-                    | Some [Meta.Pred_Toploop] -> ()
-                    | _ ->
-                        List.iter (fun reqDep ->
-                            verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
-                            Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
-                            loop reqDep
-                        ) reqDeps
-                ) pkg.Meta.package_requires;
-                System
+                try begin
+                  let (_, meta) = get_meta_cache metaTable dep in
+                  Dag.addNode (Dependency dep) depsDag;
+                  let pkg =
+                      try Meta.find dep.lib_subnames meta
+                      with Not_found -> raise (SublibraryDoesntExists dep)
+                      in
+                  List.iter (fun (preds, reqDeps) ->
+                      match preds with
+                      | Some [Meta.Pred_Toploop] -> ()
+                      | _ ->
+                          List.iter (fun reqDep ->
+                              verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
+                              Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
+                              loop reqDep
+                          ) reqDeps
+                  ) pkg.Meta.package_requires;
+                  System
+                end with DependencyMissing dep -> (add_missing dep; System)
             )
             in
         if not (Hashtbl.mem depsTable dep) then (
@@ -213,6 +219,9 @@ let prepare projFile =
             insertEdgeForDependency (Dependency dep) depsDag;
             loop dep;
         ) (Target.get_all_builddeps target);
+
+        if not (StringSet.is_empty !missingDeps) then
+          raise (DepenenciesMissing (StringSet.to_list !missingDeps));
 
         List.iter (fun (cpkg, cconstr) ->
             let ver = Prog.runPkgConfigVersion cpkg in
