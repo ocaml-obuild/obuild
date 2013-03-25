@@ -68,5 +68,3 @@ let write_lib_meta projFile lib =
     let metadirPath = dir </> fn "META" in
     let pkg = lib_to_meta projFile lib in
     Meta.write metadirPath pkg
-
-
