@@ -239,6 +239,24 @@ let mainTest argv =
         ) else
             printf "warning: no tests defined: not doing anything.\n"
 
+let mainGet argv =
+    let projFile = project_read () in
+
+    (* TODO: hardcoded just for now to get basic fields.
+     * - add option for quoting
+     * - optional formating options for multi values (one per line, csv)
+     * - access more complicated fields lib/sublib modules/dependencies, etc
+     * *)
+    match argv with
+    | []      -> eprintf "usage: obuild get <field>\n\n"; exit 1
+    | [field] -> (match field with
+                 | "name"    -> printf "%s\n" projFile.Project.name;
+                 | "version" -> printf "%s\n" projFile.Project.version;
+                 | "license" -> printf "%s\n" projFile.Project.license;
+                 | _         -> eprintf "error: unknown field %s\n" field; exit 1
+                 )
+    | _       -> eprintf "usage: obuild get <field>\n"; exit 1
+
 let mainInit argv =
     let project = Init.run () in
     let name = fn (project.Project.name) <.> "obuild" in
@@ -323,6 +341,7 @@ let knownCommands =
     ; ("init", mainInit)
     ; ("infer", mainInfer)
     ; ("test", mainTest)
+    ; ("get", mainGet)
     ; ("doc", mainDoc)
     ; ("help", mainHelp)
     ]
