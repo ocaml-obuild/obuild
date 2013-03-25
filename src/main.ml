@@ -150,17 +150,45 @@ let mainInstall argv =
     Configure.check ();
     let projFile = project_read () in
     FindlibConf.load ();
+    let destdir =
+        (if !destdir = ""
+            then (match FindlibConf.get_destdir () with
+                 | None   -> failwith "no destdir specified, and no findlib default found"
+                 | Some p -> p
+                 )
+            else fp !destdir)
+        in
 
+    (* install all the libs *)
     List.iter (fun lib ->
-        Install.write_lib_meta projFile lib
+        Install.write_lib_meta projFile lib;
+        let allMatchingFiles =
+            List.map (fun target ->
+                let buildDir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+                Build.sanity_check buildDir target;
+                (* don't play with matches *)
+                let matches =
+                    Filesystem.list_dir_pred (fun f ->
+                        match Filetype.get_extension_path (buildDir </> f) with
+                        | Filetype.FileCMX | Filetype.FileCMO | Filetype.FileCMI | Filetype.FileA
+                        | Filetype.FileCMXA | Filetype.FileCMA -> true
+                        | _                  -> false) buildDir
+                    in
+                (buildDir, matches)
+            ) (Project.lib_to_targets lib)
+            in
+        let dirName = fn (lib_name_to_string lib.Project.lib_name) in
+        verbose Report "installing library %s\n" (lib_name_to_string lib.Project.lib_name);
+
+        let allFiles = List.concat (List.map snd allMatchingFiles) in
+        verbose Debug "installing files: %s\n" (Utils.showList "," fn_to_string allFiles);
+        List.iter (fun (buildDir, buildFiles) -> 
+            List.iter (fun buildFile ->
+                Filesystem.copy_file (buildDir </> buildFile) ((destdir </> dirName) </> buildFile)
+            ) buildFiles;
+        ) allMatchingFiles;
     ) (projFile.Project.libs);
-    List.iter (fun target ->
-        let buildDir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
-        let files = Build.get_destination_files target in
-        Build.sanity_check buildDir target;
-        verbose Report "installing: %s\n" (Utils.showList "," fn_to_string files)
-    ) (Project.get_all_buildable_targets projFile);
-    unimplemented ();
+
     ()
 
 let mainTest argv =
