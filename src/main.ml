@@ -339,7 +339,7 @@ let defaultMain () =
     let cmd = List.nth args 0 in
     try
         let mainF = List.assoc cmd knownCommands in
-        mainF args
+        mainF (List.tl args)
     with Not_found ->
         eprintf "error: unknown command: %s\n\n  known commands:\n" cmd;
         List.iter (eprintf "    %s\n") (List.map fst knownCommands);
