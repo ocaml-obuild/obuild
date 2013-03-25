@@ -67,3 +67,5 @@ let load () =
     | Some p -> findlib_conf := getConf (fp p)
 
 let get_paths () = (!findlib_conf).conf_path
+
+let get_destdir () = (!findlib_conf).conf_destdir
