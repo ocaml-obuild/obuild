@@ -115,7 +115,8 @@ let mainSdist argv =
     ()
 
 let unimplemented () =
-    eprintf "sorry, you've reached an unimplemented part ! please be patient or send a patch.\n"
+    eprintf "sorry, you've reached an unimplemented part ! please be patient or send a patch.\n";
+    exit 1
 
 let mainDoc argv =
     Arg.parse_argv (Array.of_list argv)
@@ -125,8 +126,7 @@ let mainDoc argv =
 
     let projFile = project_read () in
     Doc.run projFile;
-    unimplemented ();
-    ()
+    unimplemented ()
 
 let mainInfer argv =
     let anon = ref [] in
@@ -138,8 +138,7 @@ let mainInfer argv =
     if !anon = []
     then (printf "no modules to infer\n"; exit 0);
 
-    unimplemented ();
-    ()
+    unimplemented ()
 
 let mainInstall argv =
     let destdir = ref "" in
