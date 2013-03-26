@@ -356,7 +356,7 @@ let defaultMain () =
         exit 1
     );
 
-    let cmd = List.nth args 0 in
+    let cmd = List.hd args in
     try
         let mainF = List.assoc cmd knownCommands in
         mainF args
