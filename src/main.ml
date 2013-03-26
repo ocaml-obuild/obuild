@@ -240,6 +240,7 @@ let mainTest argv =
             printf "warning: no tests defined: not doing anything.\n"
 
 let mainGet argv =
+    let argv = List.tl argv in
     let projFile = project_read () in
 
     (* TODO: hardcoded just for now to get basic fields.
@@ -355,10 +356,10 @@ let defaultMain () =
         exit 1
     );
 
-    let cmd = List.nth args 0 in
+    let cmd = List.hd args in
     try
         let mainF = List.assoc cmd knownCommands in
-        mainF (List.tl args)
+        mainF args
     with Not_found ->
         eprintf "error: unknown command: %s\n\n  known commands:\n" cmd;
         List.iter (eprintf "    %s\n") (List.map fst knownCommands);
