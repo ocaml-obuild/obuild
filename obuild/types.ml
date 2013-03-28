@@ -36,6 +36,21 @@ let name_to_string name =
     | ExampleName e -> "example-" ^ e
     | LibName l   -> "lib-" ^ lib_name_to_string l
 
+exception TargetNameNoType of string
+exception TargetUnknownType of string * string
+exception TargetNotRecognized of string
+
+let name_of_string name =
+    match string_split ~limit:2 '-' name with
+    | ["exe"; n]     -> ExeName n
+    | ["lib"; n]     -> LibName (lib_name_of_string n)
+    | ["test"; n]    -> TestName n
+    | ["bench"; n]   -> BenchName n
+    | ["example"; n] -> ExampleName n
+    | [prefix; n]    -> raise (TargetUnknownType (prefix, n))
+    | [_]            -> raise (TargetNameNoType name)
+    | _              -> raise (TargetNotRecognized name)
+
 type ocaml_compilation_option = Normal | WithDebug | WithProf
 type ocaml_compiled_type = ByteCode | Native
 type ocaml_compilation_mode = Interface | Compiled of ocaml_compiled_type

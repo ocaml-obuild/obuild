@@ -4,6 +4,8 @@ open Modname
 open Ext.Filepath
 open Types
 
+(* TODO normalize exit code *)
+
 let show exn =
     let error fmt = eprintf ("%serror%s: " ^^ fmt) (color_white ()) (color_white ()) in
     match exn with
@@ -36,6 +38,18 @@ let show exn =
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
     | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4
     | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.buildtype_to_string dir); exit 4
+    (* types stuff *)
+    | Types.TargetNameNoType s      ->
+        error "Unknown target '%s' with no prefix:\n" s;
+        error "  targets need to start by one of lib-,exe-,bench-,test-,example-\n";
+        exit 4
+    | Types.TargetUnknownType (p,s) ->
+        error "unknown type prefix '%s' in '%s':\n" p s;
+        error "  targets need to start by one of lib-,exe-,bench-,test-,example-\n";
+        exit 4
+    | Types.TargetNotRecognized s   ->
+        error "Unknown target specified '%s'\n" s;
+        exit 4
     (* reconfigure *)
     | Configure.ConfigChanged r ->
             (match r with

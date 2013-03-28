@@ -68,9 +68,10 @@ let build_options =
     ]
 
 let mainBuild argv =
+    let anon = ref [] in
     Arg.parse_argv (Array.of_list argv) (build_options @
         [ ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build")
-        ]) (fun s -> failwith ("unknown option: " ^ s))
+        ]) (fun s -> anon := s :: !anon)
         (usageStr "build");
 
     Configure.check ();
@@ -79,7 +80,13 @@ let mainBuild argv =
     let project = Analyze.prepare projFile in
     let bstate = Prepare.init project in
 
-    let taskdep = Taskdep.init project.Analyze.project_targets_dag in
+    let dag = match !anon with
+              | [] -> project.Analyze.project_targets_dag
+              | _  ->
+                      let targets = List.map name_of_string !anon in
+                      Dag.subset project.Analyze.project_targets_dag targets
+              in
+    let taskdep = Taskdep.init dag in
     while not (Taskdep.isComplete taskdep) do
         (match Taskdep.getnext taskdep with
         | None -> failwith "no free task in targets"
