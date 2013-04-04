@@ -18,6 +18,7 @@ let set_lib_bytecode v () = gconf.conf_library_bytecode <- v
 let set_exe_native v () = gconf.conf_executable_native <- v
 let set_exe_bytecode v () = gconf.conf_executable_bytecode <- v
 let set_exe_as_obj v () = gconf.conf_executable_as_obj <- v
+let set_annot v () = gconf.conf_annot <- v
 
 let set_build_examples v () = gconf.conf_build_examples <- v
 let set_build_tests v () = gconf.conf_build_tests <- v
@@ -60,6 +61,7 @@ let makeSetup digestKV project = hashtbl_fromList
       ; ("build-benchs", string_of_bool gconf.conf_build_benchs)
       ; ("build-tests", string_of_bool gconf.conf_build_tests)
       ; ("build-examples", string_of_bool gconf.conf_build_examples)
+      ; ("annot", string_of_bool gconf.conf_annot)
       ]
     @ List.map (fun (flagname,flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) gconf.conf_user_flags
     )
@@ -192,6 +194,7 @@ let check () =
     set_build_examples (bool_of_opt "build-examples") ();
     set_build_benchs (bool_of_opt "build-benchs") ();
     set_build_tests (bool_of_opt "build-tests") ();
+    set_annot (bool_of_opt "annot") ();
 
     let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
     (match ver with
