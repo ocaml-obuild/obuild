@@ -37,6 +37,7 @@ let mainConfigure argv =
     let opts =
         [ ("--flag", Arg.String userSetFlagSettings, "enable or disable a project's flag")
         ; ("--executable-as-obj", Arg.Unit (Configure.set_exe_as_obj true), "output executable as obj file")
+        ; ("--annot", Arg.Unit (Configure.set_annot true), "generate .annot files")
         ]
         in
     Arg.parse_argv (Array.of_list argv)
