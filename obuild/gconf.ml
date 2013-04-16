@@ -10,6 +10,7 @@ type gconf =
     ; mutable conf_prog_ocamldoc  : string option
     ; mutable conf_prog_ocamlyacc : string option
     ; mutable conf_prog_ocamllex  : string option
+    ; mutable conf_prog_ocamlmklib : string option
     ; mutable conf_prog_cc     : string option
     ; mutable conf_prog_ranlib : string option
     ; mutable conf_prog_ar     : string option
@@ -47,6 +48,7 @@ let gconf =
     ; conf_prog_ocamldoc = None
     ; conf_prog_ocamlyacc = None
     ; conf_prog_ocamllex = None
+    ; conf_prog_ocamlmklib = None
     ; conf_prog_cc       = None
     ; conf_prog_ranlib   = None
     ; conf_prog_ar       = None

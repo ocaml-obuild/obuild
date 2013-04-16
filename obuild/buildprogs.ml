@@ -16,7 +16,7 @@ open Pp
 exception LinkingFailed of string
 exception InferFailed of string
 
-type c_linking_mode = LinkingNoShared | LinkingShared
+type c_linking_mode = LinkingStatic | LinkingShared
 
 type linking_mode = LinkingLibrary | LinkingExecutable
 
@@ -100,10 +100,10 @@ let runCCompile project dirSpec cflags file =
     spawn args
 
 let runCLinking sharingMode depfiles dest =
-    let args = [ Prog.getCC () ]
+    let args = [ Prog.getOcamlMklib () ]
              @ (match sharingMode with
-                | LinkingNoShared -> []
-                | LinkingShared   -> ["-shared"])
+                | LinkingStatic -> ["-custom"]
+                | LinkingShared   -> [])
              @ ["-o"; fp_to_string dest ]
              @ List.map fp_to_string depfiles
              in
