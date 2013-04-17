@@ -63,17 +63,16 @@ let mainConfigure argv =
     (* check build deps of everything buildables *)
     ()
 
-let build_options =
-    [ ("-j", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
-    ; ("--jobs", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
-    ]
-
 let mainBuild argv =
     let anon = ref [] in
-    Arg.parse_argv (Array.of_list argv) (build_options @
-        [ ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build")
-        ]) (fun s -> anon := s :: !anon)
-        (usageStr "build");
+    let build_options =
+      [ ("-j", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
+      ; ("--jobs", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
+      ; ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build")
+      ; ("--noocamlmklib", Arg.Unit (fun () -> gconf.conf_ocamlmklib <- false), "do not use ocamlmklib when linking C code")
+      ] in
+
+    Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
     Configure.check ();
     let projFile = project_read () in

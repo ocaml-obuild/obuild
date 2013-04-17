@@ -99,18 +99,6 @@ let runCCompile project dirSpec cflags file =
         in
     spawn args
 
-let runCLinking sharingMode depfiles dest =
-    let args = [ Prog.getOcamlMklib () ]
-             @ (match sharingMode with
-                | LinkingStatic -> ["-custom"]
-                | LinkingShared   -> [])
-             @ ["-o"; fp_to_string dest ]
-             @ List.map fp_to_string depfiles
-             in
-    match run_with_outputs args with
-    | Success (_, warnings) -> warnings
-    | Failure er            -> raise (LinkingFailed er)
-
 let runAr dest deps =
     let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
     match run_with_outputs args with
@@ -119,6 +107,26 @@ let runAr dest deps =
 
 let runRanlib dest =
     match run_with_outputs [ Prog.getRanlib (); fp_to_string dest ] with
+    | Success (_, warnings) -> warnings
+    | Failure er            -> raise (LinkingFailed er)
+
+let runCLinking sharingMode depfiles dest =
+    let args =
+      if gconf.conf_ocamlmklib then
+        [ Prog.getOcamlMklib () ]
+        @ (match sharingMode with
+          | LinkingStatic -> ["-custom"]
+          | LinkingShared   -> [])
+        @ ["-o"; fp_to_string dest ]
+        @ List.map fp_to_string depfiles
+      else (* Not working if system != linux *)
+        [ Prog.getCC () ]
+        @ (match sharingMode with
+          | LinkingStatic -> []
+          | LinkingShared -> ["-shared"]) (* TODO: fix this for all system != linux *)
+        @ ["-o"; fp_to_string dest ]
+        @ List.map fp_to_string depfiles in
+    match run_with_outputs args with
     | Success (_, warnings) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 

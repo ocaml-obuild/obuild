@@ -36,6 +36,7 @@ type gconf =
     ; mutable conf_user_flags : (string * bool) list (* TODO moved not as global variable *)
     ; mutable conf_annot : bool
     ; mutable conf_bin_annot : bool
+    ; mutable conf_ocamlmklib : bool
     }
 
 let gconf =
@@ -74,4 +75,5 @@ let gconf =
     ; conf_user_flags           = []
     ; conf_annot                = false
     ; conf_bin_annot            = true
+    ; conf_ocamlmklib           = true
     }
