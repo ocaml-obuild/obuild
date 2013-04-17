@@ -22,7 +22,7 @@ type cpkg_config =
     ; cpkg_conf_includes : filepath list
     }
 
-(* this is a real only config of the project for configuring and building.
+(* this is a read only config of the project for configuring and building.
  *)
 type project_config =
     { project_dep_data    : (lib_name, dep_type) Hashtbl.t

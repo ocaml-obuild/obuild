@@ -10,6 +10,7 @@ type gconf =
     ; mutable conf_prog_ocamldoc  : string option
     ; mutable conf_prog_ocamlyacc : string option
     ; mutable conf_prog_ocamllex  : string option
+    ; mutable conf_prog_ocamlmklib : string option
     ; mutable conf_prog_cc     : string option
     ; mutable conf_prog_ranlib : string option
     ; mutable conf_prog_ar     : string option
@@ -35,6 +36,7 @@ type gconf =
     ; mutable conf_user_flags : (string * bool) list (* TODO moved not as global variable *)
     ; mutable conf_annot : bool
     ; mutable conf_bin_annot : bool
+    ; mutable conf_ocamlmklib : bool
     }
 
 let gconf =
@@ -47,6 +49,7 @@ let gconf =
     ; conf_prog_ocamldoc = None
     ; conf_prog_ocamlyacc = None
     ; conf_prog_ocamllex = None
+    ; conf_prog_ocamlmklib = None
     ; conf_prog_cc       = None
     ; conf_prog_ranlib   = None
     ; conf_prog_ar       = None
@@ -72,4 +75,5 @@ let gconf =
     ; conf_user_flags           = []
     ; conf_annot                = false
     ; conf_bin_annot            = true
+    ; conf_ocamlmklib           = true
     }

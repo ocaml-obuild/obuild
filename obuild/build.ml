@@ -343,12 +343,16 @@ let compile bstate cstate target =
 let linkCStuff bstate cstate clibName =
     let soFile = cstate.compilation_builddir_c </> fn ("dll" ^ clibName ^ ".so") in
     let aFile = cstate.compilation_builddir_c </> fn ("lib" ^ clibName ^ ".a") in
-
+    let libName = cstate.compilation_builddir_c </> fn clibName in
     let cdepFiles = List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources in
-    print_warnings (runCLinking LinkingShared cdepFiles soFile);
-    print_warnings (runAr aFile cdepFiles);
-    print_warnings (runRanlib aFile);
-    ()
+    if gconf.conf_ocamlmklib then
+      print_warnings (runCLinking LinkingShared cdepFiles libName)
+    else
+      (
+        print_warnings (runCLinking LinkingShared cdepFiles soFile);
+        print_warnings (runAr aFile cdepFiles);
+        print_warnings (runRanlib aFile)
+      )
 
 let linking bstate cstate target =
     let compile_opts = Target.get_compilation_opts target in
