@@ -15,6 +15,7 @@ Better configuring
 * configure storing / build checking of system state (e.g. digest of libraries, pkg-config, etc)
 * cache meta in a friendlier format in dist/ after configure. speed up build.
 * arbitrary mechanism to poke at the platform and see what it supports. feeding the file autogeneration phase.
+* per project and per system configuration file (à la git)
 
 Perf Improvement
 ----------------
@@ -34,6 +35,12 @@ Completeness
 * generate opam files (.install and .config)
 * benchs
 
+Documenting
+-----------
+
+* specification for the .obuild file format
+* mli files and code documentation
+
 Misc
 ----
 
@@ -46,3 +53,4 @@ Misc
 * add a way to refresh a .mli from scratch. for example obuild generate-mli src/ext.ml will (re-)write src/ext.mli
 * add a simple way to switch stdlib so that core can be used instead of the compiler stdlib for any target. (project field parsing done already)
 * have test (re-)build themselves when doing obuild test, instead of doing 'obuild build; obuild test'.
+* improve command line experience (cmdliner ?)
