@@ -142,7 +142,11 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                 | WithProf  -> ["-p"])
              @ (Utils.to_include_path_options includeDirs)
              @ (List.map fp_to_string libs)
-             @ (List.concat (List.map (fun x -> [ "-cclib"; x ]) cclibs))
+             @ (List.concat (List.map (fun x ->
+               [ (match buildMode with
+                 | Native -> "-cclib"
+                 | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
+               ; x ]) cclibs))
              @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode) modules)
              in
     match run_with_outputs args with
