@@ -354,16 +354,8 @@ let get_modules_desc bstate target toplevelModules =
  *)
 let prepare_target_ bstate buildDir target toplevelModules =
     let autogenDir = Dist.getBuildDest Dist.Autogen in
-    (* TODO can conflict with module packing with a module call p or d. fix *)
     let buildDirP = buildDir </> fn "opt-p" in
     let buildDirD = buildDir </> fn "opt-d" in
-    let (compileDebug, compileProfile) = get_debug_profile target in
-    (if compileDebug
-        then let _ = Filesystem.mkdirSafe buildDirD 0o755 in ()
-    );
-    (if compileProfile
-        then let _ = Filesystem.mkdirSafe buildDirP 0o755 in ()
-    );
 
     let cbits = target.target_cbits in
     let obits = target.target_obits in
@@ -371,13 +363,6 @@ let prepare_target_ bstate buildDir target toplevelModules =
     verbose Verbose "preparing compilation for %s\n%!" (Target.get_target_name target);
 
     let modulesDeps = get_modules_desc bstate target toplevelModules in
-
-    (* create some directories if needed *)
-    Hashtbl.iter (fun k v ->
-        match v.module_ty with
-        | DescDir _ -> Filesystem.mkdirSafeRecursive (buildDir <//> (directory_of_hier k)) 0o755
-        | _         -> ()
-    ) modulesDeps;
 
     (* create 2 dags per target
      * - stepsDag is a DAG of all the tasks to achieve the target (compilation only, not linking yet)
