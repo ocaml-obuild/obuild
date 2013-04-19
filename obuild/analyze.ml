@@ -32,6 +32,7 @@ type project_config =
     ; project_all_deps    : dependency list
     ; project_file        : Project.obuild
     ; project_ocamlcfg    : (string, string) Hashtbl.t
+    ; project_ocamlmkcfg  : (string, string) Hashtbl.t
     ; project_cpkgs       : (c_dep_name, cpkg_config) Hashtbl.t
     }
 
@@ -116,11 +117,23 @@ let initializeSystemStdlib ocamlCfg metaTable =
         )
     ) libs
 
+let readOcamlMkConfig filename =
+    let lines = Utils.read_file_with
+        (function "" -> None | s when s.[0] = '#' -> None | s -> Some s) 
+        (filename ^ "/Makefile.config") in
+    let h = Hashtbl.create 32 in
+    List.iter (fun l ->
+        let (k,v) = Utils.toKVeq l in
+        Hashtbl.add h (String.lowercase k) (default "" v)
+    ) lines;
+    h
+
 (* get all the dependencies required
  * and prepare the global bstate.of value *)
 let prepare projFile =
     verbose Verbose "analyzing project\n%!";
     let ocamlCfg = Prog.getOcamlConfig () in
+    let ocamlMkCfg = readOcamlMkConfig (Hashtbl.find ocamlCfg "standard_library") in
 
     let depsTable  = Hashtbl.create 16 in
     let cpkgsTable = Hashtbl.create 1 in
@@ -256,6 +269,7 @@ let prepare projFile =
     ; project_targets_dag = targetsDag
     ; project_all_deps    = List.concat $ List.map (fun target -> target.target_obits.target_builddeps) allTargets
     ; project_ocamlcfg    = ocamlCfg
+    ; project_ocamlmkcfg  = ocamlMkCfg
     ; project_file        = projFile
     ; project_cpkgs       = cpkgsTable
     }
