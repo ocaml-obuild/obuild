@@ -143,13 +143,13 @@ let emptyLib libname = emptyLibLname (lib_name_of_string libname)
 
 let emptyExe (name : string) : obuild_exe =
     { exe_name   = name
-    ; exe_main   = { filename = "" }
+    ; exe_main   = emptyFn
     ; exe_target = newTarget (ExeName name) Exe true false
     }
 
 let emptyTest (name : string) : obuild_test =
     { test_name   = name
-    ; test_main   = { filename = "" }
+    ; test_main   = emptyFn
     ; test_target = newTarget (TestName name) Test gconf.conf_build_tests false
     ; test_rundir = None
     ; test_runopt = []
@@ -158,7 +158,7 @@ let emptyTest (name : string) : obuild_test =
 
 let emptyExample (name : string) : obuild_example =
     { example_name   = name
-    ; example_main   = { filename = "" }
+    ; example_main   = emptyFn
     ; example_target = newTarget (ExampleName name) Test gconf.conf_build_examples false
     }
 
