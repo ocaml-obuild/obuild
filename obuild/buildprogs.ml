@@ -1,9 +1,10 @@
 open Types
+open Ext
+open Ext.Filepath
 open Ext.Fugue
 open Helper
 open Process
 open Printf
-open Ext.Filepath
 open Filetype
 open Analyze
 open Target
@@ -32,18 +33,19 @@ let annotToOpts annotMode =
     | AnnotationBoth -> ["-bin-annot";"-annot"]
 
 let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp modname =
-    let dstdir = dirSpec.dst_dir in
+    let dstDir = dirSpec.dst_dir in
+    Filesystem.mkdirSafeRecursive dstDir 0o755;
     let (prog, srcFile, dstFile) =
         match buildMode with
         | Interface ->
             (Prog.getOcamlC ()
             ,dirSpec.src_dir </> interface_of_module modname
-            ,dstdir </> cmi_of_module modname
+            ,dstDir </> cmi_of_module modname
             )
         | Compiled ct ->
             ((if ct = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt ())
             ,dirSpec.src_dir </> filename_of_module modname
-            ,dstdir </> (cmc_of_module ct) modname
+            ,dstDir </> (cmc_of_module ct) modname
             )
         in
     let args = [prog]
@@ -66,6 +68,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
 
 let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
+    Filesystem.mkdirSafeRecursive dstDir 0o755;
     let args = [prog]
              @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; hier_to_string x ] else []) packOpt
              @ annotToOpts annotMode
@@ -87,6 +90,8 @@ let runOcamlInfer srcDir includes pp modname =
 let o_from_cfile file = file <.> "o"
 
 let runCCompile project dirSpec cflags file =
+    let dstDir = dirSpec.dst_dir in
+    Filesystem.mkdirSafeRecursive dstDir 0o755;
     let callCCompiler = string_words_noempty (Analyze.get_ocaml_config_key "bytecomp_c_compiler" project) in
     let srcFile = dirSpec.src_dir </> file in
     (* make a .c.o file to avoid collision *)
