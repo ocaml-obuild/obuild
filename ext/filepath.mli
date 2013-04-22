@@ -1,6 +1,13 @@
 (** The module [Filepath] defines two types, [filepath] and [filename]
-    that represent respectively file names and paths in a filesystem
-    hierarchy, and useful functions to deal with them. *)
+    to represent paths and file names in a file system.
+
+    * a [filepath] represent a path in a filesystem. It can be
+    relative or absolute, and is composed of components. The last
+    component can correspond to a directory or a file in a
+    filesystem. Other components correspond to directories.
+
+    * a [filename] encapsulate the name of a file.
+*)
 
 (** Exceptions *)
 
