@@ -6,6 +6,9 @@ exception InvalidFilename of string
 type filepath = { absolute: bool; filepath : string list }
 type filename = { filename : string }
 
+let emptyFn = { filename = "" }
+let currentDir = { absolute = false; filepath = [] }
+
 let fp_to_string x =
     match x.filepath, x.absolute with
     | ([], true)  -> "/"
@@ -34,26 +37,22 @@ let fp x =
     | p ->
         { absolute = false; filepath = List.filter (fun x -> x <> "." && x <> "") p }
 
-let fn x =
-    if String.length x = 0 || x = "." then (raise EmptyFilename)
-    else if got_dirsep x then (raise (InvalidFilename x)) 
-    else { filename = x }
+let fn = function
+  | "" | "." | ".." -> raise EmptyFilename
+  | filename when got_dirsep filename -> raise (InvalidFilename filename)
+  | filename -> { filename }
 
 let valid_fn x = try let _ = fn x in true with _ -> false 
 
 let (<//>) (afp:filepath) (bfp:filepath) =
     match (afp.absolute, bfp.absolute) with
-    | (true, true)  -> failwith "cannot concat two absolute paths"
-    | (false, true) -> failwith "cannot concat an absolute path to a relative path"
-    | (_, _)        -> { absolute = afp.absolute; filepath = afp.filepath @ bfp.filepath }
+    | _, true -> failwith "the second argument cannot be an absolute path"
+    | _       -> { absolute = afp.absolute; filepath = afp.filepath @ bfp.filepath }
 
 let (</>) (afp:filepath) (bfp:filename) =
     { absolute = afp.absolute; filepath = afp.filepath @ [bfp.filename] }
 
 let (<.>) (afp:filename) ext = fn (afp.filename ^ "." ^ ext)
-
-let emptyDir = { absolute = false; filepath = [] }
-let currentDir = emptyDir
 
 let with_optpath mdir (filename : filename) =
     let path =
