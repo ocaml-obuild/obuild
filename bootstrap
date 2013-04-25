@@ -7,7 +7,7 @@ extmodules="fugue filepath filesystem"
 libmodules="gconf types dag taskdep dagutils filetype modname hier expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
 mainmodules="sdist doc init help install main"
 
-set -e 
+set -e
 
 ########################################################################
 ########################################################################
@@ -19,7 +19,8 @@ APPEND=""
 for mod in $extmodules
 do
 	echo "COMPILING $mod"
-	$OCAMLOPT -for-pack Ext -I ../ext/ -c ${mod}.ml
+	[ -f ${mod}.mli ] && $OCAMLOPT -for-pack Ext -c ${mod}.mli
+	$OCAMLOPT -for-pack Ext -c ${mod}.ml
 	APPEND+="ext/${mod}.cmx "
 done;
 cd ..
@@ -39,6 +40,7 @@ APPEND=""
 for mod in $libmodules
 do
 	echo "COMPILING $mod"
+	[ -f ${mod}.mli ] && $OCAMLOPT -for-pack Obuild -I ../ -c ${mod}.mli
 	$OCAMLOPT -for-pack Obuild -I ../ -c ${mod}.ml
 	APPEND+="obuild/${mod}.cmx "
 done;
@@ -53,6 +55,7 @@ APPEND=""
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
+	[ -f ${mod}.mli ] && $OCAMLOPT -I ../ -c ${mod}.mli
 	$OCAMLOPT -I ../ -c ${mod}.ml
 	APPEND+="${mod}.cmx "
 done
