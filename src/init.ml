@@ -42,10 +42,26 @@ let run () =
             else Some (sprintf "expecting one of the following: %s" (Utils.showList ", " (fun s -> "\"" ^ s ^ "\"") l))
         in
             
-    let valid_name n = if string_all char_is_alphanum n then None else Some "invalid name" in
-    let valid_fp n = None in
-    let valid_fn n = if Filepath.valid_fn n then None else Some "invalid filename" in
-    let valid_modname = valid_name (* FIXME *) in
+    (* strip [ext] from the the end of [s] only if it's there *)
+    let strip_ext s ~ext = 
+        try 
+            let l = String.length s in
+            let ext_l = String.length ext in
+            if (String.sub s (l-ext_l) ext_l) = ext
+                then String.sub s 0 (l-ext_l)
+                else s
+        with _ -> s (* in case out of bounds above *)
+    in 
+
+    let invalid ~x = function
+        | true -> None | false -> Some ("invalid " ^ x) in
+
+    let valid_name n = invalid ~x:"name" (string_all char_is_alphanum n) in
+    let valid_fp n = None in (* FIXME *)
+    let valid_fn n = invalid ~x:"filename" (Filepath.valid_fn n) in
+    let valid_modname n = invalid ~x:"module name" 
+        (string_all Modname.char_is_valid_modchar (strip_ext n ~ext:".ml"))
+    in 
     
     let name = ask valid_name "What is the name of your project ?" in
    
@@ -79,7 +95,8 @@ let run () =
                 exes = [ { nexe with exe_main = fn main; exe_target = target } ]
             }
         | "2" ->
-            let modules = ask_many valid_modname "Add a module ? (enter to terminate)" in
+            let modules = List.map (fun m -> String.capitalize $ strip_ext ~ext:".ml" m)
+                (ask_many valid_modname "Add a module ? (enter to terminate)") in
             let nlib = emptyLib name in
             let itarget = nlib.lib_target in
             let target = { itarget with target_obits = question_obits itarget.target_obits
