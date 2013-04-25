@@ -17,7 +17,7 @@ let removeDirContent wpath =
                         let fent = path ^ Filename.dir_sep ^ ent in
                         match (Unix.lstat fent).Unix.st_kind with
                         | Unix.S_DIR -> rmdir_recursive (Unix.rmdir) fent
-                        | Unix.S_REG | Unix.S_LNK | Unix.S_FIFO | Unix.S_SOCK -> Unix.unlink fent
+                        | Unix.S_REG -> Unix.unlink fent
                         | _          -> raise (UnexpectedFileType fent)
             done;
         with End_of_file ->
