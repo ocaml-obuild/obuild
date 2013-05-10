@@ -2,7 +2,7 @@ open Printf
 open Fugue
 open Filepath
 
-exception UnexpectedFileType
+exception UnexpectedFileType of string
 exception WriteFailed
 
 let removeDirContent wpath =
@@ -18,7 +18,7 @@ let removeDirContent wpath =
                         match (Unix.lstat fent).Unix.st_kind with
                         | Unix.S_DIR -> rmdir_recursive (Unix.rmdir) fent
                         | Unix.S_REG -> Unix.unlink fent
-                        | _          -> raise UnexpectedFileType
+                        | _          -> raise (UnexpectedFileType fent)
             done;
         with End_of_file ->
             ()
@@ -166,7 +166,7 @@ let copy_file src dst =
 
 let copy_to_dir src dst = copy_file src (dst <//> src)
 
-let copy_many_files srcs dst = List.iter (fun src -> copy_file src dst) srcs
+let copy_many_files srcs dst = List.iter (fun src -> copy_to_dir src dst) srcs
 
 let rec mktemp_dir_in prefix =
     let s = String.create 4 in
