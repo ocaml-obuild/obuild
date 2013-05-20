@@ -21,12 +21,12 @@ type predicate =
     | Pred_Preprocessor
     | Pred_Camlp4o
     | Pred_Camlp4r
+    | Pred_Unknown of string
 
 exception LibraryNotFound of string
 exception SubpackageNotFound of string
 exception ArchiveNotFound of filepath * lib_name * (predicate list)
 exception MetaParseError of filepath * string
-exception MetaUnknownPredicate of string
 
 (* mini lexer *)
 type token =
@@ -56,6 +56,7 @@ let predicate_to_string p =
     | Pred_Preprocessor -> "preprocessor"
     | Pred_Camlp4o -> "camlp4o"
     | Pred_Camlp4r -> "camlp4r"
+    | Pred_Unknown s -> s
 
 let predicate_of_string s =
     match s with
@@ -73,7 +74,7 @@ let predicate_of_string s =
     | "preprocessor"   -> Pred_Preprocessor
     | "camlp4o"        -> Pred_Camlp4o
     | "camlp4r"        -> Pred_Camlp4r
-    | _                -> raise (MetaUnknownPredicate s)
+    | _                -> Pred_Unknown s
 
 (* preliminaries structures, adjust as needed by meta. *)
 type package = { package_name        : string
@@ -127,7 +128,7 @@ let showToken tok = match tok with
 	| PLUSEQ -> "+="
 	| COMMA  -> ","
 
-(* meta files are supposed to be small, so don't bother we
+(* meta files are supposed to be small, so don't bother with
  * a real efficient and incremental read/lex/parse routine.
  *
  * this can be improve later on-needed basis
@@ -390,7 +391,7 @@ let isSyntax (path, rootPkg) dep = pkg_isSyntax (find dep.lib_subnames rootPkg)
 
 let getArchiveWithFilter (path, rootPkg) dep pred =
     let pkg = find dep.lib_subnames rootPkg in
-    List.find_all (fun (preds,a) -> List.mem pred preds) pkg.package_archives
+    List.find_all (fun (preds,_) -> List.mem pred preds) pkg.package_archives
 
 let getArchive (path, rootPkg) dep csv =
     let pkg = find dep.lib_subnames rootPkg in
