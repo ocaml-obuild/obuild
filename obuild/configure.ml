@@ -198,7 +198,10 @@ let check () =
 
     let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
     (match ver with
-    | major::minor::_-> if int_of_string major < 4 then gconf.conf_bin_annot <- false
+    | major::minor::_-> (
+        if int_of_string major < 4 then gconf.conf_bin_annot <- false;
+        if int_of_string major > 4 && int_of_string minor > 1 then gconf.conf_short_path <- true
+        )
     | _              -> gconf.conf_bin_annot <- false
     );
 
