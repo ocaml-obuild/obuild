@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 libs="unix.cmxa"
 OCAMLOPT="ocamlopt.opt -g"
