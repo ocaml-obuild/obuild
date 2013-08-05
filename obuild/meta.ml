@@ -88,6 +88,7 @@ type package = { package_name        : string
                ; package_archives    : (predicate list * string) list
                ; package_version     : string
                ; package_assignment  : (string * string) list
+               ; package_linkopts    : (predicate list option * string) list
                ; package_subs        : package list
                }
 
@@ -98,6 +99,7 @@ let newPkg name = { package_name             = name
                   ; package_directory        = ""
                   ; package_description      = ""
                   ; package_preprocessor     = ""
+                  ; package_linkopts         = []
                   ; package_browse_interface = ""
                   ; package_type_of_threads  = ""
                   ; package_exists_if        = ""
@@ -218,6 +220,19 @@ let parse name content =
         | COMMA :: I s :: xs -> let (l, r) = parseCSVtail xs in (s :: l, r)
         | xs                 -> ([], xs)
         in
+    let parse_predicate_list field tokens =
+        match tokens with
+        | LPAREN :: RPAREN :: xs -> (Some [], xs)
+        | LPAREN :: I s :: xs    ->
+            (let (ss, xs2) = parseCSVtail xs in
+            match xs2 with
+            | RPAREN :: xs3 ->
+                let preds = List.map predicate_of_string (s::ss) in
+                (Some preds, xs3)
+            | _             -> metaFailed ("expecting ')' after " ^ field ^ "'s predicate")
+            )
+        | xs                     -> (None, xs)
+        in
     let parse_requires_eq mpreds tokens =
         match tokens with
         | PLUSEQ :: S reqs :: xs
@@ -287,8 +302,13 @@ let parse name content =
             | EQ :: S s :: xs2 -> parse acc xs2
             | _                -> failwith "parsing error failed"
             )
-        | I "linkopts" :: EQ :: S _ :: xs ->
-            parse acc xs
+        | I "linkopts" :: xs -> (
+            let (preds, xs2) = parse_predicate_list "linkopts" xs in
+            match xs2 with
+            | EQ :: S s :: xs3 ->
+                    parse { acc with package_linkopts = (preds, s) :: acc.package_linkopts } xs3
+            | _         -> failwith "parsing linkopts failed, expecting equal"
+            )
         | I stuff :: EQ :: S stuffVal :: xs ->
             parse { acc with package_assignment = (stuff, stuffVal) :: acc.package_assignment } xs
         | x :: xs ->
