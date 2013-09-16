@@ -38,6 +38,7 @@ type module_desc_file =
     ; module_file_type   : ocaml_file_type
     ; module_intf_desc   : module_intf_desc option
     ; module_use_pp      : pp
+    ; module_oflags      : string list
     ; dep_cwd_modules    : hier list
     ; dep_other_modules  : modname list
     }
@@ -323,6 +324,7 @@ let get_modules_desc bstate target toplevelModules =
                         ; module_intf_desc     = intfDesc
                         ; module_use_threads   = use_thread
                         ; module_use_pp        = pp
+                        ; module_oflags        = target.target_obits.target_oflags
                         ; dep_cwd_modules      = cwdDeps
                         ; dep_other_modules    = otherDeps
                         }
