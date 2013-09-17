@@ -5,5 +5,4 @@ open Ext
 open Obuild
 
 let () =
-    let content = Filesystem.readFile (fp "_oasis") in
-    ()
+    ignore(Filesystem.readFile (fp "_oasis"))
