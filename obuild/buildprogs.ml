@@ -32,7 +32,7 @@ let annotToOpts annotMode =
     | AnnotationText -> ["-annot"]
     | AnnotationBoth -> ["-bin-annot";"-annot"]
 
-let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp modname =
+let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modname =
     let dstDir = dirSpec.dst_dir in
     Filesystem.mkdirSafeRecursive dstDir 0o755;
     let (prog, srcFile, dstFile) =
@@ -58,6 +58,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
                 | WithDebug -> ["-g"]
                 | WithProf  -> ["-p"])
              @ annotToOpts annotMode
+             @ oflags
              @ pp_to_params pp
              @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; hier_to_string x ] else []) packopt
              @ (if gconf.conf_short_path then [ "-short-paths" ] else [])

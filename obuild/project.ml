@@ -261,6 +261,7 @@ let parse strict lines =
         | "preprocessor"
         | "pp"         -> Handled { t with target_pp = Some (Pp.pp_type_of_string value) }
         | "extra-deps" -> Handled { t with target_extradeps = t.target_extradeps @ parseExtraDep value }
+        | "oflags"     -> Handled { t with target_oflags = t.target_oflags @ string_words_noempty value }
         | "stdlib"     -> Handled { t with target_stdlib = parse_stdlib value }
         | _            -> NotHandled
         in
