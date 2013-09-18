@@ -287,6 +287,7 @@ let get_modules_desc bstate target toplevelModules =
                     let allDeps =
                         match runOcamldep dopt srcFile with
                         | []   -> raise ModuleDependencyNoOutput
+                        | ml::mli::_ -> list_uniq (ml @ mli)
                         | x::_ -> x
                         in
                     verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string allDeps));

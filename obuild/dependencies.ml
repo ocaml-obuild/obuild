@@ -43,10 +43,11 @@ let runOcamldep dopt srcFile =
         try wrap_module f
         with _ -> raise (BuildDepAnalyzeFailed ("ocamldep returned a bad module name " ^ f))
         in
+    let mlFile = fp_to_string srcFile in
     let args = [Prog.getOcamlDep ()]
              @ (Utils.to_include_path_options dopt.dep_includes)
              @ (Pp.pp_to_params dopt.dep_pp)
-             @ ["-modules"; fp_to_string srcFile ] in
+             @ ["-modules"; mlFile; mlFile ^ "i"] in
     match Process.run_with_outputs args with
     | Process.Failure er -> raise (BuildDepAnalyzeFailed er)
     | Process.Success (out,_) ->
