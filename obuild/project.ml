@@ -316,6 +316,7 @@ let parse strict lines =
             match String.lowercase k with
             | "builddepends" | "builddeps"
             | "build-deps" -> { acc with target_extra_builddeps = parseDeps lib_name_of_string value @ acc.target_extra_builddeps }
+            | "oflags"     -> { acc with target_extra_oflags = acc.target_extra_oflags @ string_words_noempty value }
             | _            -> raise_if_strict ("unexpected item in : " ^ k); acc
         in
 
