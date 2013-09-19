@@ -325,7 +325,7 @@ let get_modules_desc bstate target toplevelModules =
                         ; module_intf_desc     = intfDesc
                         ; module_use_threads   = use_thread
                         ; module_use_pp        = pp
-                        ; module_oflags        = target.target_obits.target_oflags
+                        ; module_oflags        = target.target_obits.target_oflags @ (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (hier_to_string hier))))
                         ; dep_cwd_modules      = cwdDeps
                         ; dep_other_modules    = otherDeps
                         }
