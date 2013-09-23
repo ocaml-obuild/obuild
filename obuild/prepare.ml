@@ -488,6 +488,8 @@ let prepare_target_ bstate buildDir target toplevelModules =
             | System   -> Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)
         ) depPkgs
         in
+    let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncludePaths in
+    let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncludePaths in
     let depLinkingPaths =
         List.map (fun dep ->
             match Hashtbl.find conf.project_dep_data dep with
@@ -516,7 +518,11 @@ let prepare_target_ bstate buildDir target toplevelModules =
         ((match m with
         | Normal    -> buildDir
         | WithDebug -> buildDirD
-        | WithProf  -> buildDirP) <//> hier_to_dirpath hier) :: [autogenDir; obits.target_srcdir <//> hier_to_dirpath hier ] @ depIncludePaths)
+        | WithProf  -> buildDirP) <//> hier_to_dirpath hier) :: [autogenDir; obits.target_srcdir <//> hier_to_dirpath hier ] @
+	  (match m with
+           | Normal    -> depIncludePaths
+           | WithDebug -> depIncludePathsD
+           | WithProf  -> depIncludePathsP))
     ; compilation_linking_paths = [buildDir] @ depLinkingPaths
     ; compilation_linking_paths_p = [buildDirP;buildDir] @ depLinkingPaths
     ; compilation_linking_paths_d = [buildDirD;buildDir] @ depLinkingPaths
