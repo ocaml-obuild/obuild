@@ -39,12 +39,12 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
         match buildMode with
         | Interface ->
             (Prog.getOcamlC ()
-            ,dirSpec.src_dir </> interface_of_module modname
+            ,dirSpec.src_dir </> interface_of_module modname dirSpec.src_dir
             ,dstDir </> cmi_of_module modname
             )
         | Compiled ct ->
             ((if ct = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt ())
-            ,dirSpec.src_dir </> filename_of_module modname
+            ,dirSpec.src_dir </> filename_of_module modname dirSpec.src_dir
             ,dstDir </> (cmc_of_module ct) modname
             )
         in

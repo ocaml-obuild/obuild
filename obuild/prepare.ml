@@ -212,10 +212,10 @@ let get_modules_desc bstate target toplevelModules =
         let moduleName = hier_to_string hier in
         verbose Verbose "Analysing %s\n%!" moduleName;
         let srcPath =
-            try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f (hier_leaf hier)) module_lookup_method)
+            try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f (hier_leaf hier) (hier_to_dirpath hier)) module_lookup_method)
             with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths, hier))
             in
-        let srcDir = srcPath </> directory_of_module (hier_leaf hier) in
+        let srcDir = srcPath </> directory_of_module (hier_leaf hier) (hier_to_dirpath hier) in
 
         let module_desc_ty =
             if Filesystem.is_dir srcDir
@@ -237,8 +237,8 @@ let get_modules_desc bstate target toplevelModules =
                         ; module_dir_modules = List.map (fun m -> hier_append hier m) modules
                         }
                 ) else (
-                    let parserFile = srcPath </> parser_of_module (hier_leaf hier) in
-                    let lexerFile = srcPath </> lexer_of_module (hier_leaf hier) in
+                    let parserFile = srcPath </> parser_of_module (hier_leaf hier) (hier_to_dirpath hier) in
+                    let lexerFile = srcPath </> lexer_of_module (hier_leaf hier) (hier_to_dirpath hier) in
 
                     let isParser = Filesystem.exists parserFile in
                     let isLexer = Filesystem.exists lexerFile in
@@ -246,21 +246,21 @@ let get_modules_desc bstate target toplevelModules =
                         if isParser then (
                             verbose Debug "  %s is a parser\n%!" moduleName;
                             let actualSrcPath = Dist.getBuildDest (Dist.Target target.target_name) in
-                            let w = runOcamlYacc (actualSrcPath </> directory_of_module (hier_leaf hier)) parserFile in
+                            let w = runOcamlYacc (actualSrcPath </> directory_of_module (hier_leaf hier) (hier_to_dirpath hier)) parserFile in
                             print_warnings w;
                             actualSrcPath
                         ) else if isLexer then (
                             verbose Debug "  %s is a lexer\n%!" moduleName;
                             let actualSrcPath = Dist.getBuildDest (Dist.Target target.target_name) in
-                            let dest = actualSrcPath </> filename_of_module (hier_leaf hier) in
+                            let dest = actualSrcPath </> filename_of_module (hier_leaf hier) (hier_to_dirpath hier) in
                             let w = runOcamlLex dest lexerFile in
                             print_warnings w;
                             actualSrcPath
                         ) else
                             srcPath
                         in
-                    let srcFile = srcPath </> filename_of_module (hier_leaf hier) in
-                    let intfFile = srcPath </> interface_of_module (hier_leaf hier) in
+                    let srcFile = srcPath </> filename_of_module (hier_leaf hier) (hier_to_dirpath hier) in
+                    let intfFile = srcPath </> interface_of_module (hier_leaf hier) (hier_to_dirpath hier) in
                     let modTime = Filesystem.getModificationTime srcFile in
                     let hasInterface = Filesystem.exists intfFile in
                     let intfModTime = Filesystem.getModificationTime intfFile in
@@ -293,7 +293,7 @@ let get_modules_desc bstate target toplevelModules =
                     verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string allDeps));
                     let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
                         try
-                            let _ = Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun x -> x dep) module_lookup_method)
+                            let _ = Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun x -> x dep (hier_to_dirpath hier)) module_lookup_method)
                             in true
                         with
                             Utils.FilesNotFoundInPaths _ -> false
