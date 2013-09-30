@@ -32,9 +32,9 @@ let hier_to_dirpath x =
 
 let hier_append x m = { _hier = x._hier @ [m] }
 
-let filename_of_hier x  = hier_to_dirpath x </> filename_of_module (hier_leaf x)
-let directory_of_hier x = hier_to_dirpath x </> directory_of_module (hier_leaf x)
-let interface_of_hier x = hier_to_dirpath x </> interface_of_module (hier_leaf x)
+let filename_of_hier x  = hier_to_dirpath x </> filename_of_module (hier_leaf x) (hier_to_dirpath x)
+let directory_of_hier x = hier_to_dirpath x </> directory_of_module (hier_leaf x) (hier_to_dirpath x)
+let interface_of_hier x = hier_to_dirpath x </> interface_of_module (hier_leaf x) (hier_to_dirpath x)
 
 let cmc_of_hier bmode x = hier_to_dirpath x </> cmc_of_module bmode (hier_leaf x)
 let cmi_of_hier x = hier_to_dirpath x </> cmi_of_module (hier_leaf x)

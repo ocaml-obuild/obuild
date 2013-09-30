@@ -475,7 +475,7 @@ let check proj =
     let check_modules_exists target modules =
         let srcdir = target.target_obits.target_srcdir in
         List.iter (fun m ->
-            if not (Utils.exist_choice_in_paths [srcdir] (List.map (fun f -> f m) Modname.module_lookup_methods))
+            if not (Utils.exist_choice_in_paths [srcdir] (List.map (fun f -> f m srcdir) Modname.module_lookup_methods))
                 then raise (ModuleDoesntExist (target, m))
         ) modules
         in
