@@ -215,7 +215,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                                             ; include_dirs = cstate.compilation_include_paths compOpt h } in
                 let fcompile =
                     (buildMode,
-                    (fun () -> runOcamlCompile rDirSpec useThread annotMode buildMode compOpt packOpt hdesc.module_use_pp hdesc.module_oflags (hier_leaf h))) in
+                    (fun () -> runOcamlCompile rDirSpec useThread annotMode buildMode compOpt packOpt hdesc.module_use_pp hdesc.module_oflags h)) in
                 if invalid
                     then (
                         let (_, ys) = check invalid xs in

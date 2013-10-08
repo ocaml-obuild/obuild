@@ -32,20 +32,20 @@ let annotToOpts annotMode =
     | AnnotationText -> ["-annot"]
     | AnnotationBoth -> ["-bin-annot";"-annot"]
 
-let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modname =
+let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
     let dstDir = dirSpec.dst_dir in
     Filesystem.mkdirSafeRecursive dstDir 0o755;
     let (prog, srcFile, dstFile) =
         match buildMode with
         | Interface ->
             (Prog.getOcamlC ()
-            ,dirSpec.src_dir </> interface_of_module modname
-            ,dstDir </> cmi_of_module modname
+            ,interface_of_hier dirSpec.src_dir modhier
+            ,cmi_of_hier dstDir modhier
             )
         | Compiled ct ->
             ((if ct = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt ())
-            ,dirSpec.src_dir </> filename_of_module modname
-            ,dstDir </> (cmc_of_module ct) modname
+            ,filename_of_hier modhier dirSpec.src_dir
+            ,cmc_of_hier ct dstDir modhier
             )
         in
     let args = [prog]
