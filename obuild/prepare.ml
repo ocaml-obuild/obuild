@@ -237,8 +237,8 @@ let get_modules_desc bstate target toplevelModules =
                         ; module_dir_modules = List.map (fun m -> hier_append hier m) modules
                         }
                 ) else (
-                    let parserFile = srcPath </> parser_of_module (hier_leaf hier) in
-                    let lexerFile = srcPath </> lexer_of_module (hier_leaf hier) in
+                    let parserFile = parser_of_hier hier srcPath in
+                    let lexerFile = lexer_of_hier hier srcPath in
 
                     let isParser = Filesystem.exists parserFile in
                     let isLexer = Filesystem.exists lexerFile in
@@ -252,14 +252,14 @@ let get_modules_desc bstate target toplevelModules =
                         ) else if isLexer then (
                             verbose Debug "  %s is a lexer\n%!" moduleName;
                             let actualSrcPath = Dist.getBuildDest (Dist.Target target.target_name) in
-                            let dest = actualSrcPath </> filename_of_module (hier_leaf hier) in
+                            let dest = filename_of_hier hier actualSrcPath in
                             let w = runOcamlLex dest lexerFile in
                             print_warnings w;
                             actualSrcPath
                         ) else
                             srcPath
                         in
-                    let srcFile = srcPath </> filename_of_module (hier_leaf hier) in
+                    let srcFile = filename_of_hier hier srcPath in
                     let intfFile = interface_of_hier srcPath hier in
                     let modTime = Filesystem.getModificationTime srcFile in
                     let hasInterface = Filesystem.exists intfFile in
