@@ -59,7 +59,10 @@ let add_prefix prefix_path hier =
   end
 
 let check_file path filename ext =
-  Ext.Filesystem.exists (path </> ((fn filename) <.> (Filetype.file_type_to_string Filetype.FileML)))
+  if ext <>  Filetype.FileOther "" then
+    Ext.Filesystem.exists (path </> ((fn filename) <.> (Filetype.file_type_to_string ext)))
+  else
+    Ext.Filesystem.exists (path </> (fn filename))
 
 let get_filename path hier ext = 
   if Hashtbl.mem hiers hier then Hashtbl.find hiers hier
@@ -81,8 +84,14 @@ let get_filepath path hier ext =
   let path = add_prefix path hier in
   path </> ((fn (get_filename path hier ext)) <.> (Filetype.file_type_to_string ext))
 
+let get_dirpath path hier =
+  let path = add_prefix path hier in
+  path </> (fn (get_filename path hier (Filetype.FileOther "")))
+
 let filename_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileML
-let directory_of_hier x = hier_to_dirpath x </> directory_of_module (hier_leaf x)
+let directory_of_hier hier prefix_path = get_dirpath prefix_path hier
+let lexer_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLL
+let parser_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLY
 let interface_of_hier x = hier_to_dirpath x </> interface_of_module (hier_leaf x)
 
 let cmc_of_hier bmode x = hier_to_dirpath x </> cmc_of_module bmode (hier_leaf x)
