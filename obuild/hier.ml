@@ -32,6 +32,30 @@ let hier_to_dirpath x =
 
 let hier_append x m = { _hier = x._hier @ [m] }
 
+let add_prefix prefix_path hier =
+  if List.length hier._hier <= 1 then 
+    prefix_path
+  else begin
+    let to_fp =
+      fp (String.concat Filename.dir_sep (List.map modname_to_dir $ list_init hier._hier)) in
+    if (path_length prefix_path) = 0 then
+      to_fp 
+    else
+      let rec loop path hier_list =
+	match hier_list with
+	  [] -> path <//> to_fp
+	| x :: xs ->
+	  if (path_basename path) = fn (modname_to_dir (List.hd hier_list)) then
+	    if (path_length prefix_path) = 1 then
+	      to_fp (* prefix_path is fully included in hier *)
+	    else
+	      loop (path_dirname path) (List.tl hier_list)
+	  else
+	    path <//> to_fp
+      in
+      loop prefix_path hier._hier
+  end
+
 let filename_of_hier x  = hier_to_dirpath x </> filename_of_module (hier_leaf x)
 let directory_of_hier x = hier_to_dirpath x </> directory_of_module (hier_leaf x)
 let interface_of_hier x = hier_to_dirpath x </> interface_of_module (hier_leaf x)
