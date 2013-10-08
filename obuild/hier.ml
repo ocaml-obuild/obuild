@@ -81,7 +81,7 @@ let get_filepath path hier ext =
   let path = add_prefix path hier in
   path </> ((fn (get_filename path hier ext)) <.> (Filetype.file_type_to_string ext))
 
-let filename_of_hier x  = hier_to_dirpath x </> filename_of_module (hier_leaf x)
+let filename_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileML
 let directory_of_hier x = hier_to_dirpath x </> directory_of_module (hier_leaf x)
 let interface_of_hier x = hier_to_dirpath x </> interface_of_module (hier_leaf x)
 

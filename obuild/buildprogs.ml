@@ -83,7 +83,7 @@ let runOcamlInfer srcDir includes pp modname =
     let args = [Prog.getOcamlC (); "-i"]
              @ pp_to_params pp
              @ (Utils.to_include_path_options includes)
-             @ [fp_to_string (srcDir <//> filename_of_hier modname)]
+             @ [fp_to_string (filename_of_hier srcDir modname)]
         in
     match run_with_outputs args with
     | Success (mli, _) -> mli
