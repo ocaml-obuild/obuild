@@ -74,8 +74,8 @@ let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let args = [prog]
              @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; hier_to_string x ] else []) packOpt
              @ annotToOpts annotMode
-             @ [ "-pack"; "-o"; fp_to_string (dstDir <//> cmc_of_hier buildMode dest); ]
-             @ List.map (fun m -> fp_to_string (srcDir <//> cmc_of_hier buildMode m)) modules
+             @ [ "-pack"; "-o"; fp_to_string (cmc_of_hier buildMode dstDir dest); ]
+             @ List.map (fun m -> fp_to_string (cmc_of_hier buildMode srcDir m)) modules
         in
     spawn args
 
@@ -162,7 +162,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                  | Native -> "-cclib"
                  | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
                ; x ]) cclibs))
-             @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode) modules)
+             @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode currentDir) modules)
              in
     match run_with_outputs args with
     | Success (_, warnings) -> warnings

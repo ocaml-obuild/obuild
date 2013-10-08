@@ -177,10 +177,10 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                     | Some intf -> intf
                     in
                 List.map (fun compOpt ->
-                    let dest = (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier h) in
+                    let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) h) in
                     let src  = [ (FileMLI, intfDesc.module_intf_path) ] in
                     let mDeps = List.map (fun moduleDep ->
-                        (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier moduleDep)
+                        (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) moduleDep)
                     ) moduleDeps in
                     let internalDeps = List.assoc (compOpt,ByteCode) internalLibsPathsAllModes in
                     (dest,Interface,compOpt, src @ internalDeps @ mDeps)
@@ -192,13 +192,13 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                     in
                 List.map (fun (compiledTy, compOpt) ->
                     let fileCompileTy = buildmode_to_filety compiledTy in
-                    let dest = (fileCompileTy, cstate.compilation_builddir_ml compOpt <//> cmc_of_hier compiledTy h) in
+                    let dest = (fileCompileTy, cmc_of_hier compiledTy (cstate.compilation_builddir_ml compOpt) h) in
                     let src  =
                           (match hdesc.module_intf_desc with None -> [] | Some intf -> [FileMLI,intf.module_intf_path])
                         @ [(FileML, hdesc.module_src_path)] in
                     let mDeps = List.concat (List.map (fun moduleDep ->
-                        [(fileCompileTy, cstate.compilation_builddir_ml compOpt <//> cmc_of_hier compiledTy moduleDep)
-                        ;(FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier moduleDep)
+                        [(fileCompileTy, cmc_of_hier compiledTy (cstate.compilation_builddir_ml compOpt) moduleDep)
+                        ;(FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) moduleDep)
                         ]
                     ) moduleDeps) in
                     let internalDeps = List.assoc (compOpt,compiledTy) internalLibsPathsAllModes in
@@ -266,9 +266,9 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
         let tasksOps : (string * spawn) option list list =
             (List.map (fun buildMode ->
                 List.map (fun compOpt ->
-                    let dest = (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier h) in
+                    let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) h) in
                     let mdeps = List.map (fun m ->
-                            (FileCMI, cstate.compilation_builddir_ml compOpt <//> cmi_of_hier m)
+                            (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) m)
                         ) modules in
                     let dir = cstate.compilation_builddir_ml compOpt in
                     let fcompile = (fun () -> runOcamlPack dir dir annotMode buildMode packOpt h modules) in
@@ -433,7 +433,7 @@ let linking bstate cstate target =
 
             let destTime = Filesystem.getModificationTime dest in
             let depsTime =
-                try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p) (List.map (fun m -> cstate.compilation_builddir_ml compileOpt <//> cmc_of_hier compiledType m) compiled))
+                try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p) (List.map (fun m -> cmc_of_hier compiledType (cstate.compilation_builddir_ml compileOpt)  m) compiled))
                 with Not_found -> None
                 in
             if depsTime <> None then (

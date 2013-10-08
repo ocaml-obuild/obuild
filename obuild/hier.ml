@@ -92,7 +92,13 @@ let filename_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.F
 let directory_of_hier hier prefix_path = get_dirpath prefix_path hier
 let lexer_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLL
 let parser_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLY
-let interface_of_hier x = hier_to_dirpath x </> interface_of_module (hier_leaf x)
+let interface_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileMLI
 
-let cmc_of_hier bmode x = hier_to_dirpath x </> cmc_of_module bmode (hier_leaf x)
-let cmi_of_hier x = hier_to_dirpath x </> cmi_of_module (hier_leaf x)
+let cmx_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMX
+let cmo_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMO
+let cmc_of_hier bmode prefix_path hier = if bmode = Native then
+    cmx_of_hier prefix_path hier
+  else
+    cmo_of_hier prefix_path hier
+
+let cmi_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMI
