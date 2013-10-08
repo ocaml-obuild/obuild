@@ -80,6 +80,11 @@ let get_filename path hier ext =
     filename
   end
 
+let add_hier modname filename =
+  let h = hier [modname] in
+  Hashtbl.add hiers h filename;
+  h
+
 let get_filepath path hier ext =
   let path = add_prefix path hier in
   path </> ((fn (get_filename path hier ext)) <.> (Filetype.file_type_to_string ext))
@@ -102,3 +107,26 @@ let cmc_of_hier bmode prefix_path hier = if bmode = Native then
     cmo_of_hier prefix_path hier
 
 let cmi_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMI
+
+let module_lookup_methods = [ directory_of_hier; parser_of_hier; lexer_of_hier; filename_of_hier ]
+
+let hier_of_directory filename =
+  let name = fn_to_string filename in
+  let m = wrap_module (String.capitalize name) in
+  add_hier m name
+
+let hier_of_parser filename =
+  let name = Filename.chop_extension (fn_to_string filename) in
+  let m = wrap_module (String.capitalize name) in
+  add_hier m name
+
+let hier_of_lexer filename =
+  hier_of_parser filename
+
+let hier_of_filename filename =
+  let name = Filename.chop_extension (fn_to_string filename) in
+  let m = try wrap_module (String.capitalize name)
+    with EmptyModuleName -> raise (ModuleFilenameNotValid (fn_to_string filename))
+    | Invalid_argument _ -> raise (ModuleFilenameNotValid (fn_to_string filename))
+  in
+  add_hier m name;
