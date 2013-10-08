@@ -7,6 +7,8 @@ exception EmptyModuleHierarchy
 
 type hier = { _hier : modname list }
 
+let hiers = Hashtbl.create 128
+
 let hier_root x = List.hd x._hier
 let hier_parent x =
     match x._hier with
@@ -55,6 +57,29 @@ let add_prefix prefix_path hier =
       in
       loop prefix_path hier._hier
   end
+
+let check_file path filename ext =
+  Ext.Filesystem.exists (path </> ((fn filename) <.> (Filetype.file_type_to_string Filetype.FileML)))
+
+let get_filename path hier ext = 
+  if Hashtbl.mem hiers hier then Hashtbl.find hiers hier
+  else begin
+    let modname = modname_to_string (hier_leaf hier) in
+    let filename = if (check_file path modname ext) then begin
+      Hashtbl.add hiers hier modname;
+      modname
+    end else begin
+	let name = String.uncapitalize modname in
+	if (check_file path name ext) then
+	  Hashtbl.add hiers hier name;
+	name
+    end in
+    filename
+  end
+
+let get_filepath path hier ext =
+  let path = add_prefix path hier in
+  path </> ((fn (get_filename path hier ext)) <.> (Filetype.file_type_to_string ext))
 
 let filename_of_hier x  = hier_to_dirpath x </> filename_of_module (hier_leaf x)
 let directory_of_hier x = hier_to_dirpath x </> directory_of_module (hier_leaf x)
