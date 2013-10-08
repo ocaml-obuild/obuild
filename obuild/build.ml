@@ -489,16 +489,16 @@ let buildLib bstate lib =
 
 let buildExe bstate exe =
     verbose Report "Building executable %s\n" (exe.Project.exe_name);
-    buildTarget bstate (Project.exe_to_target exe) [module_of_filename exe.Project.exe_main]
+    buildTarget bstate (Project.exe_to_target exe) [hier_of_filename exe.Project.exe_main]
 
 let buildTest bstate test =
     verbose Report "Building test %s\n" (test.Project.test_name);
-    buildTarget bstate (Project.test_to_target test) [module_of_filename test.Project.test_main]
+    buildTarget bstate (Project.test_to_target test) [hier_of_filename test.Project.test_main]
 
 let buildBench bstate bench =
     verbose Report "Building benchmark %s\n" (bench.Project.bench_name);
-    buildTarget bstate (Project.bench_to_target bench) [module_of_filename bench.Project.bench_main]
+    buildTarget bstate (Project.bench_to_target bench) [hier_of_filename bench.Project.bench_main]
 
 let buildExample bstate example =
     verbose Report "Building example %s\n" (example.Project.example_name);
-    buildTarget bstate (Project.example_to_target example) [module_of_filename example.Project.example_main]
+    buildTarget bstate (Project.example_to_target example) [hier_of_filename example.Project.example_main]

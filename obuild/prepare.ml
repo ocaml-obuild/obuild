@@ -207,12 +207,12 @@ let get_modules_desc bstate target toplevelModules =
             pp_some preproc (archive :: camlp4Strs)
         ) in
 
-    let module_lookup_method = [filename_of_module; lexer_of_module; parser_of_module; directory_of_module] in
+    let module_lookup_method = [filename_of_hier; lexer_of_hier; parser_of_hier; directory_of_hier] in
     let get_one hier =
         let moduleName = hier_to_string hier in
         verbose Verbose "Analysing %s\n%!" moduleName;
         let srcPath =
-            try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f (hier_leaf hier)) module_lookup_method)
+            try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f hier) module_lookup_method)
             with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths, hier))
             in
         let srcDir = srcPath </> directory_of_module (hier_leaf hier) in
@@ -293,7 +293,7 @@ let get_modules_desc bstate target toplevelModules =
                     verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string allDeps));
                     let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
                         try
-                            let _ = Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun x -> x dep) module_lookup_method)
+                            let _ = Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun x -> x (hier_of_modname dep)) module_lookup_method)
                             in true
                         with
                             Utils.FilesNotFoundInPaths _ -> false
@@ -349,7 +349,7 @@ let get_modules_desc bstate target toplevelModules =
             | DescDir  ddir  -> List.iter loop ddir.module_dir_modules
         )
         in
-    List.iter (fun m -> loop (hier [m])) toplevelModules;
+    List.iter (fun m -> loop m) toplevelModules;
     modulesDeps
 
 (* prepare modules dependencies and various compilation state

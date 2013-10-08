@@ -25,6 +25,8 @@ let hier_of_string x =
     let l = string_split '.' x in
     hier (List.map modname_of_string l)
 
+let hier_of_modname x = { _hier = [x] }
+
 let hier_to_node x = x._hier
 
 let hier_to_dirpath x =
