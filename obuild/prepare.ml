@@ -260,7 +260,7 @@ let get_modules_desc bstate target toplevelModules =
                             srcPath
                         in
                     let srcFile = srcPath </> filename_of_module (hier_leaf hier) in
-                    let intfFile = srcPath </> interface_of_module (hier_leaf hier) in
+                    let intfFile = interface_of_hier srcPath hier in
                     let modTime = Filesystem.getModificationTime srcFile in
                     let hasInterface = Filesystem.exists intfFile in
                     let intfModTime = Filesystem.getModificationTime intfFile in

@@ -44,7 +44,6 @@ let directory_of_module modname = fn (String.uncapitalize modname._modname)
 let filename_of_module modname = fn (String.uncapitalize modname._modname ^ ".ml")
 let parser_of_module modname = fn (String.uncapitalize modname._modname ^ ".mly")
 let lexer_of_module modname = fn (String.uncapitalize modname._modname ^ ".mll")
-let interface_of_module modname = fn (String.uncapitalize modname._modname ^ ".mli")
 
 let module_lookup_methods = [ directory_of_module; parser_of_module; lexer_of_module; filename_of_module ]
 
