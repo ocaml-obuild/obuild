@@ -32,20 +32,20 @@ let annotToOpts annotMode =
     | AnnotationText -> ["-annot"]
     | AnnotationBoth -> ["-bin-annot";"-annot"]
 
-let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modname =
+let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
     let dstDir = dirSpec.dst_dir in
     Filesystem.mkdirSafeRecursive dstDir 0o755;
     let (prog, srcFile, dstFile) =
         match buildMode with
         | Interface ->
             (Prog.getOcamlC ()
-            ,dirSpec.src_dir </> interface_of_module modname
-            ,dstDir </> cmi_of_module modname
+            ,interface_of_hier dirSpec.src_dir modhier
+            ,cmi_of_hier dstDir modhier
             )
         | Compiled ct ->
             ((if ct = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt ())
-            ,dirSpec.src_dir </> filename_of_module modname
-            ,dstDir </> (cmc_of_module ct) modname
+            ,filename_of_hier modhier dirSpec.src_dir
+            ,cmc_of_hier ct dstDir modhier
             )
         in
     let args = [prog]
@@ -74,8 +74,8 @@ let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let args = [prog]
              @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; hier_to_string x ] else []) packOpt
              @ annotToOpts annotMode
-             @ [ "-pack"; "-o"; fp_to_string (dstDir <//> cmc_of_hier buildMode dest); ]
-             @ List.map (fun m -> fp_to_string (srcDir <//> cmc_of_hier buildMode m)) modules
+             @ [ "-pack"; "-o"; fp_to_string (cmc_of_hier buildMode dstDir dest); ]
+             @ List.map (fun m -> fp_to_string (cmc_of_hier buildMode srcDir m)) modules
         in
     spawn args
 
@@ -83,7 +83,7 @@ let runOcamlInfer srcDir includes pp modname =
     let args = [Prog.getOcamlC (); "-i"]
              @ pp_to_params pp
              @ (Utils.to_include_path_options includes)
-             @ [fp_to_string (srcDir <//> filename_of_hier modname)]
+             @ [fp_to_string (filename_of_hier srcDir modname)]
         in
     match run_with_outputs args with
     | Success (mli, _) -> mli
@@ -162,7 +162,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                  | Native -> "-cclib"
                  | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
                ; x ]) cclibs))
-             @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode) modules)
+             @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode currentDir) modules)
              in
     match run_with_outputs args with
     | Success (_, warnings) -> warnings

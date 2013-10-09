@@ -15,7 +15,7 @@ exception InvalidConfFile of string
 exception MissingField of string
 exception UnknownDependencyName of string
 exception UnsupportedFutureVersion of int
-exception ModuleDoesntExist of target * modname
+exception ModuleDoesntExist of target * hier
 exception ModuleListEmpty of lib_name
 exception FileDoesntExist of target * filename
 exception LicenseFileDoesntExist of filepath
@@ -29,7 +29,7 @@ type obuild_lib =
     { lib_name        : lib_name
     ; lib_description : string
     ; lib_target      : target
-    ; lib_modules     : modname list
+    ; lib_modules     : hier list
     ; lib_pack        : bool
     ; lib_syntax      : bool
     ; lib_subs        : obuild_lib list
@@ -231,7 +231,7 @@ let parse strict lines =
         List.map parseDependency (Utils.parseCSV value)
         in
     let parseModuleName value =
-        let wrap_module_nice s = wrap_module (String.capitalize s) in
+        let wrap_module_nice s = hier [(wrap_module (String.capitalize s))] in
         List.map wrap_module_nice (Utils.parseCSV value)
         in
     let parseFilenames value = List.map fn (Utils.parseCSV value) in
@@ -475,7 +475,7 @@ let check proj =
     let check_modules_exists target modules =
         let srcdir = target.target_obits.target_srcdir in
         List.iter (fun m ->
-            if not (Utils.exist_choice_in_paths [srcdir] (List.map (fun f -> f m) Modname.module_lookup_methods))
+            if not (Utils.exist_choice_in_paths [srcdir] (List.map (fun f -> f m) Hier.module_lookup_methods))
                 then raise (ModuleDoesntExist (target, m))
         ) modules
         in
@@ -553,7 +553,7 @@ let write file proj =
             add "\n";
             add (sprintf "%slibrary %s\n" iStrSection (lib_name_to_string lib.lib_name));
             let iStr = iStrSection ^ "  " in
-            add (sprintf "%smodules: %s\n" iStr (Utils.showList "," modname_to_string lib.lib_modules));
+            add (sprintf "%smodules: %s\n" iStr (Utils.showList "," hier_to_string lib.lib_modules));
             if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);
             if lib.lib_syntax then add (sprintf "%ssyntax: %b\n" iStr lib.lib_syntax);
             if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);

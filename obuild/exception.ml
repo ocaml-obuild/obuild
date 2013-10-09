@@ -20,7 +20,7 @@ let show exn =
         exit 3
     | Project.ModuleDoesntExist (t,m) ->
         error "project is referencing in '%s', a module %s that cannot be found\n"
-                (Target.get_target_name t) (Modname.modname_to_string m);
+                (Target.get_target_name t) (Hier.hier_to_string m);
         exit 3
     | Project.ModuleListEmpty l ->
         error "library %s doesn't have any modules defined.\n" (lib_name_to_string l);

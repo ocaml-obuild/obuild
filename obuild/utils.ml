@@ -50,7 +50,7 @@ let to_exe_name mode build name =
     fn (name ^ ext ^ ext2 ^ (if is_windows then ".exe" else ""))
 
 exception FileNotFoundInPaths of (filepath list * filename)
-exception FilesNotFoundInPaths of (filepath list * filename list)
+exception FilesNotFoundInPaths of (filepath list * filepath list)
 
 let get_system_paths () =
     try List.map fp (string_split ':' (Sys.getenv "PATH"))
@@ -62,10 +62,10 @@ let find_in_paths paths name =
 
 let find_choice_in_paths paths names =
     try List.find (fun p ->
-           try let _ = List.find (fun n -> Filesystem.exists (p </> n)) names in true
+           try let _ = List.find (fun n -> Filesystem.exists (n p)) names in true
            with Not_found -> false
         ) paths
-    with Not_found -> raise (FilesNotFoundInPaths (paths, names))
+    with Not_found -> raise (FilesNotFoundInPaths (paths, (List.map (fun n -> n (List.hd paths)) names)))
 
 let exist_choice_in_paths paths names =
     try let _ = find_choice_in_paths paths names in true

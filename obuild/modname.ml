@@ -38,17 +38,12 @@ let lib_of_cmca b file =
     let suffix = if b = Native then ".cmxa" else ".cma" in
     Filename.chop_suffix (fn_to_string file) suffix
 
-let cmx_of_module modname = fn (String.uncapitalize modname._modname ^ ".cmx")
-let cmo_of_module modname = fn (String.uncapitalize modname._modname ^ ".cmo")
-let cmc_of_module b = if b = Native then cmx_of_module else cmo_of_module
-let cmi_of_module modname = fn (String.uncapitalize modname._modname ^ ".cmi")
 let o_of_module modname = fn (String.uncapitalize modname._modname ^ ".o")
 
 let directory_of_module modname = fn (String.uncapitalize modname._modname)
 let filename_of_module modname = fn (String.uncapitalize modname._modname ^ ".ml")
 let parser_of_module modname = fn (String.uncapitalize modname._modname ^ ".mly")
 let lexer_of_module modname = fn (String.uncapitalize modname._modname ^ ".mll")
-let interface_of_module modname = fn (String.uncapitalize modname._modname ^ ".mli")
 
 let module_lookup_methods = [ directory_of_module; parser_of_module; lexer_of_module; filename_of_module ]
 
