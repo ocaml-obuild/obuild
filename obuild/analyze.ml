@@ -196,6 +196,7 @@ let prepare projFile =
                   let pkg =
                       try Meta.find dep.lib_subnames meta
                       with Not_found -> raise (SublibraryDoesntExists dep)
+                         | Meta.SubpackageNotFound _ -> raise (SublibraryDoesntExists dep)
                       in
                   List.iter (fun (preds, reqDeps) ->
                       match preds with

@@ -64,6 +64,8 @@ let show exn =
         error "unexpected parse error '%s' in meta file %s\n" err (fp_to_string fp); exit 4
     | Meta.ArchiveNotFound (path, dep, preds) ->
         error "archive %s not found in %s (%s)\n" (Utils.showList "," Meta.predicate_to_string preds) (lib_name_to_string dep) (fp_to_string path); exit 4
+    | Analyze.SublibraryDoesntExists dep ->
+        error "dependency %s not found\n" (lib_name_to_string dep); exit 4
     (* build related failure *)
     | Prepare.ModuleDependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.hier_to_string m); exit 5
     | Prepare.ModuleNotFound (paths,m) ->
