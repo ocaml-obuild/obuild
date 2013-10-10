@@ -202,11 +202,22 @@ let prepare projFile =
                       match preds with
                       | Some [Meta.Pred_Toploop] -> ()
                       | _ ->
-                          List.iter (fun reqDep ->
-                              verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
-                              Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
-                              loop reqDep
-                          ) reqDeps
+                            let add_deps dep deps =
+                              List.iter (fun reqDep ->
+                                verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
+                                Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
+                                loop reqDep
+                              ) deps in
+                            add_deps dep reqDeps;
+                            let rec aux deps =
+                              if (List.length deps) > 1 then begin
+                                let dep = list_last deps in
+                                let deps = list_init deps in
+                                add_deps dep deps;
+                                aux deps
+                              end
+                            in
+                            aux reqDeps
                   ) pkg.Meta.package_requires;
                   System
                 end with DependencyMissing dep -> (add_missing dep; System)
