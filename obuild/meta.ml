@@ -240,7 +240,7 @@ let parse name content =
             let deps = List.map (fun r -> lib_name_of_string r)
                 $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
                 in
-            ((mpreds, deps), xs)
+            ((mpreds, (List.rev deps)), xs)
         | _ ->
             metaFailed ("expecting '+=' or '=' after requires")
         in
