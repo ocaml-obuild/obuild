@@ -5,7 +5,7 @@ OCAMLOPT="ocamlopt.opt -g"
 
 extmodules="fugue filepath filesystem"
 libmodules="gconf types dag taskdep dagutils filetype modname hier expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
-mainmodules="sdist doc init help install main"
+mainmodules="sdist doc init help install version main"
 
 set -e
 
@@ -72,6 +72,7 @@ rm -f *.cmi *.o *a *.cmx *.cmxa
 
 # rebuild everything with the bootstraped version
 export OCAMLRUNPARAM=b
+./obuild.bootstrap get version | tr . ' ' | awk '{print "let major = ", $1, "\nand minor = ", $2, "\nand micro = ", $3, "\n"}' - > src/version.ml
 ./obuild.bootstrap clean
 ./obuild.bootstrap configure
 time ./obuild.bootstrap build

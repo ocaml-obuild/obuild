@@ -7,9 +7,6 @@ open Obuild.Helper
 open Obuild.Gconf
 open Obuild
 
-let major = 0
-let minor = 0
-
 let programName = "obuild"
 let usageStr cmd = "\nusage: " ^ programName ^ " " ^ cmd ^ " <options>\n\noptions:\n"
 
@@ -297,7 +294,7 @@ let mainHelp argv =
  * <exe> -opt1 -opt2 <command> <...>
  * *)
 let parseGlobalArgs () =
-    let printVersion () = printf "obuild %d.%d\n" major minor; exit 0
+    let printVersion () = Version.(printf "obuild %d.%d.%d\n" major minor micro; exit 0)
         in
     let printHelp () = printf "a rescue team has been dispatched\n";
                        exit 0

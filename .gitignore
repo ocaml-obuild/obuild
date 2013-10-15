@@ -3,3 +3,4 @@
 *.cmi
 dist
 src/obuild
+src/version.ml
