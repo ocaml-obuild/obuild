@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 libs="unix.cmxa"
-OCAMLOPT="ocamlopt.opt -g"
+OCAMLOPT="ocamlopt -g"
 
 extmodules="fugue filepath filesystem"
 libmodules="gconf types dag taskdep dagutils filetype modname hier expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
