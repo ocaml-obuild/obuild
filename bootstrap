@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
-
 libs="unix.cmxa"
 OCAMLOPT="ocamlopt -g"
 # use faster ocamlopt, if available
