@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 
+set -x
+
 libs="unix.cmxa"
-OCAMLOPT="ocamlopt.opt -g"
+OCAMLOPT="ocamlopt -g"
+# use faster ocamlopt, if available
+OCAMLOPT_OPT=`which ocamlopt.opt`
+if [[ $OCAMLOPT_OPT != "" ]] ; then
+    OCAMLOPT="ocamlopt.opt -g"
+fi
 
 extmodules="fugue filepath filesystem"
 libmodules="gconf types dag taskdep dagutils filetype modname hier expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
