@@ -4,10 +4,10 @@ Here are the fields accepted in obuild files
 
 The syntax is        field (flags): accepted_values
 
-field = string
-flags = M (mandatory)
-boolean = true | True | false | False
-accepted_values = comma separated string list | string list | string | boolean
+* field = string
+* flags = M (mandatory)
+* boolean = true | True | false | False
+* accepted_values = comma separated string list | string list | string | boolean
 
 # Section types
 
