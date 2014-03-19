@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# useful for obuild developpers
+
+export OCAMLOPT_DEV="ocamlopt.opt -g -annot"
+
+./bootstrap
+
+ln -sf dist/build/obuild/obuild ~/bin # minimal install
+
+# soft link .annot files so that Emacs' tuareg-mode can find them
+mkdir -p _build
+HERE=`pwd`
+for f in `find . -name *.annot` ; do
+    cd ${HERE}/_build ; ln -sf ../$f ./ ;
+done
+cd $HERE
