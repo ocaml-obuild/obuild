@@ -16,3 +16,6 @@ for f in `find . -name *.annot` ; do
     cd ${HERE}/_build ; ln -sf ../$f ./ ;
 done
 cd $HERE
+
+# generate TAGS
+otags $(find . -name *.ml) -o TAGS
