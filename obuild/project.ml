@@ -169,6 +169,9 @@ let findPath () =
     | [x] -> fp x
     | _   -> raise MultipleConfFiles
 
+let findLastInvocationPath () =
+  (Ext.Filepath.fp_to_string (findPath ())) ^ ".last_invocation"
+
 let digest () =
     let path = findPath () in
     Digest.to_hex (Digest.file (fp_to_string path))
