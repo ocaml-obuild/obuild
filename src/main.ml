@@ -176,6 +176,8 @@ let mainInstall argv =
                 (* don't play with matches *)
                 let matches =
                     Filesystem.list_dir_pred (fun f ->
+		      if (fn_to_string f) = "META" then true
+		      else
                         match Filetype.get_extension_path (buildDir </> f) with
                         | Filetype.FileCMX | Filetype.FileCMO | Filetype.FileCMI | Filetype.FileA
                         | Filetype.FileCMXA | Filetype.FileCMA -> true
