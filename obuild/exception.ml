@@ -19,13 +19,15 @@ let with_in_file fn f =
 let retry_config_and_build () =
   if not !already_retried_once then (
     let previous_configure_command =
-      with_in_file (Project.findLastInvocationPath ()) input_line
+      with_in_file (Project.findLastInvocationPath `Config) input_line
     in
     eprintf "trying to reconfigure\n\
       executing: %s\n%!" previous_configure_command;
     let config_exit_code = Sys.command previous_configure_command in
     if config_exit_code = 0 then (
-      let build_command = "obuild build" in
+      let build_command =
+        with_in_file (Project.findLastInvocationPath `Build) input_line
+      in
       eprintf "trying to build\n\
         executing: %s\n%!" build_command;
       let _build_exit_code = Sys.command build_command in ()
