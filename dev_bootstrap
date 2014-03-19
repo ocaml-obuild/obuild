@@ -6,7 +6,7 @@ export OCAMLOPT_DEV="ocamlopt.opt -g -annot"
 
 ./bootstrap
 
-ln -sf ${PWD}dist/build/obuild/obuild ~/bin # minimal install
+ln -sf ${PWD}/dist/build/obuild/obuild ~/bin # minimal install
 
 # soft link .annot files so that Emacs' tuareg-mode can find them
 rm -rf _build
