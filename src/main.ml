@@ -27,7 +27,7 @@ let with_out_file fn f =
 
 let string_list_to_file l fn =
   with_out_file fn
-    (fun out -> L.iter (Printf.fprintf out "%s\n") l)
+    (fun out -> L.iter (fprintf out "%s\n") l)
 
 let mainConfigure argv =
     let userFlagSettings = ref [] in
