@@ -7,6 +7,8 @@ open Obuild.Helper
 open Obuild.Gconf
 open Obuild
 
+module L = List
+
 let major = 0
 let minor = 0
 
@@ -16,6 +18,16 @@ let usageStr cmd = "\nusage: " ^ programName ^ " " ^ cmd ^ " <options>\n\noption
 let project_read () =
     try Project.read gconf.conf_strict
     with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn); raise exn
+
+let with_out_file fn f =
+  let out = open_out fn in
+  let res = f out in
+  close_out out;
+  res
+
+let string_list_to_file l fn =
+  with_out_file fn
+    (fun out -> L.iter (fprintf out "%s\n") l)
 
 let mainConfigure argv =
     let userFlagSettings = ref [] in
@@ -59,6 +71,7 @@ let mainConfigure argv =
     FindlibConf.load ();
     let projFile = Project.read gconf.conf_strict in
     verbose Report "Configuring %s-%s...\n" projFile.Project.name projFile.Project.version;
+    (* FBR: store the configuration command in projFile.lastrun *)
     Configure.run projFile !userFlagSettings;
     (* check build deps of everything buildables *)
     ()
