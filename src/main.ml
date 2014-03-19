@@ -19,10 +19,15 @@ let project_read () =
     try Project.read gconf.conf_strict
     with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn); raise exn
 
-let string_list_to_file l fn =
+let with_out_file fn f =
   let out = open_out fn in
-  L.iter (Printf.fprintf out "%s\n") l;
-  close_out out
+  let res = f out in
+  close_out out;
+  res
+
+let string_list_to_file l fn =
+  with_out_file fn
+    (fun out -> L.iter (Printf.fprintf out "%s\n") l)
 
 let mainConfigure argv =
     let userFlagSettings = ref [] in
