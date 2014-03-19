@@ -169,8 +169,12 @@ let findPath () =
     | [x] -> fp x
     | _   -> raise MultipleConfFiles
 
-let findLastInvocationPath () =
-  (Ext.Filepath.fp_to_string (findPath ())) ^ ".last_invocation"
+let findLastInvocationPath config_or_build =
+  let ext = match config_or_build with
+    | `Config -> ".last_config"
+    | `Build  -> ".last_build"
+  in
+  (Ext.Filepath.fp_to_string (findPath ())) ^ ext
 
 let digest () =
     let path = findPath () in
