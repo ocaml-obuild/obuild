@@ -29,6 +29,9 @@ let string_list_to_file l fn =
   with_out_file fn
     (fun out -> L.iter (fprintf out "%s\n") l)
 
+let args_to_string argv =
+  L.fold_left (fun acc x -> acc ^ " " ^ x) "" argv
+
 let mainConfigure argv =
     let userFlagSettings = ref [] in
     let userSetFlagSettings s =
@@ -71,7 +74,9 @@ let mainConfigure argv =
     FindlibConf.load ();
     let projFile = Project.read gconf.conf_strict in
     verbose Report "Configuring %s-%s...\n" projFile.Project.name projFile.Project.version;
-    (* FBR: store the configuration command in projFile.lastrun *)
+    let config_command = "obuild" ^ (args_to_string argv) in
+    (* the configuration command used is stored in a file for possible later use *)
+    string_list_to_file [config_command] (Project.findLastInvocationPath `Config);
     Configure.run projFile !userFlagSettings;
     (* check build deps of everything buildables *)
     ()
@@ -115,6 +120,9 @@ let mainBuild argv =
             Taskdep.markDone taskdep ntask
         )
     done;
+    let build_command = "obuild" ^ (args_to_string argv) in
+    (* the build command used is stored in a file for possible later use *)
+    string_list_to_file [build_command] (Project.findLastInvocationPath `Build);
     ()
 
 let mainClean argv =
