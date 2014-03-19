@@ -45,6 +45,7 @@ extra-srcs: bootstrap
 
 
 library obuild
+  oflags: -annot
   modules: obuild
   build-deps: unix, obuild.ext
 
@@ -54,21 +55,25 @@ library obuild
 
 # a comment
 executable obuild
+  oflags: -annot
   main-is: main.ml
   src-dir: src
   build-deps: unix, obuild
 
 executable obuild-simple
+  oflags: -annot
   main-is: simple.ml
   src-dir: src
   build-deps: unix, obuild
 
 executable obuild-from-oasis
+  oflags: -annot
   main-is: assimilate_oasis.ml
   src-dir: tools
   build-deps: obuild, obuild.ext
 
 test dag
+  oflags: -annot
   src-dir: tests
   main-is: test_dag.ml
   build-deps: obuild
