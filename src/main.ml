@@ -180,7 +180,7 @@ let mainInstall argv =
 		      else
                         match Filetype.get_extension_path (buildDir </> f) with
                         | Filetype.FileCMX | Filetype.FileCMO | Filetype.FileCMI | Filetype.FileA
-                        | Filetype.FileCMXA | Filetype.FileCMA -> true
+                        | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
                         | _                  -> false) buildDir
                     in
                 (buildDir, matches)

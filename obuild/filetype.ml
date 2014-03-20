@@ -12,6 +12,8 @@ type filetype = FileML
               | FileCMA
               | FileCMXA
               | FileCMXS
+	      | FileCMT
+	      | FileCMTI
               | FileO
               | FileA
               | FileSO
@@ -32,6 +34,8 @@ let file_type_of_string s =
     | "cma"  -> FileCMA
     | "cmxa" -> FileCMXA
     | "cmxs" -> FileCMXS
+    | "cmt"  -> FileCMT
+    | "cmti" -> FileCMTI
     | "o"    -> FileO
     | "a"    -> FileA
     | "so"   -> FileSO
@@ -52,6 +56,8 @@ let file_type_to_string fty =
     | FileCMA     -> "cma"
     | FileCMXA    -> "cmxa"
     | FileCMXS    -> "cmxs"
+    | FileCMT     -> "cmt"
+    | FileCMTI    -> "cmti"
     | FileO       -> "o"
     | FileA       -> "a"
     | FileSO      -> "so"
