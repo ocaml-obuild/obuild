@@ -19,16 +19,6 @@ let project_read () =
     try Project.read gconf.conf_strict
     with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn); raise exn
 
-let with_out_file fn f =
-  let out = open_out fn in
-  let res = f out in
-  close_out out;
-  res
-
-let string_list_to_file l fn =
-  with_out_file fn
-    (fun out -> L.iter (fprintf out "%s\n") l)
-
 let args_to_string argv =
   L.fold_left (fun acc x -> acc ^ " " ^ x) "" argv
 
@@ -76,7 +66,8 @@ let mainConfigure argv =
     verbose Report "Configuring %s-%s...\n" projFile.Project.name projFile.Project.version;
     let config_command = "obuild" ^ (args_to_string argv) in
     (* the configuration command used is stored in a file for possible later use *)
-    string_list_to_file [config_command] (Project.findLastInvocationPath `Config);
+    Utils.string_list_to_file [config_command]
+      (Project.findLastInvocationPath `Config);
     Configure.run projFile !userFlagSettings;
     (* check build deps of everything buildables *)
     ()
@@ -122,7 +113,7 @@ let mainBuild argv =
     done;
     let build_command = "obuild" ^ (args_to_string argv) in
     (* the build command used is stored in a file for possible later use *)
-    string_list_to_file [build_command] (Project.findLastInvocationPath `Build);
+    Utils.string_list_to_file [build_command] (Project.findLastInvocationPath `Build);
     ()
 
 let mainClean argv =
@@ -210,7 +201,7 @@ let mainInstall argv =
 
         let allFiles = List.concat (List.map snd allMatchingFiles) in
         verbose Debug "installing files: %s\n" (Utils.showList "," fn_to_string allFiles);
-        List.iter (fun (buildDir, buildFiles) -> 
+        List.iter (fun (buildDir, buildFiles) ->
             List.iter (fun buildFile ->
                 Filesystem.copy_file (buildDir </> buildFile) ((destdir </> dirName) </> buildFile)
             ) buildFiles;
@@ -376,22 +367,32 @@ let knownCommands =
     ]
 
 let defaultMain () =
-    let args = parseGlobalArgs () in
 
-    if List.length args = 0
-    then (
-        eprintf "usage: %s <command> [options]\n\n%s\n" Sys.argv.(0) usageCommands;
-        exit 1
-    );
+  let args = parseGlobalArgs () in
 
+  if List.length args = 0 then (
+    (* build is the default command *)
+    let last_build_cmd =
+      try Utils.with_in_file (Project.findLastInvocationPath `Build) input_line
+      with _no_such_file ->
+        let default_build_cmd = "obuild build" in
+        Utils.string_list_to_file [default_build_cmd]
+          (Project.findLastInvocationPath `Build);
+        default_build_cmd
+    in
+    eprintf "build is the default command\n\
+      executing: %s\n%!" last_build_cmd;
+    let _ret_code = Sys.command last_build_cmd in
+    ()
+  ) else
     let cmd = List.hd args in
     try
-        let mainF = List.assoc cmd knownCommands in
-        mainF args
+      let mainF = List.assoc cmd knownCommands in
+      mainF args
     with Not_found ->
-        eprintf "error: unknown command: %s\n\n  known commands:\n" cmd;
-        List.iter (eprintf "    %s\n") (List.map fst knownCommands);
-        exit 1
+      eprintf "error: unknown command: %s\n\n  known commands:\n" cmd;
+      List.iter (eprintf "    %s\n") (List.map fst knownCommands);
+      exit 1
 
 let () =
     try defaultMain ()
