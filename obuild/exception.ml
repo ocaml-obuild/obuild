@@ -6,6 +6,42 @@ open Types
 
 (* TODO normalize exit code *)
 
+(* automatic re-configuration trial *)
+
+let already_retried_once = ref false
+
+let retry_config_and_build () =
+  if not !already_retried_once then (
+    let previous_configure_command =
+      try Utils.with_in_file (Project.findLastInvocationPath `Config) input_line
+      with _no_such_file ->
+        let default_config_cmd = "obuild configure" in
+        Utils.string_list_to_file [default_config_cmd]
+          (Project.findLastInvocationPath `Config);
+        default_config_cmd
+    in
+    eprintf "trying to [re]configure\n\
+      executing: %s\n%!" previous_configure_command;
+    let config_exit_code = Sys.command previous_configure_command in
+    if config_exit_code = 0 then (
+      let build_command =
+        try Utils.with_in_file (Project.findLastInvocationPath `Build) input_line
+        with _no_such_file ->
+          let default_build_cmd = "obuild build" in
+          Utils.string_list_to_file [default_build_cmd]
+            (Project.findLastInvocationPath `Build);
+          default_build_cmd
+      in
+      eprintf "trying to build\n\
+        executing: %s\n%!" build_command;
+      let _build_exit_code = Sys.command build_command in ()
+    ) else (
+      eprintf "configure went bad: ret. code: %d\n%!" config_exit_code;
+      exit config_exit_code
+    )
+  );
+  already_retried_once := true
+
 let show exn =
     let error fmt = eprintf ("%serror%s: " ^^ fmt) (color_white ()) (color_white ()) in
     match exn with
@@ -36,7 +72,7 @@ let show exn =
         exit 3
     (* dist directory related *)
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
-    | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4
+    | Dist.DoesntExist   -> error "we need to configure first\n"; retry_config_and_build ()
     | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.buildtype_to_string dir); exit 4
     (* types stuff *)
     | Types.TargetNameNoType s      ->
@@ -53,13 +89,13 @@ let show exn =
     (* reconfigure *)
     | Configure.ConfigChanged r ->
             (match r with
-            | "digest" -> error "project file changed. run the configure command again\n"; exit 4
-            | _        -> error "config changed (reason=%s). run the configure command again\n" r; exit 4
+            | "digest" -> error "project file changed.\n"; retry_config_and_build ()
+            | _        -> error "config changed (reason=%s).\n" r; retry_config_and_build ()
             )
     | Configure.ConfigurationMissingKey k ->
-        error "cannot find key %s in setup. run the configure command again\n" k; exit 4
+        error "cannot find key %s in setup.\n" k; retry_config_and_build ()
     | Configure.ConfigurationTypeMismatch (k,t,v) ->
-        error "%s type mismatch (got '%s') in setup key %s. run the configure command again\n" t v k; exit 4
+        error "%s type mismatch (got '%s') in setup key %s.\n" t v k; retry_config_and_build ()
     | Meta.MetaParseError (fp,err) ->
         error "unexpected parse error '%s' in meta file %s\n" err (fp_to_string fp); exit 4
     | Meta.ArchiveNotFound (path, dep, preds) ->
@@ -85,7 +121,7 @@ let show exn =
         | 0 -> assert false
         | 1 -> error "missing dependency '%s'\n" (List.hd missing); exit 9
         | _ -> eprintf "missing dependencies:\n%s\n" (Utils.showList "\n" (fun x -> x) missing); exit 9
-        end 
+        end
     (* others exception *)
     | Unix.Unix_error (err, fname, params) ->
         error "unexpected unix error: \"%s\" during %s(%s)\n" (Unix.error_message err) fname params;
