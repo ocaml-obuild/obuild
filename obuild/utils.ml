@@ -3,8 +3,11 @@ open Ext.Filepath
 open Ext
 open Types
 open Gconf
+open Printf
 
-let read_file_with f filename = 
+module L = List
+
+let read_file_with f filename =
     let lines = ref [] in
     let chan = open_in filename in
     try
@@ -85,3 +88,20 @@ let generateFile file f =
     f (Buffer.add_string buffer);
     Filesystem.writeFile file (Buffer.contents buffer)
 
+(* ==================== I/O ==================== *)
+
+let with_in_file fn f =
+  let input = open_in fn in
+  let res = f input in
+  close_in input;
+  res
+
+let with_out_file fn f =
+  let out = open_out fn in
+  let res = f out in
+  close_out out;
+  res
+
+let string_list_to_file l fn =
+  with_out_file fn
+    (fun out -> L.iter (fprintf out "%s\n") l)
