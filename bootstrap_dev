@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-
-./bootstrap
-
-# install it in my PATH
-ln -sf $PWD/dist/build/obuild/obuild ~/bin/obuild
