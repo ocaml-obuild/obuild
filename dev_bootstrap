@@ -6,7 +6,8 @@ export OCAMLOPT_DEV="ocamlopt.opt -g -annot"
 
 ./bootstrap
 
-ln -sf dist/build/obuild/obuild ~/bin # minimal install
+# install it in my PATH
+ln -sf $PWD/dist/build/obuild/obuild ~/bin/obuild
 
 # soft link .annot files so that Emacs' tuareg-mode can find them
 rm -rf _build
@@ -17,5 +18,5 @@ for f in `find . -name *.annot` ; do
 done
 cd $HERE
 
-# generate TAGS
+# generate TAGS; FBR: remove it once I can use ocamlspot
 otags $(find . -name *.ml) -o TAGS
