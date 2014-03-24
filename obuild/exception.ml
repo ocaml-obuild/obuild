@@ -10,23 +10,27 @@ open Types
 
 let already_retried_once = ref false
 
-let with_in_file fn f =
-  let input = open_in fn in
-  let res = f input in
-  close_in input;
-  res
-
 let retry_config_and_build () =
   if not !already_retried_once then (
     let previous_configure_command =
-      with_in_file (Project.findLastInvocationPath `Config) input_line
+      try Utils.with_in_file (Project.findLastInvocationPath `Config) input_line
+      with _no_such_file ->
+        let default_config_cmd = "obuild configure" in
+        Utils.string_list_to_file [default_config_cmd]
+          (Project.findLastInvocationPath `Config);
+        default_config_cmd
     in
-    eprintf "trying to reconfigure\n\
+    eprintf "trying to [re]configure\n\
       executing: %s\n%!" previous_configure_command;
     let config_exit_code = Sys.command previous_configure_command in
     if config_exit_code = 0 then (
       let build_command =
-        with_in_file (Project.findLastInvocationPath `Build) input_line
+        try Utils.with_in_file (Project.findLastInvocationPath `Build) input_line
+        with _no_such_file ->
+          let default_build_cmd = "obuild build" in
+          Utils.string_list_to_file [default_build_cmd]
+            (Project.findLastInvocationPath `Build);
+          default_build_cmd
       in
       eprintf "trying to build\n\
         executing: %s\n%!" build_command;
@@ -68,7 +72,7 @@ let show exn =
         exit 3
     (* dist directory related *)
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
-    | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4
+    | Dist.DoesntExist   -> error "we need to configure first\n"; retry_config_and_build ()
     | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.buildtype_to_string dir); exit 4
     (* types stuff *)
     | Types.TargetNameNoType s      ->
