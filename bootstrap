@@ -7,10 +7,6 @@ OCAMLOPT_OPT=`which ocamlopt.opt`
 if [[ $OCAMLOPT_OPT != "" ]] ; then
     OCAMLOPT="ocamlopt.opt -g"
 fi
-# dev_bootstrap is allowed to override things in bootstrap
-if [[ $OCAMLOPT_DEV != "" ]] ; then
-    OCAMLOPT=$OCAMLOPT_DEV
-fi
 
 extmodules="fugue filepath filesystem"
 libmodules="gconf types dag taskdep dagutils filetype modname hier expr pp utils helper process findlibConf prog dependencies target project meta dist analyze configure prepare buildprogs build exception"
