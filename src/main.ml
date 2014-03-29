@@ -149,9 +149,11 @@ let mainInfer argv =
 
 let mainInstall argv =
   let dest_dir = ref "" in
-  Arg.parse_argv (Array.of_list argv)
-    [ ("--destdir", Arg.Set_string dest_dir, "override destination where to install (default coming from findlib configuration)")
-    ] (fun s -> failwith ("unknown option: " ^ s))
+  let opam_install = ref false in
+  Arg.parse_argv (Array.of_list argv) [
+    ("--destdir", Arg.Set_string dest_dir, "override destination where to install (default coming from findlib configuration)");
+    ("--opam", Arg.Set opam_install, "only create the .install file for opam (do not copy the files)")
+  ] (fun s -> failwith ("unknown option: " ^ s))
     (usageStr "install");
 
   Configure.check ();
@@ -166,7 +168,8 @@ let mainInstall argv =
      else fp !dest_dir)
   in
   (* install all the libs *)
-  Install.install_libs proj_file dest_dir
+  Install.install_libs proj_file dest_dir !opam_install;
+  Install.opam_install_file proj_file
 
 let mainTest argv =
     let showTest = ref false in

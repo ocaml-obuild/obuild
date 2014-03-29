@@ -10,30 +10,45 @@ open Target
 open Helper
 open Gconf
 
-let opam_install_file projFile =
-    let installPath = Dist.getDistPath () </> (fn projFile.name <.> "install") in
-    Utils.generateFile installPath (fun add ->
-        let cat_of_target target =
-            match target.target_name with
-            | ExeName _     -> Some "bin"
-            | LibName _     -> Some "lib"
-            | TestName _    -> None
-            | BenchName _   -> None
-            | ExampleName _ -> None
-            in
+let list_target_files_pred target pred =
+  let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+  Build.sanity_check build_dir target;
+  (* don't play with matches *)
+  let matches = Ext.Filesystem.list_dir_pred pred build_dir in
+  (build_dir, matches)
 
-        let allTargets = Project.get_all_buildable_targets projFile in
-        List.iter (fun target ->
-            match cat_of_target target with
-            | None -> ()
-            | Some cat ->
-                add (sprintf "%s: [\n" cat);
-                (* FIXME *)
-                List.iter (fun file ->
-                    add (sprintf "  %s\n" file)
-                ) [];
-                add ("\n");
-        ) allTargets
+let list_lib_files lib build_dir = list_target_files_pred lib (fun f ->
+    if (fn_to_string f) = "META" then true
+    else
+      match Filetype.get_extension_path (build_dir </> f) with
+      | Filetype.FileCMX | Filetype.FileCMI | Filetype.FileA
+      | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
+      | _                  -> false)
+
+let list_exe_files lib build_dir = list_target_files_pred lib (fun f ->
+    match Filetype.get_extension_path (build_dir </> f) with
+    | Filetype.FileEXE -> true
+    | _                -> false)
+
+let opam_install_file proj_file =
+  let install_path = fp (proj_file.name ^ ".install") in
+  Utils.generateFile install_path (fun add ->
+      let all_targets = Project.get_all_buildable_targets proj_file in
+      let print_target_files target list_files_fun =
+        let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+        let (_, files) = list_files_fun target build_dir in
+        List.iter (fun file -> let file_str = fn_to_string file in
+                    add (sprintf "  \"%s/%s\" {\"%s\"}\n" (fp_to_string build_dir) file_str file_str)
+                  ) files
+      in
+      add (sprintf "%s: [\n" "lib");
+      List.iter (fun target -> match target.target_name with
+          | LibName _ -> print_target_files target list_lib_files | _ -> ()) all_targets;
+      add ("]\n");
+      add (sprintf "%s: [\n" "bin");
+      List.iter (fun target -> match target.target_name with
+          | ExeName _ -> print_target_files target list_exe_files | _ -> ()) all_targets;
+      add ("]\n");
     )
 
 let lib_to_meta projFile lib =
@@ -65,21 +80,6 @@ let lib_to_meta projFile lib =
         ; package_subs             = subPkgs
     }
 
-let list_target_files_pred target pred =
-  let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
-  Build.sanity_check build_dir target;
-  (* don't play with matches *)
-  let matches = Ext.Filesystem.list_dir_pred pred build_dir in
-  (build_dir, matches)
-
-let list_lib_files lib build_dir = list_target_files_pred lib (fun f ->
-    if (fn_to_string f) = "META" then true
-    else
-      match Filetype.get_extension_path (build_dir </> f) with
-      | Filetype.FileCMX | Filetype.FileCMO | Filetype.FileCMI | Filetype.FileA
-      | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
-      | _                  -> false)
-
 let write_lib_meta projFile lib =
     let dir = Dist.getBuildDest (Dist.Target lib.lib_target.target_name) in
     let metadir_path = dir </> fn "META" in
@@ -93,7 +93,7 @@ let copy_files files dest_dir dir_name =
         ) build_files;
     ) files
 
-let install_lib proj_file lib dest_dir =
+let install_lib proj_file lib dest_dir opam =
   write_lib_meta proj_file lib;
   let all_files = List.map (fun target ->
       let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
@@ -104,7 +104,7 @@ let install_lib proj_file lib dest_dir =
   verbose Report "installing library %s\n" (lib_name_to_string lib.Project.lib_name);
   verbose Debug "installing files: %s\n" (Utils.showList ","
                                             fn_to_string (List.concat (List.map snd all_files)));
-  copy_files all_files dest_dir dir_name
+  if not opam then copy_files all_files dest_dir dir_name
 
-let install_libs proj_file destdir =
-  List.iter (fun lib -> install_lib proj_file lib destdir) proj_file.Project.libs;
+let install_libs proj_file destdir opam =
+  List.iter (fun lib -> install_lib proj_file lib destdir opam) proj_file.Project.libs;
