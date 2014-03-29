@@ -148,57 +148,25 @@ let mainInfer argv =
     unimplemented ()
 
 let mainInstall argv =
-    let destdir = ref "" in
-    Arg.parse_argv (Array.of_list argv)
-           [ ("--destdir", Arg.Set_string destdir, "override destination where to install (default coming from findlib configuration)")
-           ] (fun s -> failwith ("unknown option: " ^ s))
-           (usageStr "install");
+  let dest_dir = ref "" in
+  Arg.parse_argv (Array.of_list argv)
+    [ ("--destdir", Arg.Set_string dest_dir, "override destination where to install (default coming from findlib configuration)")
+    ] (fun s -> failwith ("unknown option: " ^ s))
+    (usageStr "install");
 
-    Configure.check ();
-    let projFile = project_read () in
-    FindlibConf.load ();
-    let destdir =
-        (if !destdir = ""
-            then (match FindlibConf.get_destdir () with
-                 | None   -> failwith "no destdir specified, and no findlib default found"
-                 | Some p -> p
-                 )
-            else fp !destdir)
-        in
-
-    (* install all the libs *)
-    List.iter (fun lib ->
-        Install.write_lib_meta projFile lib;
-        let allMatchingFiles =
-            List.map (fun target ->
-                let buildDir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
-                Build.sanity_check buildDir target;
-                (* don't play with matches *)
-                let matches =
-                    Filesystem.list_dir_pred (fun f ->
-		      if (fn_to_string f) = "META" then true
-		      else
-                        match Filetype.get_extension_path (buildDir </> f) with
-                        | Filetype.FileCMX | Filetype.FileCMO | Filetype.FileCMI | Filetype.FileA
-                        | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
-                        | _                  -> false) buildDir
-                    in
-                (buildDir, matches)
-            ) (Project.lib_to_targets lib)
-            in
-        let dirName = fn (lib_name_to_string lib.Project.lib_name) in
-        verbose Report "installing library %s\n" (lib_name_to_string lib.Project.lib_name);
-
-        let allFiles = List.concat (List.map snd allMatchingFiles) in
-        verbose Debug "installing files: %s\n" (Utils.showList "," fn_to_string allFiles);
-        List.iter (fun (buildDir, buildFiles) -> 
-            List.iter (fun buildFile ->
-                Filesystem.copy_file (buildDir </> buildFile) ((destdir </> dirName) </> buildFile)
-            ) buildFiles;
-        ) allMatchingFiles;
-    ) (projFile.Project.libs);
-
-    ()
+  Configure.check ();
+  let proj_file = project_read () in
+  FindlibConf.load ();
+  let dest_dir =
+    (if !dest_dir = ""
+     then (match FindlibConf.get_destdir () with
+         | None   -> failwith "no destdir specified, and no findlib default found"
+         | Some p -> p
+       )
+     else fp !dest_dir)
+  in
+  (* install all the libs *)
+  Install.install_libs proj_file dest_dir
 
 let mainTest argv =
     let showTest = ref false in
