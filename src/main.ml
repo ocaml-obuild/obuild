@@ -169,7 +169,8 @@ let mainInstall argv =
   in
   (* install all the libs *)
   Install.install_libs proj_file dest_dir !opam_install;
-  Install.opam_install_file proj_file
+  if !opam_install then
+    Install.opam_install_file proj_file
 
 let mainTest argv =
     let showTest = ref false in

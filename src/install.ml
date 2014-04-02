@@ -93,7 +93,7 @@ let copy_files files dest_dir dir_name =
         ) build_files;
     ) files
 
-let install_lib proj_file lib dest_dir opam =
+let install_lib proj_file lib dest_dir =
   write_lib_meta proj_file lib;
   let all_files = List.map (fun target ->
       let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
@@ -104,7 +104,10 @@ let install_lib proj_file lib dest_dir opam =
   verbose Report "installing library %s\n" (lib_name_to_string lib.Project.lib_name);
   verbose Debug "installing files: %s\n" (Utils.showList ","
                                             fn_to_string (List.concat (List.map snd all_files)));
-  if not opam then copy_files all_files dest_dir dir_name
+  copy_files all_files dest_dir dir_name
 
 let install_libs proj_file destdir opam =
-  List.iter (fun lib -> install_lib proj_file lib destdir opam) proj_file.Project.libs;
+  if not opam then
+    List.iter (fun lib -> install_lib proj_file lib destdir) proj_file.Project.libs
+  else
+    List.iter (fun lib -> write_lib_meta proj_file lib) proj_file.Project.libs;
