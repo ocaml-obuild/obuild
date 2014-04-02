@@ -481,15 +481,17 @@ let prepare_target_ bstate buildDir target toplevelModules =
     let stdlib = fp (get_ocaml_config_key "standard_library" conf) in
 
     let depPkgs = Analyze.get_pkg_deps target conf in
-    let depIncludePaths =
-        List.map (fun dep -> 
-            match Hashtbl.find conf.project_dep_data dep with
-            | Internal -> Dist.getBuildDest (Dist.Target (LibName dep))
-            | System   -> Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)
-        ) depPkgs
-        in
-    let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncludePaths in
-    let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncludePaths in
+    let (depsInternal,depsSystem) = List.partition (fun dep ->
+        match Hashtbl.find conf.project_dep_data dep with
+        | Internal -> true
+        | _ -> false) depPkgs in
+    let depIncPathInter = List.map (fun dep ->
+        Dist.getBuildDest (Dist.Target (LibName dep))) depsInternal in
+    let depIncPathSystem = List.map (fun dep ->
+        Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)) depsSystem in
+    let depIncludePaths = depIncPathInter @ depIncPathSystem in
+    let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncPathInter @ depIncPathSystem in
+    let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncPathInter @ depIncPathSystem in
     let depLinkingPaths =
         List.map (fun dep ->
             match Hashtbl.find conf.project_dep_data dep with
