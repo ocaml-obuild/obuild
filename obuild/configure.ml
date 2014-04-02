@@ -11,8 +11,12 @@ exception ToolNotFound of filename
 
 let set_lib_profiling v () = gconf.conf_library_profiling <- v
 let set_lib_debugging v () = gconf.conf_library_debugging <- v
-let set_exe_profiling v () = gconf.conf_executable_profiling <- v
-let set_exe_debugging v () = gconf.conf_executable_debugging <- v
+let set_exe_profiling v () =
+  gconf.conf_executable_profiling <- v;
+  gconf.conf_library_profiling <- v
+let set_exe_debugging v () =
+  gconf.conf_executable_debugging <- v;
+  gconf.conf_library_debugging <- v
 let set_lib_native v () = gconf.conf_library_native <- v
 let set_lib_bytecode v () = gconf.conf_library_bytecode <- v
 let set_exe_native v () = gconf.conf_executable_native <- v
