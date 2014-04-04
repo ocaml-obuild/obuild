@@ -67,7 +67,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
              @ ["-o"; fp_to_string dstFile ]
              @ ["-c"; fp_to_string srcFile ]
         in
-    spawn args
+    Process.create args
 
 let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
@@ -78,7 +78,7 @@ let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
              @ [ "-pack"; "-o"; fp_to_string (cmc_of_hier buildMode dstDir dest); ]
              @ List.map (fun m -> fp_to_string (cmc_of_hier buildMode srcDir m)) modules
         in
-    spawn args
+    Process.create args
 
 let runOcamlInfer srcDir includes pp modname =
     let args = [Prog.getOcamlC (); "-i"]
@@ -86,8 +86,8 @@ let runOcamlInfer srcDir includes pp modname =
              @ (Utils.to_include_path_options includes)
              @ [fp_to_string (filename_of_hier srcDir modname)]
         in
-    match run_with_outputs args with
-    | Success (mli, _) -> mli
+    match run args with
+    | Success (mli, _, _) -> mli
     | Failure er       -> raise (InferFailed er)
 
 let o_from_cfile file = file <.> "o"
@@ -105,17 +105,17 @@ let runCCompile project dirSpec cflags file =
              @ ["-o"; fp_to_string dstFile]
              @ ["-c"; fp_to_string srcFile]
         in
-    spawn args
+    Process.create args
 
 let runAr dest deps =
     let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
-    match run_with_outputs args with
-    | Success (_, warnings) -> warnings
+    match run args with
+    | Success (_, warnings, _) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
 let runRanlib dest =
-    match run_with_outputs [ Prog.getRanlib (); fp_to_string dest ] with
-    | Success (_, warnings) -> warnings
+    match run [ Prog.getRanlib (); fp_to_string dest ] with
+    | Success (_, warnings, _) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
 let runCLinking sharingMode depfiles dest =
@@ -134,8 +134,8 @@ let runCLinking sharingMode depfiles dest =
           | LinkingShared -> ["-shared"]) (* TODO: fix this for all system != linux *)
         @ ["-o"; fp_to_string dest ]
         @ List.map fp_to_string depfiles in
-    match run_with_outputs args with
-    | Success (_, warnings) -> warnings
+    match run args with
+    | Success (_, warnings, _) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
 let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
@@ -165,8 +165,8 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                ; x ]) cclibs))
              @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode currentDir) modules)
              in
-    match run_with_outputs args with
-    | Success (_, warnings) -> warnings
+    match Process.run args with
+    | Success (_, warnings,_) -> warnings
     | Failure er            -> raise (LinkingFailed er)
 
 

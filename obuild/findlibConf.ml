@@ -34,9 +34,9 @@ let parseConfFile content =
 let getConf path = parseConfFile (Filesystem.readFile path)
 
 let getFindlibProgram_Config () =
-    match Process.run_with_outputs [ "ocamlfind"; "printconf"; "conf" ] with
+    match Process.run [ "ocamlfind"; "printconf"; "conf" ] with
     | Process.Failure err     -> failwith ("ocamlfind printconf failed err " ^ err)
-    | Process.Success (out,_) -> match string_lines_noempty out with
+    | Process.Success (out,_,_) -> match string_lines_noempty out with
                          | [x] -> [fp x]
                          | _   -> failwith ("ocamlfind printconf failed output: " ^ out)
 

@@ -265,7 +265,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
 
         (* directory never have interface (?) so we serialize the native/bytecode creation.
          * the mtime checking is sub-optimal. low hanging fruits warning *)
-        let tasksOps : (string * spawn) option list list =
+        let tasksOps : (string * call) option list list =
           let allModes = List.concat
               (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
           in
@@ -288,7 +288,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             in
         let (reason, ops) =
             (*[ [(r,f)] ]*)
-            let l : (string * spawn) list list = List.map maybes_to_list tasksOps in
+            let l : (string * call) list list = List.map maybes_to_list tasksOps in
             match List.filter (fun x -> x <> []) l with
             | []                -> ("", [])
             | [] :: ys          -> assert false
@@ -307,8 +307,8 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
      * and process the result
      *)
     let schedule_finish (task, st) isDone =
-        (match terminate_process (task, st) with
-        | Success (_, warnings) -> (* TODO: store warnings for !isDone and print them if they are different when isDone *)
+        (match Process.terminate (task, st) with
+        | Success (_, warnings, _) -> (* TODO: store warnings for !isDone and print them if they are different when isDone *)
                                     if isDone then print_warnings warnings
         | Failure er            -> match task with
                                    | CompileC _ -> raise (CCompilationFailed er)

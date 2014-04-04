@@ -195,8 +195,8 @@ let mainTest argv =
                         eprintf "error: %s doesn't appears built, make sure build has been run first\n" (Target.get_target_name testTarget);
                         exit 1
                     );
-                    (match Process.run_with_outputs [ fp_to_string exePath ] with
-                    | Process.Success (out,_) ->
+                    (match Process.run [ fp_to_string exePath ] with
+                    | Process.Success (out,_,_) ->
                         if !showTest then print_warnings out;
                         (test.Project.test_name, true)
                     | Process.Failure err ->

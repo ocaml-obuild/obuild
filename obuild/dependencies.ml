@@ -48,9 +48,9 @@ let runOcamldep dopt srcFile =
              @ (Utils.to_include_path_options dopt.dep_includes)
              @ (Pp.pp_to_params dopt.dep_pp)
              @ ["-modules"; mlFile; mlFile ^ "i"] in
-    match Process.run_with_outputs args with
+    match Process.run args with
     | Process.Failure er -> raise (BuildDepAnalyzeFailed er)
-    | Process.Success (out,_) ->
+    | Process.Success (out,_,_) ->
         List.map snd (parse_output_KsemiVs
             (fun _ -> raise (BuildDepAnalyzeFailed ("assumption failed: " ^ out)))
             fp wrap_module_safe out
@@ -62,9 +62,9 @@ let runOcamldep dopt srcFile =
  *)
 let runCCdep srcDir files : (filename * filepath list) list =
     let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
-    match Process.run_with_outputs args with
+    match Process.run args with
     | Process.Failure err     -> raise (BuildCDepAnalyzeFailed err)
-    | Process.Success (out,_) ->
+    | Process.Success (out,_,_) ->
         parse_output_KsemiVs
             (fun _ -> raise (BuildCDepAnalyzeFailed "missing semicolon in gcc dependency output"))
             fn fp out

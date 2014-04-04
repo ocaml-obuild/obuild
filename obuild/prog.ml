@@ -44,8 +44,8 @@ let getLD       () = getCache "ld"         (fun n -> [ default "ld" gconf.conf_p
 let getPkgConfig() = getCache "pkg-config" (fun n -> [ default "pkg-config" gconf.conf_prog_pkgconfig])
 
 let getOcamlVersion () =
-    match Process.run_with_outputs [ getOcamlOpt (); "-vnum" ] with
-    | Process.Success (s,_) -> (match string_split ~limit:3 '.' s with
+    match Process.run [ getOcamlOpt (); "-vnum" ] with
+    | Process.Success (s,_,_) -> (match string_split ~limit:3 '.' s with
                    | [major;minor;other] ->
                            (user_int_of_string "ocaml version major" major
                            ,user_int_of_string "ocaml version minor" minor
@@ -56,8 +56,8 @@ let getOcamlVersion () =
     | Process.Failure err -> raise (OCamlProgramError err)
 
 let getOcamlConfig () =
-    match Process.run_with_outputs [ getOcamlOpt (); "-config" ] with
-    | Process.Success (s,_) ->
+    match Process.run [ getOcamlOpt (); "-config" ] with
+    | Process.Success (s,_,_) ->
         let lines = string_lines_noempty s in
         let h = Hashtbl.create 32 in
         List.iter (fun l ->
@@ -68,20 +68,20 @@ let getOcamlConfig () =
     | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err))
 
 let getCamlp4Config () =
-    match Process.run_with_outputs [ getCamlp4 (); "-where" ] with
-    | Process.Success (s,_) ->
+    match Process.run [ getCamlp4 (); "-where" ] with
+    | Process.Success (s,_,_) ->
         let (l:_) = string_lines_noempty s in
         l
     | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err))
  
 let runTar output dir =
-    match Process.run_with_outputs [ "tar"; "czf"; output; dir ] with
+    match Process.run [ "tar"; "czf"; output; dir ] with
     | Process.Success _   -> ()
     | Process.Failure err -> raise (TarError err)
 
 let runPkgConfig typ name =
-    match Process.run_with_outputs [ getPkgConfig (); typ; name ] with
-    | Process.Success (s,_) -> s
+    match Process.run [ getPkgConfig (); typ; name ] with
+    | Process.Success (s,_,_) -> s
     | Process.Failure err   -> raise (PkgConfigError err)
 
 let runPkgConfigVersion name =

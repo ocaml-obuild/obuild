@@ -9,9 +9,9 @@ let runOcamldoc pp =
              @ (maybe [] (fun s -> ["-pp"; s ]) pp)
              @ []
         in
-    match Process.run_with_outputs args with
+    match Process.run args with
     | Process.Failure er      -> raise (DocumentationBuildingFailed er)
-    | Process.Success (_,_) -> ()
+    | Process.Success (_,_,_) -> ()
 
 let run projFile =
     ()

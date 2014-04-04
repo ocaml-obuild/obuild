@@ -111,15 +111,15 @@ let init project =
 let runOcamlLex dest src =
     let prog = Prog.getOcamlLex () in
     let args = [ prog; "-o"; fp_to_string dest; fp_to_string src ] in
-    match Process.run_with_outputs args with
-    | Process.Success (_, warnings) -> warnings
+    match Process.run args with
+    | Process.Success (_, warnings,_) -> warnings
     | Process.Failure er -> raise (LexFailed er)
 
 let runOcamlYacc prefix src =
     let prog = Prog.getOcamlYacc () in
     let args = [ prog; "-b"; fp_to_string prefix; fp_to_string src ] in
-    match Process.run_with_outputs args with
-    | Process.Success (_, warnings) -> warnings
+    match Process.run args with
+    | Process.Success (_, warnings,_) -> warnings
     | Process.Failure er -> raise (YaccFailed er)
 
 let get_compilation_order cstate =
