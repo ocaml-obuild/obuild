@@ -3,7 +3,6 @@ open Ext.Filepath
 open Ext
 open Types
 open Helper
-open Process
 open Printf
 open Filetype
 open Analyze
@@ -120,13 +119,13 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
     let compile_c taskIndex task cFile =
         let dest = (FileO, cDirSpec.dst_dir </> o_from_cfile cFile) in
         (match check_destination_valid cstate dest with
-        | None            -> on_task_finish task; Retry
+        | None            -> on_task_finish task; Scheduler.Retry
         | Some srcChanged ->
             let reason = reason_from_paths dest srcChanged in
             verbose Report "[%*d of %d] Compiling C %-.30s%s\n%!" nbStepLen taskIndex nbStep (fn_to_string cFile)
                     (if reason <> "" then "    ( " ^ reason ^ " )" else "");
             let cflags = cbits.target_cflags in
-            AddProcess (task, runCCompile bstate.bstate_config cDirSpec cflags cFile)
+            Scheduler.AddProcess (task, runCCompile bstate.bstate_config cDirSpec cflags cFile)
         )
         in
 
@@ -233,7 +232,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             in
         let (compilationReason, checkFunList) = check false depDescs in
         match compilationReason with
-        | None        -> on_task_finish task; Retry
+        | None        -> on_task_finish task; Scheduler.Retry
         | Some reason ->
                 (* if we module has an interface, we create one list, so everything can be run in parallel,
                  * otherwise we partition the buildMode functions in buildModes group. *)
@@ -246,7 +245,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                 let verb = if isIntf then "Intfing" else "Compiling" in
                 verbose Report "[%*d of %d] %s %-.30s%s\n%!" nbStepLen taskIndex nbStep verb (hier_to_string h)
                     (if reason <> "" then "    ( " ^ reason ^ " )" else "");
-                AddTask (task, funLists)
+                Scheduler.AddTask (task, funLists)
         in
     (* compile a set of modules in directory into a pack *)
     let compile_directory taskIndex task h =
@@ -265,7 +264,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
 
         (* directory never have interface (?) so we serialize the native/bytecode creation.
          * the mtime checking is sub-optimal. low hanging fruits warning *)
-        let tasksOps : (string * call) option list list =
+        let tasksOps : (string * Scheduler.call) option list list =
           let allModes = List.concat
               (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
           in
@@ -288,7 +287,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             in
         let (reason, ops) =
             (*[ [(r,f)] ]*)
-            let l : (string * call) list list = List.map maybes_to_list tasksOps in
+            let l : (string * Scheduler.call) list list = List.map maybes_to_list tasksOps in
             match List.filter (fun x -> x <> []) l with
             | []                -> ("", [])
             | [] :: ys          -> assert false
@@ -297,10 +296,10 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
         if ops <> []
             then (
                 verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nbStepLen taskIndex nbStep (hier_to_string h) reason;
-                AddTask (task, ops)
+                Scheduler.AddTask (task, ops)
             ) else (
                 on_task_finish task;
-                Retry
+                Scheduler.Retry
             )
         in
     (* a compilation task has finished, terminate the process,
@@ -308,9 +307,9 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
      *)
     let schedule_finish (task, st) isDone =
         (match Process.terminate (task, st) with
-        | Success (_, warnings, _) -> (* TODO: store warnings for !isDone and print them if they are different when isDone *)
+        | Process.Success (_, warnings, _) -> (* TODO: store warnings for !isDone and print them if they are different when isDone *)
                                     if isDone then print_warnings warnings
-        | Failure er            -> match task with
+        | Process.Failure er            -> match task with
                                    | CompileC _ -> raise (CCompilationFailed er)
                                    | _          -> raise (CompilationFailed er)
         );
@@ -335,14 +334,14 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             | (CompileDirectory m) -> compile_directory taskIndex task m
             in
         if Taskdep.isComplete taskdep
-            then Terminate
+            then Scheduler.Terminate
             else match Taskdep.getnext taskdep with
-                 | None      -> WaitingTask
+                 | None      -> Scheduler.WaitingTask
                  | Some task -> dispatch task
         in
 
-    let stat = schedule gconf.conf_parallel_jobs schedule_idle schedule_finish in
-    verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.nb_processes stat.max_runqueue;
+    let stat = Scheduler.schedule gconf.conf_parallel_jobs schedule_idle schedule_finish on_task_finish in
+    verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes stat.Scheduler.max_runqueue;
     ()
 
 let compile bstate cstate target =
