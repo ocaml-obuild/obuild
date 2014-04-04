@@ -190,6 +190,8 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                 let allModes = List.concat
                     (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
                     in
+                let allModes = List.filter (fun (t,o) ->
+                        match (t,o) with (ByteCode,WithProf) -> false | _ -> true) allModes in
                 List.map (fun (compiledTy, compOpt) ->
                     let fileCompileTy = buildmode_to_filety compiledTy in
                     let dest = (fileCompileTy, cmc_of_hier compiledTy (cstate.compilation_builddir_ml compOpt) h) in
@@ -264,19 +266,25 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
         (* directory never have interface (?) so we serialize the native/bytecode creation.
          * the mtime checking is sub-optimal. low hanging fruits warning *)
         let tasksOps : (string * spawn) option list list =
-            (List.map (fun buildMode ->
-                List.map (fun compOpt ->
-                    let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) h) in
-                    let mdeps = List.map (fun m ->
-                            (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) m)
-                        ) modules in
-                    let dir = cstate.compilation_builddir_ml compOpt in
-                    let fcompile = (fun () -> runOcamlPack dir dir annotMode buildMode packOpt h modules) in
-                    match check_destination_valid_with mdeps cstate dest with
-                    | None            -> None
-                    | Some srcChanged -> Some (reason_from_paths dest srcChanged, fcompile)
-                ) compileOpts
-            ) buildModes)
+          let allModes = List.concat
+              (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
+          in
+          let allModes = List.filter (fun (t,o) ->
+                        match (t,o) with (ByteCode,WithProf) -> false | _ -> true) allModes in
+          let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) allModes in
+          (List.map (fun pair_list ->
+               List.map (fun (buildMode, compOpt) ->
+                   let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) h) in
+                   let mdeps = List.map (fun m ->
+                       (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) m)
+                     ) modules in
+                   let dir = cstate.compilation_builddir_ml compOpt in
+                   let fcompile = (fun () -> runOcamlPack dir dir annotMode buildMode packOpt h modules) in
+                   match check_destination_valid_with mdeps cstate dest with
+                   | None            -> None
+                   | Some srcChanged -> Some (reason_from_paths dest srcChanged, fcompile)
+                 ) pair_list
+             ) [byte_list; native_list])
             in
         let (reason, ops) =
             (*[ [(r,f)] ]*)
@@ -456,21 +464,26 @@ let linking bstate cstate target =
 let get_destination_files target =
     let compileOpts = Target.get_compilation_opts target in
     let compiledTypes = Target.get_ocaml_compiled_types target in
+    let all_modes = List.concat (List.map (fun compiledTy ->
+        List.map (fun cmode -> (compiledTy, cmode)) compileOpts) compiledTypes) in
+    let all_modes = List.filter (fun (t,o) ->
+        match (t,o) with (ByteCode,WithProf) -> false | _ -> true) all_modes in
     match target.Target.target_name with
     | LibName libname ->
-        List.concat (List.map (fun compiledType ->
-            List.map (fun compileOpt -> cmca_of_lib compiledType compileOpt libname) compileOpts
-        ) compiledTypes)
+      List.map (fun (compiledType,compileOpt) -> cmca_of_lib compiledType compileOpt libname) all_modes
     | ExeName e | TestName e | BenchName e | ExampleName e ->
-        List.concat (List.map (fun compiledType ->
-            List.map (fun compileOpt ->
-                Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target)
-            ) compileOpts
-        ) compiledTypes)
+      List.map (fun (compiledType,compileOpt) ->
+          Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target)
+        ) all_modes
 
 let sanity_check buildDir target =
     let files = get_destination_files target in
-    let allOK = List.for_all (fun f -> Filesystem.exists (buildDir </> f)) files in
+    let allOK = List.for_all (fun f ->
+        let test = Filesystem.exists (buildDir </> f) in
+        if not test then
+          verbose Debug "warning: missing file %s" (fp_to_string (buildDir </> f));
+        test
+      ) files in
     if not allOK
         then verbose Report "warning: some target file appears to be missing";
     ()

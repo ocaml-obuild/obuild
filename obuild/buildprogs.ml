@@ -34,6 +34,7 @@ let annotToOpts annotMode =
 
 let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
     let dstDir = dirSpec.dst_dir in
+    let compileOpt = if buildMode = Interface && compileOpt = WithProf then WithDebug else compileOpt in
     Filesystem.mkdirSafeRecursive dstDir 0o755;
     let (prog, srcFile, dstFile) =
         match buildMode with
