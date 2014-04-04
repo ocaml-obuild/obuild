@@ -102,13 +102,6 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
     let nbStepLen = String.length (string_of_int nbStep) in
     let taskdep = Taskdep.init cstate.compilation_dag in
 
-    let on_task_finish task =
-        Taskdep.markDone taskdep task;
-        match task with
-        | CompileModule m -> ()
-        | _               -> ()
-        in
-
     let cDirSpec =
         { include_dirs = cstate.compilation_c_include_paths
         ; dst_dir      = cstate.compilation_builddir_c
@@ -119,7 +112,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
     let compile_c taskIndex task cFile =
         let dest = (FileO, cDirSpec.dst_dir </> o_from_cfile cFile) in
         (match check_destination_valid cstate dest with
-        | None            -> on_task_finish task; Scheduler.Retry
+        | None            -> Scheduler.FinishTask task
         | Some srcChanged ->
             let reason = reason_from_paths dest srcChanged in
             verbose Report "[%*d of %d] Compiling C %-.30s%s\n%!" nbStepLen taskIndex nbStep (fn_to_string cFile)
@@ -232,7 +225,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             in
         let (compilationReason, checkFunList) = check false depDescs in
         match compilationReason with
-        | None        -> on_task_finish task; Scheduler.Retry
+        | None        -> Scheduler.FinishTask task
         | Some reason ->
                 (* if we module has an interface, we create one list, so everything can be run in parallel,
                  * otherwise we partition the buildMode functions in buildModes group. *)
@@ -297,10 +290,8 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             then (
                 verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nbStepLen taskIndex nbStep (hier_to_string h) reason;
                 Scheduler.AddTask (task, ops)
-            ) else (
-                on_task_finish task;
-                Scheduler.Retry
-            )
+            ) else
+                Scheduler.FinishTask task
         in
     (* a compilation task has finished, terminate the process,
      * and process the result
@@ -314,33 +305,18 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                                    | _          -> raise (CompilationFailed er)
         );
         if isDone then
-            on_task_finish task
+          Taskdep.markDone taskdep task
         in
 
-    (* when the scheduler has some room, we get the next task from
-     * taskdep and either start a process or call retry.
-     *
-     * Retry is returned when no process need to be spawned for the next task
-     * since the dependencies have not changed and thus the cache still have
-     * valid target file. Instead of returning retry, we could just go get
-     * the next task ourself.
-     *)
-    let schedule_idle () =
-        let dispatch (taskIndex, task) =
-            match task with
-            | (CompileC m)         -> compile_c taskIndex task m
-            | (CompileInterface m) -> compile_module taskIndex task true m
-            | (CompileModule m)    -> compile_module taskIndex task false m
-            | (CompileDirectory m) -> compile_directory taskIndex task m
-            in
-        if Taskdep.isComplete taskdep
-            then Scheduler.Terminate
-            else match Taskdep.getnext taskdep with
-                 | None      -> Scheduler.WaitingTask
-                 | Some task -> dispatch task
+    let dispatch (taskIndex, task) =
+      match task with
+      | (CompileC m)         -> compile_c taskIndex task m
+      | (CompileInterface m) -> compile_module taskIndex task true m
+      | (CompileModule m)    -> compile_module taskIndex task false m
+      | (CompileDirectory m) -> compile_directory taskIndex task m
         in
 
-    let stat = Scheduler.schedule gconf.conf_parallel_jobs schedule_idle schedule_finish on_task_finish in
+    let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
     verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes stat.Scheduler.max_runqueue;
     ()
 

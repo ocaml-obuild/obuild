@@ -82,6 +82,21 @@ let rec idle_loop idle_fun on_task_finish_fun state =
        state.tasks <- (t,tg) :: state.tasks;
        state.waitqueue <- first @ state.waitqueue;
     )
+
+(* when the scheduler has some room, we get the next task from
+ * taskdep and either start a process or call retry.
+ *
+ * Retry is returned when no process need to be spawned for the next task
+ * since the dependencies have not changed and thus the cache still have
+ * valid target file. Instead of returning retry, we could just go get
+ * the next task ourself.
+ *)
+let schedule_idle taskdep dispatch_fun () =
+  if Taskdep.isComplete taskdep
+  then Terminate
+  else match Taskdep.getnext taskdep with
+    | None      -> WaitingTask
+    | Some task -> dispatch_fun task
     
 (* this is a simple one thread loop to schedule
  * multiple tasks (forked) until they terminate
@@ -93,7 +108,7 @@ let rec idle_loop idle_fun on_task_finish_fun state =
  * if all the subtasks in the task are done then the second value is set
  * to true.
  **)
-let schedule j idle_fun finish_fun on_task_finish_fun =
+let schedule j taskdep dispatch_fun finish_fun =
   let st = { 
     runqueue = [];
     waitqueue = [];
@@ -101,6 +116,7 @@ let schedule j idle_fun finish_fun on_task_finish_fun =
     waiting_task = false;
     tasks = [];
   } in
+  let on_task_finish task = Taskdep.markDone taskdep task in
   let stats = { max_runqueue = 0; nb_processes = 0 } in
   let pick_process (task, process) remaining_processes =
     stats.nb_processes <- stats.nb_processes + 1;
@@ -117,7 +133,7 @@ let schedule j idle_fun finish_fun on_task_finish_fun =
   while not st.terminate || st.runqueue <> [] || st.waitqueue <> [] do
     while not st.terminate && not st.waiting_task && List.length st.runqueue < j do
       match st.waitqueue with
-      | []           -> idle_loop idle_fun on_task_finish_fun st
+      | []           -> idle_loop (schedule_idle taskdep dispatch_fun) on_task_finish st
       | (t,p)::procs -> pick_process (t,p) procs
     done;
     set_max ();
