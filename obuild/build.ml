@@ -23,27 +23,27 @@ exception Internal_Inconsistancy of string * string
  * if not valid gives the filepath that has changed.
  * *)
 let check_destination_valid_with srcs cstate (filety, dest) =
-    if Filesystem.exists dest
-        then (
-            let destTime = Filesystem.getModificationTime dest in
-            try Some (List.find (fun (_,path) ->
-                let mtime = Filesystem.getModificationTime path in
-                destTime < mtime
-                ) srcs)
-            with Not_found -> None
-        ) else
-            Some (FileO, currentDir)
+  if Filesystem.exists dest
+  then (
+    let dest_time = Filesystem.getModificationTime dest in
+    try Some (List.find (fun (_,path) ->
+        let mtime = Filesystem.getModificationTime path in
+        dest_time < mtime
+      ) srcs)
+    with Not_found -> None
+  ) else
+    Some (FileO, currentDir)
 
 (* same as before but the list of sources is automatically determined
  * from the file DAG
  *)
 let check_destination_valid cstate (filety, dest) =
-    let children =
-        try Dag.getChildren cstate.compilation_filesdag (file_id (filety, dest))
-        with Dag.DagNode_Not_found ->
-            raise (Internal_Inconsistancy ((file_type_to_string filety), ("missing destination: " ^ fp_to_string dest)))
-        in
-    check_destination_valid_with (List.map un_file_id children) cstate (filety,dest)
+  let children =
+    try Dag.getChildren cstate.compilation_filesdag (file_id (filety, dest))
+    with Dag.DagNode_Not_found ->
+      raise (Internal_Inconsistancy ((file_type_to_string filety), ("missing destination: " ^ fp_to_string dest)))
+  in
+  check_destination_valid_with (List.map un_file_id children) cstate (filety,dest)
 
 (* get a nice reason of why a destination is not deemed valid against
  * the source filepath that triggered the unvalid check.
@@ -85,47 +85,58 @@ let reason_from_paths (_,dest) (srcTy,changedSrc) =
                 fp_to_string changedSrc ^ " changed"
         )
 
+let get_all_modes target =
+  let compile_opts = Target.get_compilation_opts target in
+  let compiled_types = Target.get_ocaml_compiled_types target in
+  let all_modes = List.concat (List.map (fun ty ->
+      List.map (fun cmode -> (ty, cmode)) compile_opts) compiled_types) in
+  List.filter (fun (t,o) ->
+      match (t,o) with (ByteCode,WithProf) -> false | _ -> true) all_modes
+
+let get_nb_step dag =
+  let nb_step = Dag.length dag in
+  let nb_step_len = String.length (string_of_int nb_step) in
+  (nb_step, nb_step_len)
+
+(* compile C files *)
+let compile_c task_index task c_file bstate cstate target =
+  let cbits = target.target_cbits in
+  let c_dir_spec = {
+    include_dirs = cstate.compilation_c_include_paths;
+    dst_dir      = cstate.compilation_builddir_c;
+    src_dir      = cbits.target_cdir
+  } in
+  let dest = (FileO, c_dir_spec.dst_dir </> o_from_cfile c_file) in
+  (match check_destination_valid cstate dest with
+   | None            -> Scheduler.FinishTask task
+   | Some src_changed ->
+     let reason = reason_from_paths dest src_changed in
+     let (nb_step,nb_step_len) = get_nb_step cstate.compilation_dag in
+     verbose Report "[%*d of %d] Compiling C %-.30s%s\n%!" nb_step_len task_index nb_step (fn_to_string c_file)
+       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+     let cflags = cbits.target_cflags in
+     Scheduler.AddProcess (task, runCCompile bstate.bstate_config c_dir_spec cflags c_file)
+  )
+
 (* compile will process the compilation DAG,
  * which will compile all C sources and OCaml modules.
  *)
-let compile_ (bstate: build_state) (cstate: compilation_state) target =
-    let annotMode =
-        if gconf.conf_annot && gconf.conf_bin_annot then AnnotationBoth
-        else if gconf.conf_annot then AnnotationText
-        else if gconf.conf_bin_annot then AnnotationBin
-        else AnnotationNone
-        in
-    let compileOpts = Target.get_compilation_opts target in
-    let cbits = target.target_cbits in
+let compile (bstate: build_state) (cstate: compilation_state) target =
+  let annotMode =
+    if gconf.conf_annot && gconf.conf_bin_annot then AnnotationBoth
+    else if gconf.conf_annot then AnnotationText
+    else if gconf.conf_bin_annot then AnnotationBin
+    else AnnotationNone
+  in
 
-    let nbStep = Dag.length cstate.compilation_dag in
-    let nbStepLen = String.length (string_of_int nbStep) in
-    let taskdep = Taskdep.init cstate.compilation_dag in
+  let compile_opts = Target.get_compilation_opts target in
+  let all_modes = get_all_modes target in
 
-    let cDirSpec =
-        { include_dirs = cstate.compilation_c_include_paths
-        ; dst_dir      = cstate.compilation_builddir_c
-        ; src_dir      = cbits.target_cdir
-        }
-        in
-    (* add a C compilation process *)
-    let compile_c taskIndex task cFile =
-        let dest = (FileO, cDirSpec.dst_dir </> o_from_cfile cFile) in
-        (match check_destination_valid cstate dest with
-        | None            -> Scheduler.FinishTask task
-        | Some srcChanged ->
-            let reason = reason_from_paths dest srcChanged in
-            verbose Report "[%*d of %d] Compiling C %-.30s%s\n%!" nbStepLen taskIndex nbStep (fn_to_string cFile)
-                    (if reason <> "" then "    ( " ^ reason ^ " )" else "");
-            let cflags = cbits.target_cflags in
-            Scheduler.AddProcess (task, runCCompile bstate.bstate_config cDirSpec cflags cFile)
-        )
-        in
+  let (nb_step, nb_step_len) = get_nb_step cstate.compilation_dag in
+  let taskdep = Taskdep.init cstate.compilation_dag in
 
-    let buildModes = Target.get_ocaml_compiled_types target in
-
-    let buildmode_to_filety bmode = if bmode = Native then FileCMX else FileCMO in
-    let buildmode_to_library_filety bmode = if bmode = Native then FileCMXA else FileCMA in
+  let buildmode_to_filety bmode = if bmode = Native then FileCMX else FileCMO in
+  let buildmode_to_library_filety bmode = if bmode = Native then FileCMXA else FileCMA in
 
     let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
     let internalLibsPathsAllModes =
@@ -176,14 +187,8 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                     ) moduleDeps in
                     let internalDeps = List.assoc (compOpt,ByteCode) internalLibsPathsAllModes in
                     (dest,Interface,compOpt, src @ internalDeps @ mDeps)
-                ) compileOpts
+                ) compile_opts
             ) else (
-                (* TODO: need way to not do debug/profile per (native|bytecode) mode *)
-                let allModes = List.concat
-                    (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
-                    in
-                let allModes = List.filter (fun (t,o) ->
-                        match (t,o) with (ByteCode,WithProf) -> false | _ -> true) allModes in
                 List.map (fun (compiledTy, compOpt) ->
                     let fileCompileTy = buildmode_to_filety compiledTy in
                     let dest = (fileCompileTy, cmc_of_hier compiledTy (cstate.compilation_builddir_ml compOpt) h) in
@@ -197,7 +202,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                     ) moduleDeps) in
                     let internalDeps = List.assoc (compOpt,compiledTy) internalLibsPathsAllModes in
                     (dest,Compiled compiledTy,compOpt,src @ internalDeps @ mDeps)
-                ) allModes
+                ) all_modes
             )
             in
 
@@ -236,7 +241,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
                              List.filter (fun x -> List.length x > 0) [List.map snd l1; List.map snd l2]
                     in
                 let verb = if isIntf then "Intfing" else "Compiling" in
-                verbose Report "[%*d of %d] %s %-.30s%s\n%!" nbStepLen taskIndex nbStep verb (hier_to_string h)
+                verbose Report "[%*d of %d] %s %-.30s%s\n%!" nb_step_len taskIndex nb_step verb (hier_to_string h)
                     (if reason <> "" then "    ( " ^ reason ^ " )" else "");
                 Scheduler.AddTask (task, funLists)
         in
@@ -258,12 +263,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
         (* directory never have interface (?) so we serialize the native/bytecode creation.
          * the mtime checking is sub-optimal. low hanging fruits warning *)
         let tasksOps : (string * Scheduler.call) option list list =
-          let allModes = List.concat
-              (List.map (fun compiledTy -> List.map (fun cmode -> (compiledTy, cmode)) compileOpts) buildModes)
-          in
-          let allModes = List.filter (fun (t,o) ->
-                        match (t,o) with (ByteCode,WithProf) -> false | _ -> true) allModes in
-          let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) allModes in
+          let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) all_modes in
           (List.map (fun pair_list ->
                List.map (fun (buildMode, compOpt) ->
                    let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) h) in
@@ -288,7 +288,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
             in
         if ops <> []
             then (
-                verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nbStepLen taskIndex nbStep (hier_to_string h) reason;
+                verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nb_step_len taskIndex nb_step (hier_to_string h) reason;
                 Scheduler.AddTask (task, ops)
             ) else
                 Scheduler.FinishTask task
@@ -310,7 +310,7 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
 
     let dispatch (taskIndex, task) =
       match task with
-      | (CompileC m)         -> compile_c taskIndex task m
+      | (CompileC m)         -> compile_c taskIndex task m bstate cstate target
       | (CompileInterface m) -> compile_module taskIndex task true m
       | (CompileModule m)    -> compile_module taskIndex task false m
       | (CompileDirectory m) -> compile_directory taskIndex task m
@@ -319,9 +319,6 @@ let compile_ (bstate: build_state) (cstate: compilation_state) target =
     let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
     verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes stat.Scheduler.max_runqueue;
     ()
-
-let compile bstate cstate target =
-    compile_ bstate cstate target
 
 let linkCStuff bstate cstate clibName =
     let soFile = cstate.compilation_builddir_c </> fn ("dll" ^ clibName ^ ".so") in
@@ -437,18 +434,13 @@ let linking bstate cstate target =
     ) compiledTypes
 
 let get_destination_files target =
-    let compileOpts = Target.get_compilation_opts target in
-    let compiledTypes = Target.get_ocaml_compiled_types target in
-    let all_modes = List.concat (List.map (fun compiledTy ->
-        List.map (fun cmode -> (compiledTy, cmode)) compileOpts) compiledTypes) in
-    let all_modes = List.filter (fun (t,o) ->
-        match (t,o) with (ByteCode,WithProf) -> false | _ -> true) all_modes in
+    let all_modes = get_all_modes target in
     match target.Target.target_name with
     | LibName libname ->
-      List.map (fun (compiledType,compileOpt) -> cmca_of_lib compiledType compileOpt libname) all_modes
+      List.map (fun (typ,opt) -> cmca_of_lib typ opt libname) all_modes
     | ExeName e | TestName e | BenchName e | ExampleName e ->
-      List.map (fun (compiledType,compileOpt) ->
-          Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target)
+      List.map (fun (ty,opt) ->
+          Utils.to_exe_name opt ty (Target.get_target_dest_name target)
         ) all_modes
 
 let sanity_check buildDir target =
