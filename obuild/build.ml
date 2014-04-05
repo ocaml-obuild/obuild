@@ -219,94 +219,99 @@ let dep_descs is_intf hdesc bstate cstate target h =
       ) all_modes
   )
 
+(* add a OCaml module or interface compilation process *)
+let compile_module task_index task is_intf h bstate cstate target =
+  let pack_opt = hier_parent h in
+  let hdesc =
+    let desc = Hashtbl.find cstate.compilation_modules h in
+    match desc.module_ty with
+    | DescFile z -> z
+    | DescDir _  ->
+      failwith (sprintf "internal error compile module on directory (%s). steps dag internal error"
+                  (hier_to_string h))
+  in
+  let src_path = path_dirname hdesc.module_src_path in
+  let use_thread = hdesc.module_use_threads in
+  let dir_spec = {
+    src_dir      = src_path;
+    dst_dir      = currentDir;
+    include_dirs = [currentDir]
+  } in
+  let dep_descs = dep_descs is_intf hdesc bstate cstate target h in
+  let annot_mode = annot_mode () in
+  let rec check invalid descs = match descs with
+    | []                                  -> (None, [])
+    | (dest,build_mode,comp_opt,srcs) :: xs ->
+      let r_dir_spec = {
+        dir_spec with
+        dst_dir = cstate.compilation_builddir_ml comp_opt <//> hier_to_dirpath h;
+        include_dirs = cstate.compilation_include_paths comp_opt h
+      } in
+      let fcompile =
+        (build_mode,(fun () -> runOcamlCompile r_dir_spec use_thread annot_mode build_mode comp_opt
+                       pack_opt hdesc.module_use_pp hdesc.module_oflags h)) in
+      if invalid
+      then (
+        let (_, ys) = check invalid xs in
+        (Some "", fcompile :: ys)
+      ) else (
+        match check_destination_valid_with srcs cstate dest with
+        | None            -> check false xs
+        | Some src_changed ->
+          let reason = reason_from_paths dest src_changed in
+          let (_, ys) = check true xs in
+          (Some reason, fcompile :: ys)
+      )
+  in
+  let (compilation_reason, check_fun_list) = check false dep_descs in
+  match compilation_reason with
+  | None        -> Scheduler.FinishTask task
+  | Some reason -> (* if the module has an interface, we create one list, so everything can be run in parallel,
+                    * otherwise we partition the build_mode functions in build_modes group. *)
+    let fun_lists =
+      if is_intf || module_file_has_interface hdesc
+      then [List.map snd check_fun_list]
+      else let (l1,l2) = List.partition (fun (x,_) -> x = Compiled Native) check_fun_list in
+        List.filter (fun x -> List.length x > 0) [List.map snd l1; List.map snd l2]
+    in
+    let verb = if is_intf then "Intfing" else "Compiling" in
+    let (nb_step, nb_step_len) = get_nb_step cstate.compilation_dag in
+    verbose Report "[%*d of %d] %s %-.30s%s\n%!" nb_step_len task_index nb_step verb (hier_to_string h)
+      (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+    Scheduler.AddTask (task, fun_lists)
+
 (* compile will process the compilation DAG,
  * which will compile all C sources and OCaml modules.
  *)
 let compile (bstate: build_state) (cstate: compilation_state) target =
-  let annotMode = annot_mode () in
   let taskdep = Taskdep.init cstate.compilation_dag in
-
-  (* add a OCaml module or interface compilation process *)
-  let compile_module taskIndex task isIntf h =
-    let packOpt = hier_parent h in
-    let hdesc =
-      let desc = Hashtbl.find cstate.compilation_modules h in
-      match desc.module_ty with
-      | DescFile z -> z
-      | DescDir _  -> failwith (sprintf "internal error compile module on directory (%s). steps dag internal error" (hier_to_string h))
-    in
-    let srcPath = path_dirname hdesc.module_src_path in
-    let useThread = hdesc.module_use_threads in
-    let dirSpec = {
-      src_dir      = srcPath;
-      dst_dir      = currentDir;
-      include_dirs = [currentDir]
-    } in
-    let depDescs = dep_descs isIntf hdesc bstate cstate target h in
-    let rec check invalid descs = match descs with
-      | []                                  -> (None, [])
-      | (dest,buildMode,compOpt,srcs) :: xs ->
-        let rDirSpec = { dirSpec with dst_dir = cstate.compilation_builddir_ml compOpt <//> hier_to_dirpath h
-                                    ; include_dirs = cstate.compilation_include_paths compOpt h } in
-        let fcompile = (buildMode,
-                        (fun () -> runOcamlCompile rDirSpec useThread annotMode buildMode compOpt packOpt hdesc.module_use_pp hdesc.module_oflags h)) in
-        if invalid
-        then (
-          let (_, ys) = check invalid xs in
-          (Some "", fcompile :: ys)
-        ) else (
-          match check_destination_valid_with srcs cstate dest with
-          | None            -> check false xs
-          | Some srcChanged ->
-            let reason = reason_from_paths dest srcChanged in
-            let (_, ys) = check true xs in
-            (Some reason, fcompile :: ys)
-        )
-    in
-    let (compilationReason, checkFunList) = check false depDescs in
-    match compilationReason with
-    | None        -> Scheduler.FinishTask task
-    | Some reason ->
-      (* if we module has an interface, we create one list, so everything can be run in parallel,
-                 * otherwise we partition the buildMode functions in buildModes group. *)
-      let funLists =
-        if isIntf || module_file_has_interface hdesc
-        then [List.map snd checkFunList]
-        else let (l1,l2) = List.partition (fun (x,_) -> x = Compiled Native) checkFunList in
-          List.filter (fun x -> List.length x > 0) [List.map snd l1; List.map snd l2]
-      in
-      let verb = if isIntf then "Intfing" else "Compiling" in
-      let (nb_step, nb_step_len) = get_nb_step cstate.compilation_dag in
-      verbose Report "[%*d of %d] %s %-.30s%s\n%!" nb_step_len taskIndex nb_step verb (hier_to_string h)
-        (if reason <> "" then "    ( " ^ reason ^ " )" else "");
-      Scheduler.AddTask (task, funLists)
-  in
   (* a compilation task has finished, terminate the process,
-     * and process the result
-  *)
-  let schedule_finish (task, st) isDone =
-        (match Process.terminate (task, st) with
-        | Process.Success (_, warnings, _) -> (* TODO: store warnings for !isDone and print them if they are different when isDone *)
-                                    if isDone then print_warnings warnings
-        | Process.Failure er            -> match task with
-                                   | CompileC _ -> raise (CCompilationFailed er)
-                                   | _          -> raise (CompilationFailed er)
-        );
-        if isDone then
-          Taskdep.markDone taskdep task
-        in
+     * and process the result *)
+  let schedule_finish (task, st) is_done =
+    (match Process.terminate (task, st) with
+     | Process.Success (_, warnings, _) ->
+       (* TODO: store warnings for !isDone and print them if they are different when isDone *)
+       if is_done then print_warnings warnings
+     | Process.Failure er            -> match task with
+       | CompileC _ -> raise (CCompilationFailed er)
+       | _          -> raise (CompilationFailed er)
+    );
+    if is_done then
+      Taskdep.markDone taskdep task
+  in
 
-    let dispatch (taskIndex, task) =
-      match task with
-      | (CompileC m)         -> compile_c taskIndex task m bstate cstate target
-      | (CompileInterface m) -> compile_module taskIndex task true m
-      | (CompileModule m)    -> compile_module taskIndex task false m
-      | (CompileDirectory m) -> compile_directory taskIndex task m cstate target
-        in
+  let dispatch (task_index, task) =
+    match task with
+    | (CompileC m)         -> compile_c task_index task m bstate cstate target
+    | (CompileInterface m) -> compile_module task_index task true m bstate cstate target
+    | (CompileModule m)    -> compile_module task_index task false m bstate cstate target
+    | (CompileDirectory m) -> compile_directory task_index task m cstate target
+  in
 
-    let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
-    verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes stat.Scheduler.max_runqueue;
-    ()
+  let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
+  verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes
+    stat.Scheduler.max_runqueue;
+  ()
 
 let linkCStuff bstate cstate clibName =
     let soFile = cstate.compilation_builddir_c </> fn ("dll" ^ clibName ^ ".so") in
