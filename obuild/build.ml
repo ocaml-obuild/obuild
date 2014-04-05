@@ -93,6 +93,12 @@ let get_all_modes target =
   List.filter (fun (t,o) ->
       match (t,o) with (ByteCode,WithProf) -> false | _ -> true) all_modes
 
+let annot_mode () =
+  if gconf.conf_annot && gconf.conf_bin_annot then AnnotationBoth
+  else if gconf.conf_annot then AnnotationText
+  else if gconf.conf_bin_annot then AnnotationBin
+  else AnnotationNone
+
 let get_nb_step dag =
   let nb_step = Dag.length dag in
   let nb_step_len = String.length (string_of_int nb_step) in
@@ -118,19 +124,59 @@ let compile_c task_index task c_file bstate cstate target =
      Scheduler.AddProcess (task, runCCompile bstate.bstate_config c_dir_spec cflags c_file)
   )
 
+(* compile a set of modules in directory into a pack *)
+let compile_directory task_index task h cstate target =
+  let pack_opt = hier_parent h in
+  (* get all the modules defined at level h+1 *)
+  let modules_task = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [task] in
+  let filter_modules t : hier option = match t with
+    | (CompileC _)         -> None
+    | (CompileInterface _) -> None
+    | (CompileDirectory m) -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
+    | (CompileModule m)    -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
+  in
+  let modules = List.rev $ list_filter_map filter_modules modules_task in
+  let all_modes = get_all_modes target in
+  let annot_mode = annot_mode () in
+  (* directory never have interface (?) so we serialize the native/bytecode creation.
+   * the mtime checking is sub-optimal. low hanging fruits warning *)
+  let tasks_ops : (string * Scheduler.call) option list list =
+    let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) all_modes in
+    (List.map (fun pair_list ->
+         List.map (fun (build_mode, comp_opt) ->
+             let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) h) in
+             let mdeps = List.map (fun m ->
+                 (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) m)) modules in
+             let dir = cstate.compilation_builddir_ml comp_opt in
+             let fcompile = (fun () -> runOcamlPack dir dir annot_mode build_mode pack_opt h modules) in
+             match check_destination_valid_with mdeps cstate dest with
+             | None            -> None
+             | Some src_changed -> Some (reason_from_paths dest src_changed, fcompile)
+           ) pair_list
+       ) [byte_list; native_list])
+  in
+  let (reason, ops) =
+    (*[ [(r,f)] ]*)
+    let l : (string * Scheduler.call) list list = List.map maybes_to_list tasks_ops in
+    match List.filter (fun x -> x <> []) l with
+    | []                -> ("", [])
+    | [] :: ys          -> assert false
+    | ((r,x)::xs) :: ys -> (r, (x :: List.map snd xs) :: List.map (List.map snd) ys)
+  in
+  if ops <> [] then (
+    let (nb_step,nb_step_len) = get_nb_step cstate.compilation_dag in
+    verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nb_step_len task_index nb_step (hier_to_string h) reason;
+    Scheduler.AddTask (task, ops)
+  ) else
+    Scheduler.FinishTask task
+
 (* compile will process the compilation DAG,
  * which will compile all C sources and OCaml modules.
  *)
 let compile (bstate: build_state) (cstate: compilation_state) target =
-  let annotMode =
-    if gconf.conf_annot && gconf.conf_bin_annot then AnnotationBoth
-    else if gconf.conf_annot then AnnotationText
-    else if gconf.conf_bin_annot then AnnotationBin
-    else AnnotationNone
-  in
-
   let compile_opts = Target.get_compilation_opts target in
   let all_modes = get_all_modes target in
+  let annotMode = annot_mode () in
 
   let (nb_step, nb_step_len) = get_nb_step cstate.compilation_dag in
   let taskdep = Taskdep.init cstate.compilation_dag in
@@ -245,54 +291,6 @@ let compile (bstate: build_state) (cstate: compilation_state) target =
                     (if reason <> "" then "    ( " ^ reason ^ " )" else "");
                 Scheduler.AddTask (task, funLists)
         in
-    (* compile a set of modules in directory into a pack *)
-    let compile_directory taskIndex task h =
-        let packOpt = hier_parent h in
-
-        (* get all the modules defined at level h+1 *)
-        let modulesTask = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [task] in
-        let filterModules t : hier option =
-            match t with
-            | (CompileC _)         -> None
-            | (CompileInterface _) -> None
-            | (CompileDirectory m) -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
-            | (CompileModule m)    -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
-            in
-        let modules = List.rev $ list_filter_map filterModules modulesTask in
-
-        (* directory never have interface (?) so we serialize the native/bytecode creation.
-         * the mtime checking is sub-optimal. low hanging fruits warning *)
-        let tasksOps : (string * Scheduler.call) option list list =
-          let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) all_modes in
-          (List.map (fun pair_list ->
-               List.map (fun (buildMode, compOpt) ->
-                   let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) h) in
-                   let mdeps = List.map (fun m ->
-                       (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml compOpt) m)
-                     ) modules in
-                   let dir = cstate.compilation_builddir_ml compOpt in
-                   let fcompile = (fun () -> runOcamlPack dir dir annotMode buildMode packOpt h modules) in
-                   match check_destination_valid_with mdeps cstate dest with
-                   | None            -> None
-                   | Some srcChanged -> Some (reason_from_paths dest srcChanged, fcompile)
-                 ) pair_list
-             ) [byte_list; native_list])
-            in
-        let (reason, ops) =
-            (*[ [(r,f)] ]*)
-            let l : (string * Scheduler.call) list list = List.map maybes_to_list tasksOps in
-            match List.filter (fun x -> x <> []) l with
-            | []                -> ("", [])
-            | [] :: ys          -> assert false
-            | ((r,x)::xs) :: ys -> (r, (x :: List.map snd xs) :: List.map (List.map snd) ys)
-            in
-        if ops <> []
-            then (
-                verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nb_step_len taskIndex nb_step (hier_to_string h) reason;
-                Scheduler.AddTask (task, ops)
-            ) else
-                Scheduler.FinishTask task
-        in
     (* a compilation task has finished, terminate the process,
      * and process the result
      *)
@@ -313,7 +311,7 @@ let compile (bstate: build_state) (cstate: compilation_state) target =
       | (CompileC m)         -> compile_c taskIndex task m bstate cstate target
       | (CompileInterface m) -> compile_module taskIndex task true m
       | (CompileModule m)    -> compile_module taskIndex task false m
-      | (CompileDirectory m) -> compile_directory taskIndex task m
+      | (CompileDirectory m) -> compile_directory taskIndex task m cstate target
         in
 
     let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
