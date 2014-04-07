@@ -36,7 +36,7 @@ let check_destination_valid_with srcs cstate (filety, dest) =
 
 (* same as before but the list of sources is automatically determined
  * from the file DAG
- *)
+*)
 let check_destination_valid cstate (filety, dest) =
   let children =
     try Dag.getChildren cstate.compilation_filesdag (file_id (filety, dest))
@@ -50,40 +50,40 @@ let check_destination_valid cstate (filety, dest) =
  *
  * if source filepath is empty, it means that destination doesn't exists *)
 let reason_from_paths (_,dest) (srcTy,changedSrc) =
-    let trim_pd_exts z =
-        let n = fn_to_string z in
-        if string_endswith ".d" n then fn (Filename.chop_suffix n ".d")
-        else if string_endswith ".p" n then fn (Filename.chop_suffix n ".p")
-        else z
-        in
-    if changedSrc = currentDir
-        then ""
-        else (
-            let bdest = path_basename dest in
-            let bsrc  = path_basename changedSrc  in
-            match Filetype.get_extension bdest with
-            | FileCMX | FileCMO -> (
-                match srcTy with
-                | FileCMX | FileCMO ->
-                    let bml = Filetype.replace_extension bdest FileML in
-                    let bmli = Filetype.replace_extension bdest FileMLI in
-                    if bml = bsrc then "Source changed"
-                    else if bmli = bsrc then "Interface changed"
-                    else ("Dependency " ^ modname_to_string (module_of_filename (trim_pd_exts bsrc)) ^ " changed " ^ fp_to_string changedSrc)
-                | FileCMXA | FileCMA ->
-                    "Library changed " ^ fp_to_string changedSrc
-                | _ ->
-                    "Dependencies changed " ^ fp_to_string changedSrc
-                )
-            | FileO ->
-                let bc = Filetype.replace_extension bdest FileC in
-                let bh = Filetype.replace_extension bdest FileH in
-                if bc = bsrc then ("C file " ^ fn_to_string bsrc ^ " changed")
-                else if bh = bsrc then ("H file " ^ fn_to_string bsrc ^ " changed")
-                else ("file changed " ^ fp_to_string changedSrc)
-            | _ ->
-                fp_to_string changedSrc ^ " changed"
-        )
+  let trim_pd_exts z =
+    let n = fn_to_string z in
+    if string_endswith ".d" n then fn (Filename.chop_suffix n ".d")
+    else if string_endswith ".p" n then fn (Filename.chop_suffix n ".p")
+    else z
+  in
+  if changedSrc = currentDir
+  then ""
+  else (
+    let bdest = path_basename dest in
+    let bsrc  = path_basename changedSrc  in
+    match Filetype.get_extension bdest with
+    | FileCMX | FileCMO -> (
+        match srcTy with
+        | FileCMX | FileCMO ->
+          let bml = Filetype.replace_extension bdest FileML in
+          let bmli = Filetype.replace_extension bdest FileMLI in
+          if bml = bsrc then "Source changed"
+          else if bmli = bsrc then "Interface changed"
+          else ("Dependency " ^ modname_to_string (module_of_filename (trim_pd_exts bsrc)) ^ " changed " ^ fp_to_string changedSrc)
+        | FileCMXA | FileCMA ->
+          "Library changed " ^ fp_to_string changedSrc
+        | _ ->
+          "Dependencies changed " ^ fp_to_string changedSrc
+      )
+    | FileO ->
+      let bc = Filetype.replace_extension bdest FileC in
+      let bh = Filetype.replace_extension bdest FileH in
+      if bc = bsrc then ("C file " ^ fn_to_string bsrc ^ " changed")
+      else if bh = bsrc then ("H file " ^ fn_to_string bsrc ^ " changed")
+      else ("file changed " ^ fp_to_string changedSrc)
+    | _ ->
+      fp_to_string changedSrc ^ " changed"
+  )
 
 let get_all_modes target =
   let compile_opts = Target.get_compilation_opts target in
@@ -143,10 +143,8 @@ let compile_directory task_index task h cstate target =
   (* get all the modules defined at level h+1 *)
   let modules_task = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [task] in
   let filter_modules t : hier option = match t with
-    | (CompileC _)         -> None
-    | (CompileInterface _) -> None
-    | (CompileDirectory m) -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
-    | (CompileModule m)    -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
+    | (CompileC _) | (CompileInterface _) | (LinkTarget _) | (CheckTarget _) -> None
+    | (CompileDirectory m) | (CompileModule m) -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
   in
   let modules = List.rev $ list_filter_map filter_modules modules_task in
   let all_modes = get_all_modes target in
@@ -211,8 +209,8 @@ let dep_descs is_intf hdesc bstate cstate target h =
               None -> []
             | Some intf -> [FileMLI,intf.module_intf_path]) @ [(FileML, hdesc.module_src_path)] in
         let m_deps = List.concat (List.map (fun module_dep ->
-              [(file_compile_ty, cmc_of_hier compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
-              (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) module_dep)]
+            [(file_compile_ty, cmc_of_hier compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
+             (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) module_dep)]
           ) module_deps) in
         let internal_deps = List.assoc (comp_opt,compiled_ty) internal_libs_paths_all_modes in
         (dest,Compiled compiled_ty,comp_opt,src @ internal_deps @ m_deps)
@@ -249,7 +247,7 @@ let compile_module task_index task is_intf h bstate cstate target =
       } in
       let fcompile =
         (build_mode,(fun () -> runOcamlCompile r_dir_spec use_thread annot_mode build_mode comp_opt
-                       pack_opt hdesc.module_use_pp hdesc.module_oflags h)) in
+                        pack_opt hdesc.module_use_pp hdesc.module_oflags h)) in
       if invalid
       then (
         let (_, ys) = check invalid xs in
@@ -280,9 +278,141 @@ let compile_module task_index task is_intf h bstate cstate target =
       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
     Scheduler.AddTask (task, fun_lists)
 
+let wait_for_files cdep_files =
+  List.for_all (fun f ->
+      let test = Filesystem.exists f in
+      if not test then
+        verbose Debug "warning: (temporarily?) missing file %s" (fp_to_string f);
+      test
+    ) cdep_files
+
+let link_c cstate clib_name =
+  let lib_name = cstate.compilation_builddir_c </> fn clib_name in
+  let cdep_files = List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources in
+  (* Not sure why it is necessary ... gcc seems to return before the files are ready. *)
+  while not (wait_for_files cdep_files) do
+    ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
+  done;
+  if gconf.conf_ocamlmklib then
+    [[(fun () -> runCLinking LinkingShared cdep_files lib_name)]]
+  else (
+    let so_file = cstate.compilation_builddir_c </> fn ("dll" ^ clib_name ^ ".so") in
+    let a_file = cstate.compilation_builddir_c </> fn ("lib" ^ clib_name ^ ".a") in
+    [[(fun () -> runCLinking LinkingShared cdep_files so_file)];
+     [(fun () -> runAr a_file cdep_files)];
+     [(fun () -> runRanlib a_file)]]
+  )
+
+let link task_index task bstate cstate target =
+  let cbits = target.target_cbits in
+  let compiled = get_compilation_order cstate in
+  verbose Debug "  compilation order: %s\n" (Utils.showList "," hier_to_string compiled);
+  let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
+  verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
+  let selfLibDirs = List.map (fun dep -> Dist.getBuildDest (Dist.Target (LibName dep))) selfDeps in
+  let internal_cclibs = if cstate.compilation_csources <> []
+    then [Target.get_target_clibname target]
+    else []
+  in
+  let cclibs = List.concat (List.map (fun (cpkg,_) ->
+      List.map (fun x -> "-l" ^ x)
+        (Analyze.get_c_pkg cpkg bstate.bstate_config).cpkg_conf_libs) cbits.target_cpkgs)
+               @ List.map (fun x -> "-L" ^ fp_to_string x) selfLibDirs
+               @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ internal_cclibs)
+  in
+  let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
+  verbose Verbose "package deps: [%s]\n" (Utils.showList "," lib_name_to_string pkgDeps);
+  let useThreadLib =
+    if List.mem (lib_name_of_string "threads") pkgDeps || List.mem (lib_name_of_string "threads.posix") pkgDeps
+    then WithThread
+    else NoThread
+  in
+  let cfunlist = if cstate.compilation_csources <> [] then
+      link_c cstate (Target.get_target_clibname target)
+    else [] in
+  let all_modes = get_all_modes target in
+  let funlist = List.fold_left (fun flist (compiledType,compileOpt) ->
+      let buildDeps =  if is_target_lib target then []
+        else list_filter_map (fun dep ->
+            match Hashtbl.find bstate.bstate_config.project_dep_data dep with
+            | Internal -> Some (in_current_dir (cmca_of_lib compiledType compileOpt dep))
+            | System   ->
+              let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
+              let pred = match compiledType with
+                | Native    -> Meta.Pred_Native
+                | ByteCode  -> Meta.Pred_Byte
+              in
+              let archives = Meta.getArchiveWithFilter meta dep pred in
+              match archives with
+              | []              -> None
+              | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
+          ) pkgDeps
+      in
+      let dest = match target.target_name with
+        | LibName libname ->
+          cstate.compilation_builddir_ml Normal </> cmca_of_lib compiledType compileOpt libname
+        | _ ->
+          let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
+          cstate.compilation_builddir_ml Normal </> outputName
+      in
+      let linking_paths_of compileOpt = match compileOpt with
+        | Normal    -> cstate.compilation_linking_paths
+        | WithDebug -> cstate.compilation_linking_paths_d
+        | WithProf  -> cstate.compilation_linking_paths_p
+      in
+      let destTime = Filesystem.getModificationTime dest in
+      let depsTime =
+        try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p)
+                    (List.map (fun m -> cmc_of_hier compiledType (cstate.compilation_builddir_ml compileOpt) m)
+                       compiled))
+        with Not_found -> None
+      in
+      if depsTime <> None then (
+        let (nb_step,nb_step_len) = get_nb_step cstate.compilation_dag in
+        verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
+          (if is_target_lib target then "library" else "executable") (fp_to_string dest);
+        (fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
+            (if is_target_lib target then LinkingLibrary else LinkingExecutable)
+            compileOpt useThreadLib cclibs buildDeps compiled dest) :: flist
+      ) else flist
+    ) [] all_modes in
+  if funlist <> [] then
+    Scheduler.AddTask (task, cfunlist @ [funlist])
+  else
+    Scheduler.FinishTask task
+
+let get_destination_files target =
+  let all_modes = get_all_modes target in
+  match target.Target.target_name with
+  | LibName libname ->
+    List.map (fun (typ,opt) -> cmca_of_lib typ opt libname) all_modes
+  | ExeName e | TestName e | BenchName e | ExampleName e ->
+    List.map (fun (ty,opt) ->
+        Utils.to_exe_name opt ty (Target.get_target_dest_name target)
+      ) all_modes
+
+let sanity_check build_dir target =
+  let files = get_destination_files target in
+  let allOK = List.for_all (fun f ->
+      let test = Filesystem.exists (build_dir </> f) in
+      if not test then
+        verbose Debug "warning: missing file %s" (fp_to_string (build_dir </> f));
+      test
+    ) files in
+  if not allOK
+  then verbose Report "warning: some target file appears to be missing";
+  ()
+
+let check task_index task cstate target =
+  let buildDir = Dist.getBuildDest_path (Dist.Target target.target_name) in
+  let (nb_step,nb_step_len) = get_nb_step cstate.compilation_dag in
+  verbose Report "[%*d of %d] Checking %s\n%!" nb_step_len task_index nb_step (fp_to_string buildDir);
+  sanity_check buildDir target;
+  Scheduler.FinishTask task
+
 (* compile will process the compilation DAG,
  * which will compile all C sources and OCaml modules.
- *)
+*)
 let compile (bstate: build_state) (cstate: compilation_state) target =
   let taskdep = Taskdep.init cstate.compilation_dag in
   (* a compilation task has finished, terminate the process,
@@ -306,6 +436,8 @@ let compile (bstate: build_state) (cstate: compilation_state) target =
     | (CompileInterface m) -> compile_module task_index task true m bstate cstate target
     | (CompileModule m)    -> compile_module task_index task false m bstate cstate target
     | (CompileDirectory m) -> compile_directory task_index task m cstate target
+    | (LinkTarget t)       -> link task_index task bstate cstate t
+    | (CheckTarget t)      -> check task_index task cstate t
   in
 
   let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
@@ -313,165 +445,30 @@ let compile (bstate: build_state) (cstate: compilation_state) target =
     stat.Scheduler.max_runqueue;
   ()
 
-let linkCStuff bstate cstate clibName =
-    let soFile = cstate.compilation_builddir_c </> fn ("dll" ^ clibName ^ ".so") in
-    let aFile = cstate.compilation_builddir_c </> fn ("lib" ^ clibName ^ ".a") in
-    let libName = cstate.compilation_builddir_c </> fn clibName in
-    let cdepFiles = List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources in
-    if gconf.conf_ocamlmklib then
-      print_warnings (runCLinking LinkingShared cdepFiles libName)
-    else
-      (
-        print_warnings (runCLinking LinkingShared cdepFiles soFile);
-        print_warnings (runAr aFile cdepFiles);
-        print_warnings (runRanlib aFile)
-      )
-
-let linking bstate cstate target =
-    let compile_opts = Target.get_compilation_opts target in
-    let compiledTypes = Target.get_ocaml_compiled_types target in
-
-    let cbits = target.target_cbits in
-
-    let compiled = get_compilation_order cstate in
-    verbose Debug "  compilation order: %s\n" (Utils.showList "," hier_to_string compiled);
-
-    let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
-    verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
-    let selfLibDirs = List.map (fun dep -> Dist.getBuildDest (Dist.Target (LibName dep))) selfDeps in
-
-    let internal_cclibs =
-        if cstate.compilation_csources <> []
-            then [Target.get_target_clibname target]
-            else []
-        in
-    let cclibs = List.concat (List.map (fun (cpkg,_) -> List.map (fun x -> "-l" ^ x) (Analyze.get_c_pkg cpkg bstate.bstate_config).cpkg_conf_libs) cbits.target_cpkgs)
-               @ List.map (fun x -> "-L" ^ fp_to_string x) selfLibDirs
-               @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ internal_cclibs)
-        in
-
-    let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
-    verbose Verbose "package deps: [%s]\n" (Utils.showList "," lib_name_to_string pkgDeps);
-
-    let useThreadLib =
-        if List.mem (lib_name_of_string "threads") pkgDeps
-        || List.mem (lib_name_of_string "threads.posix") pkgDeps
-            then WithThread
-            else NoThread
-        in
-    let useThreads = useThreadLib in
-
-    if cstate.compilation_csources <> [] then (
-        let cname = Target.get_target_clibname target in
-        linkCStuff bstate cstate cname;
-    );
-
-    List.iter (fun compiledType ->
-        List.iter (fun compileOpt ->
-            let buildDeps =
-                if is_target_lib target
-                    then []
-                    else
-                        list_filter_map (fun dep ->
-                            match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-                            | Internal -> Some (in_current_dir (cmca_of_lib compiledType compileOpt dep))
-                            | System   ->
-                                let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
-                                let pred =
-                                    match compiledType with
-                                    | Native    -> Meta.Pred_Native
-                                    | ByteCode  -> Meta.Pred_Byte
-                                    in
-                                let archives = Meta.getArchiveWithFilter meta dep pred in
-                                match archives with
-                                | []              -> None
-                                | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
-                        ) pkgDeps
-                in
-
-            let dest =
-                match target.target_name with
-                | LibName libname ->
-                    cstate.compilation_builddir_ml Normal </> cmca_of_lib compiledType compileOpt libname
-                | _ ->
-                    let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
-                    cstate.compilation_builddir_ml Normal </> outputName
-                in
-            let linking_paths_of compileOpt =
-                match compileOpt with
-                | Normal    -> cstate.compilation_linking_paths
-                | WithDebug -> cstate.compilation_linking_paths_d
-                | WithProf  -> cstate.compilation_linking_paths_p
-                in
-
-            let destTime = Filesystem.getModificationTime dest in
-            let depsTime =
-                try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p) (List.map (fun m -> cmc_of_hier compiledType (cstate.compilation_builddir_ml compileOpt)  m) compiled))
-                with Not_found -> None
-                in
-            if depsTime <> None then (
-                verbose Report "Linking %s %s\n%!" (if is_target_lib target then "library" else "executable") (fp_to_string dest);
-
-                print_warnings (runOcamlLinking
-                    (linking_paths_of compileOpt)
-                    compiledType
-                    (if is_target_lib target then LinkingLibrary else LinkingExecutable)
-                    compileOpt
-                    useThreads
-                    cclibs
-                    buildDeps
-                    compiled
-                    dest)
-            )
-        ) compile_opts
-    ) compiledTypes
-
-let get_destination_files target =
-    let all_modes = get_all_modes target in
-    match target.Target.target_name with
-    | LibName libname ->
-      List.map (fun (typ,opt) -> cmca_of_lib typ opt libname) all_modes
-    | ExeName e | TestName e | BenchName e | ExampleName e ->
-      List.map (fun (ty,opt) ->
-          Utils.to_exe_name opt ty (Target.get_target_dest_name target)
-        ) all_modes
-
-let sanity_check buildDir target =
-    let files = get_destination_files target in
-    let allOK = List.for_all (fun f ->
-        let test = Filesystem.exists (buildDir </> f) in
-        if not test then
-          verbose Debug "warning: missing file %s" (fp_to_string (buildDir </> f));
-        test
-      ) files in
-    if not allOK
-        then verbose Report "warning: some target file appears to be missing";
-    ()
-
 let buildTarget bstate target modules =
-    let buildDir = Dist.createBuildDest (Dist.Target target.target_name) in
-    let cstate = prepare_target bstate buildDir target modules in
-    compile bstate cstate target;
-    linking bstate cstate target;
-    sanity_check buildDir target;
-    ()
+  let buildDir = Dist.createBuildDest (Dist.Target target.target_name) in
+  let cstate = prepare_target bstate buildDir target modules in
+  compile bstate cstate target;
+  (*  linking bstate cstate target; *)
+  (*    sanity_check buildDir target; *)
+  ()
 
 let buildLib bstate lib =
-    verbose Report "Building library %s\n" (lib_name_to_string lib.Project.lib_name);
-    buildTarget bstate (Project.lib_to_target lib) lib.Project.lib_modules
+  verbose Report "Building library %s\n" (lib_name_to_string lib.Project.lib_name);
+  buildTarget bstate (Project.lib_to_target lib) lib.Project.lib_modules
 
 let buildExe bstate exe =
-    verbose Report "Building executable %s\n" (exe.Project.exe_name);
-    buildTarget bstate (Project.exe_to_target exe) [hier_of_filename exe.Project.exe_main]
+  verbose Report "Building executable %s\n" (exe.Project.exe_name);
+  buildTarget bstate (Project.exe_to_target exe) [hier_of_filename exe.Project.exe_main]
 
 let buildTest bstate test =
-    verbose Report "Building test %s\n" (test.Project.test_name);
-    buildTarget bstate (Project.test_to_target test) [hier_of_filename test.Project.test_main]
+  verbose Report "Building test %s\n" (test.Project.test_name);
+  buildTarget bstate (Project.test_to_target test) [hier_of_filename test.Project.test_main]
 
 let buildBench bstate bench =
-    verbose Report "Building benchmark %s\n" (bench.Project.bench_name);
-    buildTarget bstate (Project.bench_to_target bench) [hier_of_filename bench.Project.bench_main]
+  verbose Report "Building benchmark %s\n" (bench.Project.bench_name);
+  buildTarget bstate (Project.bench_to_target bench) [hier_of_filename bench.Project.bench_main]
 
 let buildExample bstate example =
-    verbose Report "Building example %s\n" (example.Project.example_name);
-    buildTarget bstate (Project.example_to_target example) [hier_of_filename example.Project.example_main]
+  verbose Report "Building example %s\n" (example.Project.example_name);
+  buildTarget bstate (Project.example_to_target example) [hier_of_filename example.Project.example_main]

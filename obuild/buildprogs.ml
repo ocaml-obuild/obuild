@@ -108,65 +108,54 @@ let runCCompile project dirSpec cflags file =
     Process.create args
 
 let runAr dest deps =
-    let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
-    match run args with
-    | Success (_, warnings, _) -> warnings
-    | Failure er            -> raise (LinkingFailed er)
+  let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
+  Process.create args
 
 let runRanlib dest =
-    match run [ Prog.getRanlib (); fp_to_string dest ] with
-    | Success (_, warnings, _) -> warnings
-    | Failure er            -> raise (LinkingFailed er)
+  Process.create [ Prog.getRanlib (); fp_to_string dest ]
 
 let runCLinking sharingMode depfiles dest =
-    let args =
-      if gconf.conf_ocamlmklib then
-        [ Prog.getOcamlMklib () ]
-        @ (match sharingMode with
+  let args = if gconf.conf_ocamlmklib then
+      [ Prog.getOcamlMklib () ] @ (match sharingMode with
           | LinkingStatic -> ["-custom"]
           | LinkingShared   -> [])
-        @ ["-o"; fp_to_string dest ]
-        @ List.map fp_to_string depfiles
-      else (* Not working if system != linux *)
-        [ Prog.getCC () ]
-        @ (match sharingMode with
+      @ ["-o"; fp_to_string dest ]
+      @ List.map fp_to_string depfiles
+    else (* Not working if system != linux *)
+      [ Prog.getCC () ]
+      @ (match sharingMode with
           | LinkingStatic -> []
           | LinkingShared -> ["-shared"]) (* TODO: fix this for all system != linux *)
-        @ ["-o"; fp_to_string dest ]
-        @ List.map fp_to_string depfiles in
-    match run args with
-    | Success (_, warnings, _) -> warnings
-    | Failure er            -> raise (LinkingFailed er)
+      @ ["-o"; fp_to_string dest ]
+      @ List.map fp_to_string depfiles in
+  Process.create args
 
 let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
-    let prog =
-        match buildMode with
-        | Native    -> Prog.getOcamlOpt ()
-        | ByteCode  -> Prog.getOcamlC ()
-        in
-    let args = [ prog ]
+  let prog = match buildMode with
+    | Native    -> Prog.getOcamlOpt ()
+    | ByteCode  -> Prog.getOcamlC ()
+  in
+  let args = [ prog ]
              @ (match useThread with
-                | NoThread   -> []
-                | WithThread -> ["-thread"])
+                 | NoThread   -> []
+                 | WithThread -> ["-thread"])
              @ (match linkingMode with
-                | LinkingLibrary    -> ["-a"]
-                | LinkingExecutable -> if gconf.conf_executable_as_obj then ["-output-obj"] else [])
+                 | LinkingLibrary    -> ["-a"]
+                 | LinkingExecutable -> if gconf.conf_executable_as_obj then ["-output-obj"] else [])
              @ ["-o"; fp_to_string dest]
              @ (match compileType with
-                | Normal    -> []
-                | WithDebug -> ["-g"]
-                | WithProf  -> ["-p"])
+                 | Normal    -> []
+                 | WithDebug -> ["-g"]
+                 | WithProf  -> ["-p"])
              @ (Utils.to_include_path_options includeDirs)
              @ (List.map fp_to_string libs)
              @ (List.concat (List.map (fun x ->
-               [ (match buildMode with
-                 | Native -> "-cclib"
-                 | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
-               ; x ]) cclibs))
+                 [ (match buildMode with
+                      | Native -> "-cclib"
+                      | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
+                 ; x ]) cclibs))
              @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode currentDir) modules)
-             in
-    match Process.run args with
-    | Success (_, warnings,_) -> warnings
-    | Failure er            -> raise (LinkingFailed er)
+  in
+  Process.create args
 
 
