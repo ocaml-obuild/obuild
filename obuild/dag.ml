@@ -145,6 +145,15 @@ let copy dag =
     List.iter (fun node -> copy_node node) nodes;
     dag2
 
+let merge dest src =
+  let nodes = Hashtbl.fold (fun k _ acc -> k :: acc) src.nodes [] in
+  let copy_node node =
+    addNode node dest;
+    let children = getChildren src node in
+    addChildrenEdges node children dest
+  in
+  List.iter (fun node -> copy_node node) nodes
+
 (* o(v^3) use with care *)
 let transitive_reduction dag =
     let reducedDag = copy dag in

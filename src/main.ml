@@ -61,45 +61,28 @@ let mainConfigure argv =
     ()
 
 let mainBuild argv =
-    let anon = ref [] in
-    let build_options =
-      [ ("-j", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
-      ; ("--jobs", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel")
-      ; ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build")
-      ; ("--noocamlmklib", Arg.Unit (fun () -> gconf.conf_ocamlmklib <- false), "do not use ocamlmklib when linking C code")
-      ] in
+  let anon = ref [] in
+  let build_options = [
+    ("-j", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel");
+    ("--jobs", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel");
+    ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build");
+    ("--noocamlmklib", Arg.Unit (fun () -> gconf.conf_ocamlmklib <- false), "do not use ocamlmklib when linking C code")
+  ] in
+  Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
-    Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
+  Configure.check ();
+  let projFile = project_read () in
+  FindlibConf.load ();
+  let project = Analyze.prepare projFile in
+  let bstate = Prepare.init project in
 
-    Configure.check ();
-    let projFile = project_read () in
-    FindlibConf.load ();
-    let project = Analyze.prepare projFile in
-    let bstate = Prepare.init project in
-
-    let dag = match !anon with
-              | [] -> project.Analyze.project_targets_dag
-              | _  ->
-                      let targets = List.map name_of_string !anon in
-                      Dag.subset project.Analyze.project_targets_dag targets
-              in
-    let taskdep = Taskdep.init dag in
-    while not (Taskdep.isComplete taskdep) do
-        (match Taskdep.getnext taskdep with
-        | None -> failwith "no free task in targets"
-        | Some (step,ntask) ->
-            verbose Verbose "building target %s\n%!" (name_to_string ntask);
-            (match ntask with
-            | ExeName name   -> Build.buildExe bstate (Project.find_exe projFile name)
-            | LibName name   -> Build.buildLib bstate (Project.find_lib projFile name)
-            | BenchName name -> Build.buildBench bstate (Project.find_bench projFile name)
-            | TestName name  -> Build.buildTest bstate (Project.find_test projFile name)
-            | ExampleName name -> Build.buildExample bstate (Project.find_example projFile name)
-            );
-            Taskdep.markDone taskdep ntask
-        )
-    done;
-    ()
+  let dag = match !anon with
+    | [] -> project.Analyze.project_targets_dag
+    | _  ->
+      let targets = List.map name_of_string !anon in
+      Dag.subset project.Analyze.project_targets_dag targets
+  in
+  Build.build_dag bstate projFile dag
 
 let mainClean argv =
     if Filesystem.exists (Dist.getDistPath ())

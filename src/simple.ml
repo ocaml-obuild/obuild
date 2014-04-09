@@ -112,7 +112,7 @@ let main () =
             FindlibConf.load ();
             let project = Analyze.prepare project_config in
             let bstate = Prepare.init project in
-            Build.buildExe bstate exe;
+            Build.build_exe bstate exe;
             let files = Build.get_destination_files exe.exe_target in
             List.iter (fun file ->
                 printf "copying %s to %s\n" (fp_to_string (buildDir </> file)) (fp_to_string $ in_current_dir file);
