@@ -314,6 +314,55 @@ let link_c cstate clib_name =
      [(fun () -> runRanlib a_file)]]
   )
 
+let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
+  let buildDeps =  if is_target_lib target then []
+    else list_filter_map (fun dep ->
+        match Hashtbl.find bstate.bstate_config.project_dep_data dep with
+        | Internal -> Some (in_current_dir (cmca_of_lib compiledType compileOpt dep))
+        | System   ->
+          let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
+          let pred = match compiledType with
+            | Native    -> Meta.Pred_Native
+            | ByteCode  -> Meta.Pred_Byte
+          in
+          let archives = Meta.getArchiveWithFilter meta dep pred in
+          match archives with
+          | []              -> None
+          | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
+      ) pkgDeps
+  in
+  let dest = match target.target_name with
+    | LibName libname ->
+      if plugin then
+        cstate.compilation_builddir_ml Normal </> cmxs_of_lib compileOpt libname
+      else
+        cstate.compilation_builddir_ml Normal </> cmca_of_lib compiledType compileOpt libname
+    | _ ->
+      let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
+      cstate.compilation_builddir_ml Normal </> outputName
+  in
+  let linking_paths_of compileOpt = match compileOpt with
+    | Normal    -> cstate.compilation_linking_paths
+    | WithDebug -> cstate.compilation_linking_paths_d
+    | WithProf  -> cstate.compilation_linking_paths_p
+  in
+  let destTime = Filesystem.getModificationTime dest in
+  let depsTime =
+    try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p)
+                (List.map (fun m -> cmc_of_hier compiledType (cstate.compilation_builddir_ml compileOpt) m)
+                   compiled))
+    with Not_found -> None
+  in
+  if depsTime <> None then (
+    let (nb_step,nb_step_len) = get_nb_step dag in
+    let link_type = if plugin then LinkingPlugin else
+      if is_target_lib target then LinkingLibrary else LinkingExecutable in
+    verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
+      (if is_target_lib target then "library" else "executable") (fp_to_string dest);
+    [(fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
+         link_type compileOpt useThreadLib cclibs buildDeps compiled dest)]
+  ) else []
+
 let link task_index task bstate task_context dag =
   let (cstate,target) = Hashtbl.find task_context task in
   let cbits = target.target_cbits in
@@ -344,49 +393,13 @@ let link task_index task bstate task_context dag =
     else [] in
   let all_modes = get_all_modes target in
   let funlist = List.fold_left (fun flist (compiledType,compileOpt) ->
-      let buildDeps =  if is_target_lib target then []
-        else list_filter_map (fun dep ->
-            match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-            | Internal -> Some (in_current_dir (cmca_of_lib compiledType compileOpt dep))
-            | System   ->
-              let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
-              let pred = match compiledType with
-                | Native    -> Meta.Pred_Native
-                | ByteCode  -> Meta.Pred_Byte
-              in
-              let archives = Meta.getArchiveWithFilter meta dep pred in
-              match archives with
-              | []              -> None
-              | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
-          ) pkgDeps
-      in
-      let dest = match target.target_name with
-        | LibName libname ->
-          cstate.compilation_builddir_ml Normal </> cmca_of_lib compiledType compileOpt libname
-        | _ ->
-          let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
-          cstate.compilation_builddir_ml Normal </> outputName
-      in
-      let linking_paths_of compileOpt = match compileOpt with
-        | Normal    -> cstate.compilation_linking_paths
-        | WithDebug -> cstate.compilation_linking_paths_d
-        | WithProf  -> cstate.compilation_linking_paths_p
-      in
-      let destTime = Filesystem.getModificationTime dest in
-      let depsTime =
-        try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p)
-                    (List.map (fun m -> cmc_of_hier compiledType (cstate.compilation_builddir_ml compileOpt) m)
-                       compiled))
-        with Not_found -> None
-      in
-      if depsTime <> None then (
-        let (nb_step,nb_step_len) = get_nb_step dag in
-        verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
-          (if is_target_lib target then "library" else "executable") (fp_to_string dest);
-        (fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
-            (if is_target_lib target then LinkingLibrary else LinkingExecutable)
-            compileOpt useThreadLib cclibs buildDeps compiled dest) :: flist
-      ) else flist
+      let normal = (link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
+          compiledType compileOpt false) in
+      let res = if (is_target_lib target) && compiledType = Native && gconf.conf_library_plugin then
+          (link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
+             compiledType compileOpt true) @ normal
+        else normal in
+      res @ flist
     ) [] all_modes in
   if funlist <> [] then
     Scheduler.AddTask (task, cfunlist @ [funlist])

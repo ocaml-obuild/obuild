@@ -18,6 +18,8 @@ let set_exe_debugging v () =
   gconf.conf_executable_debugging <- v;
   gconf.conf_library_debugging <- v
 let set_lib_native v () = gconf.conf_library_native <- v
+let set_lib_plugin v () = gconf.conf_library_plugin <- v;
+  if v then set_lib_native v ()
 let set_lib_bytecode v () = gconf.conf_library_bytecode <- v
 let set_exe_native v () = gconf.conf_executable_native <- v
 let set_exe_bytecode v () = gconf.conf_executable_bytecode <- v
@@ -60,6 +62,7 @@ let makeSetup digestKV project = hashtbl_fromList
       ; ("library-profiling", string_of_bool gconf.conf_library_profiling)
       ; ("library-debugging", string_of_bool gconf.conf_library_debugging)
       ; ("library-native", string_of_bool gconf.conf_library_native)
+      ; ("library-plugin", string_of_bool gconf.conf_library_plugin)
       ; ("library-bytecode", string_of_bool gconf.conf_library_bytecode)
       ; ("executable-as-obj", string_of_bool gconf.conf_executable_as_obj)
       ; ("build-benchs", string_of_bool gconf.conf_build_benchs)

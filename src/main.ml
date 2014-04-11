@@ -40,6 +40,7 @@ let mainConfigure argv =
     Arg.parse_argv (Array.of_list argv)
         ( enable_disable_opt "library-bytecode" Configure.set_lib_bytecode "library compilation as bytecode"
         @ enable_disable_opt "library-native" Configure.set_lib_native "library compilation as native"
+        @ enable_disable_opt "library-plugin" Configure.set_lib_plugin "library compilation as native plugin"
         @ enable_disable_opt "executable-bytecode" Configure.set_exe_bytecode "executable compilation as bytecode"
         @ enable_disable_opt "executable-native" Configure.set_exe_native "executable compilation as native"
         @ enable_disable_opt "library-profiling" Configure.set_lib_profiling "library profiling"

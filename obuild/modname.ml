@@ -29,6 +29,7 @@ let modname_to_string x = x._modname
 let modname_to_dir x = String.uncapitalize x._modname
 
 let to_libstring lib = String.concat "_" (lib_name_to_string_nodes lib)
+let cmxs_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cmxs")
 let cmxa_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cmxa")
 let cma_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cma")
 let cmca_of_lib b = if b = Native then cmxa_of_lib else cma_of_lib

@@ -24,6 +24,7 @@ type gconf =
     ; mutable conf_executable_profiling : bool
     ; mutable conf_executable_as_obj : bool
     ; mutable conf_library_native : bool
+    ; mutable conf_library_plugin : bool
     ; mutable conf_library_bytecode : bool
     ; mutable conf_executable_native : bool
     ; mutable conf_executable_bytecode : bool
@@ -61,6 +62,7 @@ let gconf =
     ; conf_library_debugging    = false
     ; conf_library_profiling    = false
     ; conf_library_native       = true
+    ; conf_library_plugin       = true
     ; conf_library_bytecode     = true
     ; conf_executable_debugging = false
     ; conf_executable_profiling = false

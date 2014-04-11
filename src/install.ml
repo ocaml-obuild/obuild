@@ -21,7 +21,7 @@ let list_lib_files lib build_dir = list_target_files_pred lib (fun f ->
     if (fn_to_string f) = "META" then true
     else
       match Filetype.get_extension_path (build_dir </> f) with
-      | Filetype.FileCMX | Filetype.FileCMI | Filetype.FileA
+      | Filetype.FileCMX | Filetype.FileCMI | Filetype.FileA | Filetype.FileCMXS
       | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
       | _                  -> false)
 

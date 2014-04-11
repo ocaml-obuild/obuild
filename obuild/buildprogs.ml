@@ -19,7 +19,7 @@ exception InferFailed of string
 
 type c_linking_mode = LinkingStatic | LinkingShared
 
-type linking_mode = LinkingLibrary | LinkingExecutable
+type linking_mode = LinkingLibrary | LinkingPlugin | LinkingExecutable
 
 type annotation_mode = AnnotationNone | AnnotationBin | AnnotationText | AnnotationBoth
 
@@ -140,6 +140,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                  | NoThread   -> []
                  | WithThread -> ["-thread"])
              @ (match linkingMode with
+                 | LinkingPlugin    -> ["-shared"]
                  | LinkingLibrary    -> ["-a"]
                  | LinkingExecutable -> if gconf.conf_executable_as_obj then ["-output-obj"] else [])
              @ ["-o"; fp_to_string dest]

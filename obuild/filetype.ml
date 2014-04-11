@@ -12,8 +12,8 @@ type filetype = FileML
               | FileCMA
               | FileCMXA
               | FileCMXS
-	      | FileCMT
-	      | FileCMTI
+	            | FileCMT
+	            | FileCMTI
               | FileO
               | FileA
               | FileSO
