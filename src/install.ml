@@ -51,34 +51,31 @@ let opam_install_file proj_file =
       add ("]\n");
     )
 
-let lib_to_meta projFile lib =
-    let requires_of_lib lib =
-        let deps = lib.lib_target.target_obits.target_builddeps in
-        [ (None, List.map (fun d -> fst d) deps) ]
-        in
-    let set_meta_field_from_lib pkg lib =
-        { pkg with
-              package_requires    = requires_of_lib lib
-            ; package_description = if lib.lib_description <> "" then lib.lib_description else projFile.description
-            ; package_archives    =
-                [ ([Pred_Byte]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name))
-                ; ([Pred_Native], fn_to_string (cmca_of_lib Native Normal lib.lib_name))
-                ]
-        }
-        in
-
-    let subPkgs =
-        List.map (fun sub ->
-            let npkg = newPkg (list_last (lib_name_to_string_nodes sub.lib_name)) in
-            set_meta_field_from_lib npkg sub
-        ) lib.lib_subs
-        in
-
-    let pkg = set_meta_field_from_lib (newPkg "") lib in
-    { pkg with
-          package_version          = projFile.version
-        ; package_subs             = subPkgs
-    }
+let lib_to_meta proj_file lib =
+  let requires_of_lib lib =
+    let deps = lib.lib_target.target_obits.target_builddeps in
+    [ (None, List.map (fun d -> fst d) deps) ]
+  in
+  let set_meta_field_from_lib pkg lib = {
+    pkg with package_requires    = requires_of_lib lib;
+             package_description = if lib.lib_description <> "" then lib.lib_description else proj_file.description;
+             package_archives    = [
+               ([Pred_Byte]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name));
+               ([Pred_Byte; Pred_Plugin]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name));
+               ([Pred_Native], fn_to_string (cmca_of_lib Native Normal lib.lib_name))
+             ] @ (if gconf.conf_library_plugin then
+                    [([Pred_Native; Pred_Plugin], fn_to_string (cmxs_of_lib Normal lib.lib_name))]
+                  else [])
+  } in
+  let subPkgs = List.map (fun sub ->
+      let npkg = newPkg (list_last (lib_name_to_string_nodes sub.lib_name)) in
+      set_meta_field_from_lib npkg sub
+    ) lib.lib_subs
+  in
+  let pkg = set_meta_field_from_lib (newPkg "") lib in {
+    pkg with package_version          = proj_file.version;
+             package_subs             = subPkgs
+  }
 
 let write_lib_meta projFile lib =
     let dir = Dist.getBuildDest (Dist.Target lib.lib_target.target_name) in

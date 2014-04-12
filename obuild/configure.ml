@@ -189,6 +189,7 @@ let check () =
     set_lib_profiling (bool_of_opt "library-profiling") ();
     set_lib_debugging (bool_of_opt "library-debugging") ();
     set_lib_native (bool_of_opt "library-native") ();
+    set_lib_plugin (bool_of_opt "library-plugin") ();
     set_lib_bytecode (bool_of_opt "library-bytecode") ();
 
     set_exe_profiling (bool_of_opt "executable-profiling") ();
