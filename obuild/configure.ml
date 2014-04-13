@@ -13,10 +13,10 @@ let set_lib_profiling v () = gconf.conf_library_profiling <- v
 let set_lib_debugging v () = gconf.conf_library_debugging <- v
 let set_exe_profiling v () =
   gconf.conf_executable_profiling <- v;
-  gconf.conf_library_profiling <- v
+  if v then gconf.conf_library_profiling <- v
 let set_exe_debugging v () =
   gconf.conf_executable_debugging <- v;
-  gconf.conf_library_debugging <- v
+  if v then gconf.conf_library_debugging <- v
 let set_lib_native v () = gconf.conf_library_native <- v
 let set_lib_plugin v () = gconf.conf_library_plugin <- v;
   if v then set_lib_native v ()
@@ -29,6 +29,25 @@ let set_annot v () = gconf.conf_annot <- v
 let set_build_examples v () = gconf.conf_build_examples <- v
 let set_build_tests v () = gconf.conf_build_tests <- v
 let set_build_benchs v () = gconf.conf_build_benchs <- v
+
+let all_options = [
+  ("executable-profiling", (fun () -> gconf.conf_executable_profiling), set_exe_profiling);
+  ("executable-debugging", (fun () -> gconf.conf_executable_debugging), set_exe_debugging);
+  ("executable-native", (fun () -> gconf.conf_executable_native), set_exe_native);
+  ("executable-bytecode", (fun () -> gconf.conf_executable_bytecode), set_exe_bytecode);
+  ("executable-as-obj", (fun () -> gconf.conf_executable_as_obj), set_exe_as_obj);
+
+  ("library-profiling", (fun () -> gconf.conf_library_profiling), set_lib_profiling);
+  ("library-debugging", (fun () -> gconf.conf_library_debugging), set_lib_debugging);
+  ("library-native", (fun () -> gconf.conf_library_native), set_lib_native);
+  ("library-bytecode", (fun () -> gconf.conf_library_bytecode), set_lib_bytecode);
+  ("library-plugin", (fun () -> gconf.conf_library_plugin), set_lib_plugin);
+
+  ("build-benchs", (fun () -> gconf.conf_build_benchs), set_build_benchs);
+  ("build-tests", (fun () -> gconf.conf_build_tests), set_build_tests);
+  ("build-examples", (fun () -> gconf.conf_build_examples), set_build_examples);
+  ("annot", (fun () -> gconf.conf_annot), set_annot);
+]
 
 let getDigestKV () =
     let digest = Project.digest () in
@@ -52,26 +71,12 @@ let generateCFile project file flags =
         ) flags;
     )
 
-let makeSetup digestKV project = hashtbl_fromList
-    ( digestKV
+let makeSetup digestKV project = hashtbl_fromList (
+    digestKV
     @ hashtbl_toList project.Analyze.project_ocamlcfg
-    @ [ ("executable-profiling", string_of_bool gconf.conf_executable_profiling)
-      ; ("executable-debugging", string_of_bool gconf.conf_executable_debugging)
-      ; ("executable-native", string_of_bool gconf.conf_executable_native)
-      ; ("executable-bytecode", string_of_bool gconf.conf_executable_bytecode)
-      ; ("library-profiling", string_of_bool gconf.conf_library_profiling)
-      ; ("library-debugging", string_of_bool gconf.conf_library_debugging)
-      ; ("library-native", string_of_bool gconf.conf_library_native)
-      ; ("library-plugin", string_of_bool gconf.conf_library_plugin)
-      ; ("library-bytecode", string_of_bool gconf.conf_library_bytecode)
-      ; ("executable-as-obj", string_of_bool gconf.conf_executable_as_obj)
-      ; ("build-benchs", string_of_bool gconf.conf_build_benchs)
-      ; ("build-tests", string_of_bool gconf.conf_build_tests)
-      ; ("build-examples", string_of_bool gconf.conf_build_examples)
-      ; ("annot", string_of_bool gconf.conf_annot)
-      ]
+    @ (List.map (fun (opt,conf,_) -> (opt, string_of_bool (conf ()))) all_options)
     @ List.map (fun (flagname,flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) gconf.conf_user_flags
-    )
+  )
 
 let sanityCheck setup =
     let (_: string) = Prog.getOcamlOpt () in
@@ -79,83 +84,76 @@ let sanityCheck setup =
     let (_: string) = Prog.getOcamlDep () in
     ()
 
-let comparekvs reason setup l =
-    List.iter (fun (k,v) ->
-        try
-            let v' = Hashtbl.find setup k in
-            if v' <> v then
-                raise (ConfigChanged reason)
-        with Not_found ->
-            raise (ConfigChanged reason)
-    ) l
+let comparekvs reason setup l = List.iter (fun (k,v) ->
+    try
+      let v' = Hashtbl.find setup k in
+      if v' <> v then
+        raise (ConfigChanged reason)
+    with Not_found ->
+      raise (ConfigChanged reason)
+  ) l
 
-let comparekvs_hashtbl reason setup l =
-    Hashtbl.iter (fun k v ->
-        try
-            let v' = Hashtbl.find setup k in
-            if v' <> v then
-                raise (ConfigChanged reason)
-        with Not_found ->
-            raise (ConfigChanged reason)
-    ) l
+let comparekvs_hashtbl reason setup l = Hashtbl.iter (fun k v ->
+    try
+      let v' = Hashtbl.find setup k in
+      if v' <> v then
+        raise (ConfigChanged reason)
+    with Not_found ->
+      raise (ConfigChanged reason)
+  ) l
 
-let run projFile tweakFlags =
-    Dist.checkOrCreate ();
-    let digestKV = getDigestKV () in
+let create_dist project flags =
+  verbose Verbose "configuration changed, deleting dist\n%!";
+  Filesystem.removeDirContent (Dist.getDistPath ());
+  verbose Verbose "auto-generating configuration files\n%!";
+  let autogenDir = Dist.createBuildDest Dist.Autogen in
+  generateMlFile project (autogenDir </> fn "path_generated.ml") flags;
+  generateCFile project (autogenDir </> fn "obuild_macros.h") flags
 
-    let flagsVal =
-        List.map (fun flag ->
-            let name = flag.Project.flag_name in
-            let def  = flag.Project.flag_default in
+let get_flags_value proj_file user_flags = List.map (fun flag ->
+    let name = flag.Project.flag_name in
+    let def  = flag.Project.flag_default in
+    let override = ref None in
+    List.iter (fun tw -> match tw with
+        | ClearFlag s -> if s = name then override := Some false
+        | SetFlag   s -> if s = name then override := Some true
+      ) user_flags;
+    match (!override, def) with
+    | (None, None)   -> (name, false)
+    | (None, Some v) -> (name, v)
+    | (Some v, _)    -> (name, v)
+  ) proj_file.Project.flags
 
-            let override = ref None in
-            List.iter (fun tw ->
-                match tw with
-                | ClearFlag s -> if s = name then override := Some false
-                | SetFlag   s -> if s = name then override := Some true
-            ) tweakFlags;
+let run proj_file user_flags =
+  Dist.checkOrCreate ();
+  let digestKV = getDigestKV () in
+  let flags = get_flags_value proj_file user_flags in
+  verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
+  gconf.conf_user_flags <- flags;
 
-            match (!override, def) with
-            | (None, None)   -> (name, false)
-            | (None, Some v) -> (name, v)
-            | (Some v, _)    -> (name, v)
-        ) projFile.Project.flags
-        in
-    verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flagsVal);
-    gconf.conf_user_flags <- flagsVal;
+  let syspath = Utils.get_system_paths () in
+  List.iter (fun tool ->
+      try let _ = Utils.find_in_paths syspath tool in ()
+      with Utils.FileNotFoundInPaths _ -> raise (ToolNotFound tool)
+    ) proj_file.Project.extra_tools;
 
-    let syspath = Utils.get_system_paths () in
-    List.iter (fun tool ->
-        try let _ = Utils.find_in_paths syspath tool in ()
-        with Utils.FileNotFoundInPaths _ -> raise (ToolNotFound tool)
-    ) projFile.Project.extra_tools;
+  let project = Analyze.prepare proj_file in
+  let currentSetup = makeSetup digestKV project in
+  let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
+  let projectSystemChanged = match actualSetup with
+    | None     -> true
+    | Some stp ->
+      (* TODO harcoded for now till we do all the checks. *)
+      try comparekvs "setup" stp (hashtbl_toList currentSetup); (* FORCED should be false *) true
+      with _ -> true
+  in
 
-    let project = Analyze.prepare projFile in
-
-    let currentSetup = makeSetup digestKV project in
-    let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
-    let projectSystemChanged =
-        match actualSetup with
-        | None     -> true
-        | Some stp ->
-            (* TODO harcoded for now till we do all the checks. *)
-            try comparekvs "setup" stp (hashtbl_toList currentSetup); (* FORCED should be false *) true
-            with _ -> true
-        in
-
-    if projectSystemChanged then (
-        (* write setup file *)
-        verbose Verbose "configuration changed, deleting dist\n%!";
-        Filesystem.removeDirContent (Dist.getDistPath ());
-
-        verbose Verbose "Writing new setup\n%!";
-        Dist.write_setup currentSetup;
-
-        verbose Verbose "auto-generating configuration files\n%!";
-        let autogenDir = Dist.createBuildDest Dist.Autogen in
-        generateMlFile project (autogenDir </> fn "path_generated.ml") flagsVal;
-        generateCFile project (autogenDir </> fn "obuild_macros.h") flagsVal;
-    )
+  if projectSystemChanged then (
+    create_dist project flags;
+    (* write setup file *)
+    verbose Verbose "Writing new setup\n%!";
+    Dist.write_setup currentSetup
+  )
 
 exception ConfigurationMissingKey of string
 exception ConfigurationTypeMismatch of string * string * string
@@ -186,23 +184,7 @@ let check () =
     ) setup;
 
     (* load the environment *)
-    set_lib_profiling (bool_of_opt "library-profiling") ();
-    set_lib_debugging (bool_of_opt "library-debugging") ();
-    set_lib_native (bool_of_opt "library-native") ();
-    set_lib_plugin (bool_of_opt "library-plugin") ();
-    set_lib_bytecode (bool_of_opt "library-bytecode") ();
-
-    set_exe_profiling (bool_of_opt "executable-profiling") ();
-    set_exe_debugging (bool_of_opt "executable-debugging") ();
-    set_exe_native (bool_of_opt "executable-native") ();
-    set_exe_bytecode (bool_of_opt "executable-bytecode") ();
-
-    set_exe_as_obj (bool_of_opt "executable-as-obj") ();
-
-    set_build_examples (bool_of_opt "build-examples") ();
-    set_build_benchs (bool_of_opt "build-benchs") ();
-    set_build_tests (bool_of_opt "build-tests") ();
-    set_annot (bool_of_opt "annot") ();
+    List.iter (fun (opt,_,set) -> set (bool_of_opt opt) ()) all_options;
 
     let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
     (match ver with

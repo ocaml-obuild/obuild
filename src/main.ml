@@ -11,55 +11,49 @@ let programName = "obuild"
 let usageStr cmd = "\nusage: " ^ programName ^ " " ^ cmd ^ " <options>\n\noptions:\n"
 
 let project_read () =
-    try Project.read gconf.conf_strict
-    with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn); raise exn
+  try Project.read gconf.conf_strict
+  with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn);
+    raise exn
 
-let mainConfigure argv =
-    let userFlagSettings = ref [] in
-    let userSetFlagSettings s =
-        let tweak =
-            if string_startswith "-" s
-                then ClearFlag (string_drop 1 s)
-                else SetFlag s
-            in
-        userFlagSettings := tweak :: !userFlagSettings
-        in
+let configure argv =
+  let user_flags = ref [] in
+  let user_set_flags s =
+    let tweak = if string_startswith "-" s then ClearFlag (string_drop 1 s) else SetFlag s
+    in
+    user_flags := tweak :: !user_flags
+  in
 
-    let enable_disable_opt opt_name f doc =
-        [ ("--enable-" ^ opt_name, Arg.Unit (f true), " enable " ^ doc)
-        ; ("--disable-" ^ opt_name, Arg.Unit (f false), "disable " ^ doc)
-        ]
-        in
+  let enable_disable_opt opt_name f doc = [
+    ("--enable-" ^ opt_name, Arg.Unit (f true), " enable " ^ doc);
+    ("--disable-" ^ opt_name, Arg.Unit (f false), "disable " ^ doc)
+  ] in
+  let opts = [
+    ("--flag", Arg.String user_set_flags, "enable or disable a project's flag");
+    ("--executable-as-obj", Arg.Unit (Configure.set_exe_as_obj true), "output executable as obj file");
+    ("--annot", Arg.Unit (Configure.set_annot true), "generate .annot files")
+  ] in
+  Arg.parse_argv (Array.of_list argv) (
+    enable_disable_opt "library-bytecode" Configure.set_lib_bytecode "library compilation as bytecode"
+    @ enable_disable_opt "library-native" Configure.set_lib_native "library compilation as native"
+    @ enable_disable_opt "library-plugin" Configure.set_lib_plugin "library compilation as native plugin"
+    @ enable_disable_opt "executable-bytecode" Configure.set_exe_bytecode "executable compilation as bytecode"
+    @ enable_disable_opt "executable-native" Configure.set_exe_native "executable compilation as native"
+    @ enable_disable_opt "library-profiling" Configure.set_lib_profiling "library profiling"
+    @ enable_disable_opt "library-debugging" Configure.set_lib_debugging "library debugging"
+    @ enable_disable_opt "executable-profiling" Configure.set_exe_profiling "executable profiling"
+    @ enable_disable_opt "executable-debugging" Configure.set_exe_debugging "executable debugging"
+    @ enable_disable_opt "examples" Configure.set_build_examples "building examples"
+    @ enable_disable_opt "benchs" Configure.set_build_benchs "building benchs"
+    @ enable_disable_opt "tests" Configure.set_build_tests "building tests"
+    @ opts
+  ) (fun s -> failwith ("unknown option: " ^ s)) (usageStr "configure");
 
-    let opts =
-        [ ("--flag", Arg.String userSetFlagSettings, "enable or disable a project's flag")
-        ; ("--executable-as-obj", Arg.Unit (Configure.set_exe_as_obj true), "output executable as obj file")
-        ; ("--annot", Arg.Unit (Configure.set_annot true), "generate .annot files")
-        ]
-        in
-    Arg.parse_argv (Array.of_list argv)
-        ( enable_disable_opt "library-bytecode" Configure.set_lib_bytecode "library compilation as bytecode"
-        @ enable_disable_opt "library-native" Configure.set_lib_native "library compilation as native"
-        @ enable_disable_opt "library-plugin" Configure.set_lib_plugin "library compilation as native plugin"
-        @ enable_disable_opt "executable-bytecode" Configure.set_exe_bytecode "executable compilation as bytecode"
-        @ enable_disable_opt "executable-native" Configure.set_exe_native "executable compilation as native"
-        @ enable_disable_opt "library-profiling" Configure.set_lib_profiling "library profiling"
-        @ enable_disable_opt "library-debugging" Configure.set_lib_debugging "library debugging"
-        @ enable_disable_opt "executable-profiling" Configure.set_exe_profiling "executable profiling"
-        @ enable_disable_opt "executable-debugging" Configure.set_exe_debugging "executable debugging"
-        @ enable_disable_opt "examples" Configure.set_build_examples "building examples"
-        @ enable_disable_opt "benchs" Configure.set_build_benchs "building benchs"
-        @ enable_disable_opt "tests" Configure.set_build_tests "building tests"
-        @ opts
-        ) (fun s -> failwith ("unknown option: " ^ s))
-        (usageStr "configure");
-
-    FindlibConf.load ();
-    let projFile = Project.read gconf.conf_strict in
-    verbose Report "Configuring %s-%s...\n" projFile.Project.name projFile.Project.version;
-    Configure.run projFile !userFlagSettings;
-    (* check build deps of everything buildables *)
-    ()
+  FindlibConf.load ();
+  let proj_file = Project.read gconf.conf_strict in
+  verbose Report "Configuring %s-%s...\n" proj_file.Project.name proj_file.Project.version;
+  Configure.run proj_file !user_flags;
+  (* check build deps of everything buildables *)
+  ()
 
 let mainBuild argv =
   let anon = ref [] in
@@ -72,9 +66,9 @@ let mainBuild argv =
   Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
   Configure.check ();
-  let projFile = project_read () in
+  let proj_file = project_read () in
   FindlibConf.load ();
-  let project = Analyze.prepare projFile in
+  let project = Analyze.prepare proj_file in
   let bstate = Prepare.init project in
 
   let dag = match !anon with
@@ -83,7 +77,7 @@ let mainBuild argv =
       let targets = List.map name_of_string !anon in
       Dag.subset project.Analyze.project_targets_dag targets
   in
-  Build.build_dag bstate projFile dag
+  Build.build_dag bstate proj_file dag
 
 let mainClean argv =
     if Filesystem.exists (Dist.getDistPath ())
@@ -98,8 +92,8 @@ let mainSdist argv =
            (usageStr "sdist");
     Dist.check (fun () -> ());
 
-    let projFile = project_read () in
-    Sdist.run projFile !isSnapshot;
+    let proj_file = project_read () in
+    Sdist.run proj_file !isSnapshot;
     ()
 
 let unimplemented () =
@@ -112,8 +106,8 @@ let mainDoc argv =
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "doc");
 
-    let projFile = project_read () in
-    Doc.run projFile;
+    let proj_file = project_read () in
+    Doc.run proj_file;
     unimplemented ()
 
 let mainInfer argv =
@@ -161,12 +155,12 @@ let mainTest argv =
            (usageStr "test");
 
     Configure.check ();
-    let projFile = project_read () in
+    let proj_file = project_read () in
     if not gconf.conf_build_tests then (
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
         exit 1
     );
-    let testTargets = List.map Project.test_to_target projFile.Project.tests in
+    let testTargets = List.map Project.test_to_target proj_file.Project.tests in
     if testTargets <> []
         then (
             let results =
@@ -187,7 +181,7 @@ let mainTest argv =
                         print_warnings err;
                         (test.Project.test_name, false)
                     )
-                ) projFile.Project.tests
+                ) proj_file.Project.tests
                 in
             (* this is just a mockup. expect results displayed in javascript and 3d at some point *)
             let failed = List.filter (fun (_,x) -> false = x) results in
@@ -203,7 +197,7 @@ let mainTest argv =
 
 let mainGet argv =
     let argv = List.tl argv in
-    let projFile = project_read () in
+    let proj_file = project_read () in
 
     (* TODO: hardcoded just for now to get basic fields.
      * - add option for quoting
@@ -213,9 +207,9 @@ let mainGet argv =
     match argv with
     | []      -> eprintf "usage: obuild get <field>\n\n"; exit 1
     | [field] -> (match field with
-                 | "name"    -> printf "%s\n" projFile.Project.name;
-                 | "version" -> printf "%s\n" projFile.Project.version;
-                 | "license" -> printf "%s\n" projFile.Project.license;
+                 | "name"    -> printf "%s\n" proj_file.Project.name;
+                 | "version" -> printf "%s\n" proj_file.Project.version;
+                 | "license" -> printf "%s\n" proj_file.Project.license;
                  | _         -> eprintf "error: unknown field %s\n" field; exit 1
                  )
     | _       -> eprintf "usage: obuild get <field>\n"; exit 1
@@ -296,7 +290,7 @@ let parseGlobalArgs () =
     processGlobalArgs (List.tl (Array.to_list Sys.argv))
 
 let knownCommands =
-    [ ("configure", mainConfigure)
+    [ ("configure", configure)
     ; ("build", mainBuild)
     ; ("clean", mainClean)
     ; ("sdist", mainSdist)
