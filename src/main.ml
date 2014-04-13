@@ -65,8 +65,8 @@ let mainBuild argv =
   ] in
   Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
-  Configure.check ();
   let proj_file = project_read () in
+  Configure.check proj_file true;
   FindlibConf.load ();
   let project = Analyze.prepare proj_file in
   let bstate = Prepare.init project in
@@ -131,8 +131,8 @@ let mainInstall argv =
   ] (fun s -> failwith ("unknown option: " ^ s))
     (usageStr "install");
 
-  Configure.check ();
   let proj_file = project_read () in
+  Configure.check proj_file false;
   FindlibConf.load ();
   let dest_dir =
     (if !dest_dir = ""
@@ -154,8 +154,8 @@ let mainTest argv =
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "test");
 
-    Configure.check ();
     let proj_file = project_read () in
+    Configure.check proj_file false;
     if not gconf.conf_build_tests then (
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
         exit 1

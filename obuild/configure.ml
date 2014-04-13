@@ -158,41 +158,49 @@ let run proj_file user_flags =
 exception ConfigurationMissingKey of string
 exception ConfigurationTypeMismatch of string * string * string
 
-let check () =
-    Dist.checkOrFail ();
+let check proj_file reconf =
+  Dist.checkOrFail ();
+  let setup = Dist.read_setup () in
+  let ocamlCfg = Prog.getOcamlConfig () in
+  let digestKV = getDigestKV () in
 
-    let setup = Dist.read_setup () in
-    let ocamlCfg = Prog.getOcamlConfig () in
-    let digestKV = getDigestKV () in
+  comparekvs_hashtbl "ocaml config" setup ocamlCfg;
+  let reconfigure = try
+      comparekvs "digest" setup digestKV;
+      false
+    with e -> if reconf then true else raise e in
+  let get_opt k =
+    try Hashtbl.find setup k
+    with Not_found -> raise (ConfigurationMissingKey k)
+  in
+  let bool_of_opt k =
+    let v = get_opt k in
+    try bool_of_string v
+    with Failure _ -> raise (ConfigurationTypeMismatch (k,"bool",v))
+  in
 
-    comparekvs "digest" setup digestKV;
-    comparekvs_hashtbl "ocaml config" setup ocamlCfg;
-
-    let get_opt k =
-        try Hashtbl.find setup k
-        with Not_found -> raise (ConfigurationMissingKey k)
-        in
-    let bool_of_opt k =
-        let v = get_opt k in
-        try bool_of_string v
-        with Failure _ -> raise (ConfigurationTypeMismatch (k,"bool",v))
-        in
-
-    Hashtbl.iter (fun k v ->
-        if string_startswith "flag-" k then
-            gconf.conf_user_flags <- (string_drop 5 k, bool_of_string v) :: gconf.conf_user_flags
+  Hashtbl.iter (fun k v ->
+      if string_startswith "flag-" k then
+        gconf.conf_user_flags <- (string_drop 5 k, bool_of_string v) :: gconf.conf_user_flags
     ) setup;
-
-    (* load the environment *)
-    List.iter (fun (opt,_,set) -> set (bool_of_opt opt) ()) all_options;
-
-    let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
-    (match ver with
-    | major::minor::_-> (
-        if int_of_string major < 4 then gconf.conf_bin_annot <- false;
-        if int_of_string major > 4 && int_of_string minor > 1 then gconf.conf_short_path <- true
-        )
-    | _              -> gconf.conf_bin_annot <- false
-    );
-
-    ()
+  (* load the environment *)
+  List.iter (fun (opt,_,set) -> set (bool_of_opt opt) ()) all_options;
+  let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
+  (match ver with
+   | major::minor::_-> (
+       if int_of_string major < 4 then gconf.conf_bin_annot <- false;
+       if int_of_string major > 4 && int_of_string minor > 1 then gconf.conf_short_path <- true
+     )
+   | _ -> gconf.conf_bin_annot <- false
+  );
+  if reconfigure then begin
+    let flags = get_flags_value proj_file [] in
+    verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
+    let project = Analyze.prepare proj_file in
+    create_dist project flags;
+    (* write setup file *)
+    verbose Verbose "Writing new setup\n%!";
+    let currentSetup = makeSetup digestKV project in
+    Dist.write_setup currentSetup
+  end;
+  ()
