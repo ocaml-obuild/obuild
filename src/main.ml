@@ -65,9 +65,9 @@ let mainBuild argv =
   ] in
   Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
+  FindlibConf.load ();
   let proj_file = project_read () in
   Configure.check proj_file true;
-  FindlibConf.load ();
   let project = Analyze.prepare proj_file in
   let bstate = Prepare.init project in
 
