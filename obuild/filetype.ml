@@ -2,8 +2,6 @@ open Ext.Filepath
 
 type filetype = FileML
               | FileMLI
-              | FileMLY
-              | FileMLL
               | FileH
               | FileC
               | FileCMX
@@ -24,8 +22,6 @@ let file_type_of_string s =
     match s with
     | "ml"   -> FileML
     | "mli"  -> FileMLI
-    | "mly"  -> FileMLY
-    | "mll"  -> FileMLL
     | "h"    -> FileH
     | "c"    -> FileC
     | "cmx"  -> FileCMX
@@ -46,8 +42,6 @@ let file_type_to_string fty =
     match fty with
     | FileML      -> "ml"
     | FileMLI     -> "mli"
-    | FileMLY     -> "mly"
-    | FileMLL     -> "mll"
     | FileH       -> "h"
     | FileC       -> "c"
     | FileCMX     -> "cmx"

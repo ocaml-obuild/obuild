@@ -49,8 +49,6 @@ let lexer_of_module modname = fn (String.uncapitalize modname._modname ^ ".mll")
 let module_lookup_methods = [ directory_of_module; parser_of_module; lexer_of_module; filename_of_module ]
 
 let module_of_directory filename = wrap_module (String.capitalize (fn_to_string filename))
-let module_of_parser filename = wrap_module (String.capitalize (Filename.chop_extension (fn_to_string filename)))
-let module_of_lexer filename = wrap_module (String.capitalize (Filename.chop_extension (fn_to_string filename)))
 let module_of_filename filename =
     try wrap_module (String.capitalize (Filename.chop_extension (fn_to_string filename)))
     with EmptyModuleName -> raise (ModuleFilenameNotValid (fn_to_string filename))

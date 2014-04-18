@@ -97,8 +97,9 @@ let get_dirpath path hier =
 
 let filename_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileML
 let directory_of_hier hier prefix_path = get_dirpath prefix_path hier
-let lexer_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLL
-let parser_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLY
+let generators_of_hier = List.map (fun gen hier prefix_path ->
+    get_filepath prefix_path hier (Filetype.FileOther gen.Generators.suffix)
+  ) !Generators.generators
 let interface_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileMLI
 
 let cmx_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMX
@@ -110,20 +111,12 @@ let cmc_of_hier bmode prefix_path hier = if bmode = Native then
 
 let cmi_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMI
 
-let module_lookup_methods = [ directory_of_hier; parser_of_hier; lexer_of_hier; filename_of_hier ]
+let module_lookup_methods = directory_of_hier::generators_of_hier @ [filename_of_hier]
 
 let hier_of_directory filename =
   let name = fn_to_string filename in
   let m = wrap_module (String.capitalize name) in
   add_hier m name
-
-let hier_of_parser filename =
-  let name = Filename.chop_extension (fn_to_string filename) in
-  let m = wrap_module (String.capitalize name) in
-  add_hier m name
-
-let hier_of_lexer filename =
-  hier_of_parser filename
 
 let hier_of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in

@@ -20,8 +20,6 @@ exception ModuleDependsItself of hier
 exception ModuleDependenciesProblem of hier list
 exception ModuleDependencyNoOutput
 exception ModuleNotFound of (filepath list * hier)
-exception YaccFailed of string
-exception LexFailed of string
 
 type module_intf_desc = {
   module_intf_mtime : float;
@@ -29,7 +27,7 @@ type module_intf_desc = {
 }
 
 type use_thread_flag = NoThread | WithThread
-type ocaml_file_type = Lexer | Parser | SimpleModule
+type ocaml_file_type = GeneratedModule | SimpleModule
 
 type module_desc_file = {
   module_use_threads  : use_thread_flag;
@@ -103,20 +101,6 @@ type compilation_state = {
 }
 
 let init project = { bstate_config = project }
-
-let runOcamlLex dest src =
-  let prog = Prog.getOcamlLex () in
-  let args = [ prog; "-o"; fp_to_string dest; fp_to_string src ] in
-  match Process.run args with
-  | Process.Success (_, warnings,_) -> warnings
-  | Process.Failure er -> raise (LexFailed er)
-
-let runOcamlYacc prefix src =
-  let prog = Prog.getOcamlYacc () in
-  let args = [ prog; "-b"; fp_to_string prefix; fp_to_string src ] in
-  match Process.run args with
-  | Process.Success (_, warnings,_) -> warnings
-  | Process.Failure er -> raise (YaccFailed er)
 
 let get_compilation_order cstate =
   let filter_modules t : hier option = match t with
@@ -193,7 +177,7 @@ let get_modules_desc bstate target toplevelModules =
         pp_some preproc (archive :: camlp4Strs)
     ) in
 
-  let module_lookup_method = [filename_of_hier; lexer_of_hier; parser_of_hier; directory_of_hier] in
+  let module_lookup_method = filename_of_hier::generators_of_hier @ [directory_of_hier] in
   let get_one hier =
     let moduleName = hier_to_string hier in
     verbose Verbose "Analysing %s\n%!" moduleName;
@@ -212,8 +196,8 @@ let get_modules_desc bstate target toplevelModules =
             then Some (module_of_directory f)
             else (match Filetype.get_extension_path fp with
                 | Filetype.FileML  -> Some (module_of_filename f)
-                | Filetype.FileMLL -> Some (module_of_lexer f)
-                | Filetype.FileMLY -> Some (module_of_parser f)
+                | Filetype.FileOther s -> if Generators.is_generator_ext s then Some (module_of_filename f)
+                  else None
                 | _                -> None
               )
           ) srcDir
@@ -223,27 +207,23 @@ let get_modules_desc bstate target toplevelModules =
           module_dir_modules = List.map (fun m -> hier_append hier m) modules
         }
       ) else (
-        let parserFile = parser_of_hier hier srcPath in
-        let lexerFile = lexer_of_hier hier srcPath in
-
-        let isParser = Filesystem.exists parserFile in
-        let isLexer = Filesystem.exists lexerFile in
+        let generators_files = List.map (fun gen_fun -> gen_fun hier srcPath) generators_of_hier in
+        let generator_file = try
+            Some (List.find (fun file -> Filesystem.exists file) generators_files)
+          with Not_found -> None in
         let srcPath =
-          if isParser then (
-            verbose Debug "  %s is a parser\n%!" moduleName;
-            let actualSrcPath = Dist.getBuildDest (Dist.Target target.target_name) in
-            let w = runOcamlYacc (actualSrcPath </> directory_of_module (hier_leaf hier)) parserFile in
-            print_warnings w;
-            actualSrcPath
-          ) else if isLexer then (
-            verbose Debug "  %s is a lexer\n%!" moduleName;
-            let actualSrcPath = Dist.getBuildDest (Dist.Target target.target_name) in
-            let dest = filename_of_hier hier actualSrcPath in
-            let w = runOcamlLex dest lexerFile in
-            print_warnings w;
-            actualSrcPath
-          ) else
-            srcPath
+          match generator_file with
+          | None -> srcPath
+          | Some f ->
+            verbose Debug "  %s is a generator\n%!" moduleName;
+            let actual_src_path = Dist.getBuildDest (Dist.Target target.target_name) in
+            let dest_file = filename_of_hier hier actual_src_path in
+            if not (Filesystem.exists dest_file) or
+               ((Filesystem.getModificationTime dest_file) < (Filesystem.getModificationTime f)) then begin
+              let w = Generators.run (actual_src_path </> directory_of_module (hier_leaf hier)) f in
+              print_warnings w
+            end;
+            actual_src_path
         in
         let srcFile = filename_of_hier hier srcPath in
         let intfFile = interface_of_hier srcPath hier in
@@ -306,7 +286,7 @@ let get_modules_desc bstate target toplevelModules =
         DescFile
           { module_src_mtime     = modTime
           ; module_src_path      = srcFile
-          ; module_file_type     = if isParser then Parser else if isLexer then Lexer else SimpleModule
+          ; module_file_type     = if generator_file = None then SimpleModule else GeneratedModule
           ; module_intf_desc     = intfDesc
           ; module_use_threads   = use_thread
           ; module_use_pp        = pp
