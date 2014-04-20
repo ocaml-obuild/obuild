@@ -1,0 +1,9 @@
+PKG unix
+S ext
+S src
+S obuild
+S tools
+B dist/build/obuild
+B dist/build/lib-obuild 
+B dist/build/lib-obuild.ext
+B dist/build/lib-obuild/obuild
