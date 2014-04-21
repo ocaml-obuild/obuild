@@ -42,6 +42,8 @@ let getRanlib   () = getCache "ranlib"     (fun n -> [ default "ranlib" gconf.co
 let getAR       () = getCache "ar"         (fun n -> [ default "ar" gconf.conf_prog_ar])
 let getLD       () = getCache "ld"         (fun n -> [ default "ld" gconf.conf_prog_ld])
 let getPkgConfig() = getCache "pkg-config" (fun n -> [ default "pkg-config" gconf.conf_prog_pkgconfig])
+let getOcaml () = getCache "ocaml" (fun n -> maybe ["ocaml"] list_singleton gconf.conf_prog_ocaml)
+let getOcamlMktop () = getCache "ocamlmktop" (fun n -> maybe ["ocamlmktop"] list_singleton gconf.conf_prog_ocamlmktop)
 
 let getOcamlVersion () =
     match Process.run [ getOcamlOpt (); "-vnum" ] with

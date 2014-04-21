@@ -15,7 +15,7 @@ let buildtype_to_string ty =
 exception NotADirectory
 exception MissingDestinationDirectory of buildType
 exception DoesntExist
-exception SetupDoesntExist
+exception FileDoesntExist of string
 
 let distPath = ref (fp "dist")
 
@@ -23,6 +23,8 @@ let setDistPath p = distPath := p
 let getDistPath () = !distPath
 
 let setupPath = getDistPath () </> fn "setup"
+let configure_path = getDistPath () </> fn "configure"
+let build_path = getDistPath () </> fn "build"
 
 let check f =
     if Filesystem.exists (getDistPath ())
@@ -65,12 +67,14 @@ let createBuildDest buildtype =
     let _ = Filesystem.mkdirSafe destDir 0o755 in
     destDir
 
-let read_setup () =
-    try
-        let content = Filesystem.readFile setupPath in
-        hashtbl_fromList (List.map (fun l -> second (default "") $ Utils.toKV l) $ string_split '\n' content)
-    with _ ->
-        raise SetupDoesntExist
+let read_dist_file path =
+  try
+    let content = Filesystem.readFile path in
+    hashtbl_fromList (List.map (fun l -> second (default "") $ Utils.toKV l) $ string_split '\n' content)
+  with _ -> raise (FileDoesntExist (fp_to_string path))
+
+let read_setup () = read_dist_file setupPath
+let read_configure () = read_dist_file configure_path
 
 let write_setup setup =
     let kv (k,v) = k ^ ": " ^ v in

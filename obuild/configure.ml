@@ -8,6 +8,9 @@ open Gconf
 
 exception ConfigChanged of string
 exception ToolNotFound of filename
+exception ConfigurationMissingKey of string
+exception ConfigurationTypeMismatch of string * string * string
+exception ConfigureScriptFailed of string
 
 let set_lib_profiling v () = gconf.conf_library_profiling <- v
 let set_lib_debugging v () = gconf.conf_library_debugging <- v
@@ -102,18 +105,33 @@ let comparekvs_hashtbl reason setup l = Hashtbl.iter (fun k v ->
       raise (ConfigChanged reason)
   ) l
 
+let execute_configure_script proj_file =
+  match proj_file.Project.configure_script with
+  | None -> ()
+  | Some script ->
+    let args = [ (Prog.getOcaml ()); (fp_to_string script) ] in
+    (match Process.run args with
+    | Process.Success (_, warnings,_) -> print_warnings warnings
+    | Process.Failure er -> raise (ConfigureScriptFailed er))
+
 let create_dist project flags =
   verbose Verbose "configuration changed, deleting dist\n%!";
-  Filesystem.removeDirContent (Dist.getDistPath ());
+  Filesystem.removeDirContent (Dist.build_path);
   verbose Verbose "auto-generating configuration files\n%!";
   let autogenDir = Dist.createBuildDest Dist.Autogen in
   generateMlFile project (autogenDir </> fn "path_generated.ml") flags;
   generateCFile project (autogenDir </> fn "obuild_macros.h") flags
 
-let get_flags_value proj_file user_flags = List.map (fun flag ->
+let get_assoc name assoc =
+  try
+    let v = List.assoc name assoc in
+    Some v
+  with Not_found -> None
+
+let get_flags_value proj_file setup_flags user_flags = List.map (fun flag ->
     let name = flag.Project.flag_name in
     let def  = flag.Project.flag_default in
-    let override = ref None in
+    let override = ref (get_assoc name setup_flags) in
     List.iter (fun tw -> match tw with
         | ClearFlag s -> if s = name then override := Some false
         | SetFlag   s -> if s = name then override := Some true
@@ -124,19 +142,47 @@ let get_flags_value proj_file user_flags = List.map (fun flag ->
     | (Some v, _)    -> (name, v)
   ) proj_file.Project.flags
 
-let run proj_file user_flags =
-  Dist.checkOrCreate ();
-  let digestKV = getDigestKV () in
-  let flags = get_flags_value proj_file user_flags in
-  verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
-  gconf.conf_user_flags <- flags;
-
+let check_extra_tools proj_file =
   let syspath = Utils.get_system_paths () in
   List.iter (fun tool ->
       try let _ = Utils.find_in_paths syspath tool in ()
       with Utils.FileNotFoundInPaths _ -> raise (ToolNotFound tool)
-    ) proj_file.Project.extra_tools;
+    ) proj_file.Project.extra_tools
 
+let get_flags hash =
+  Hashtbl.fold (fun k v acc ->
+      if string_startswith "flag-" k then
+        (string_drop 5 k, bool_of_string v) :: acc
+      else
+        acc) hash []
+
+let bool_of_opt hashtable k =
+  let get_opt k =
+    try Hashtbl.find hashtable k
+    with Not_found -> raise (ConfigurationMissingKey k)
+  in
+  let v = get_opt k in
+  try bool_of_string v
+  with Failure _ -> raise (ConfigurationTypeMismatch (k,"bool",v))
+
+let set_opts hashtable =
+  (* load the environment *)
+  List.iter (fun (opt,_,set) -> set (bool_of_opt hashtable opt) ()) all_options
+
+let run proj_file user_flags =
+  Dist.checkOrCreate ();
+  let digestKV = getDigestKV () in
+  execute_configure_script proj_file;
+  let configure = try Some (Dist.read_configure ()) with _ -> None in
+  let configure_flags = match configure with
+    | None -> []
+    | Some h -> get_flags h in
+  (* user_flags needs to be set before calling Analyze.prepare *)
+  let flags = get_flags_value proj_file configure_flags user_flags in
+  verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
+  gconf.conf_user_flags <- flags;
+
+  check_extra_tools proj_file;
   let project = Analyze.prepare proj_file in
   let currentSetup = makeSetup digestKV project in
   let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
@@ -155,36 +201,20 @@ let run proj_file user_flags =
     Dist.write_setup currentSetup
   )
 
-exception ConfigurationMissingKey of string
-exception ConfigurationTypeMismatch of string * string * string
-
 let check proj_file reconf =
   Dist.checkOrFail ();
   let setup = Dist.read_setup () in
   let ocamlCfg = Prog.getOcamlConfig () in
   let digestKV = getDigestKV () in
-
+  (* check if the environment changed. *)
   comparekvs_hashtbl "ocaml config" setup ocamlCfg;
+  (* if the digest of .obuild changed, let's reconfigure *)
   let reconfigure = try
       comparekvs "digest" setup digestKV;
       false
     with e -> if reconf then true else raise e in
-  let get_opt k =
-    try Hashtbl.find setup k
-    with Not_found -> raise (ConfigurationMissingKey k)
-  in
-  let bool_of_opt k =
-    let v = get_opt k in
-    try bool_of_string v
-    with Failure _ -> raise (ConfigurationTypeMismatch (k,"bool",v))
-  in
-
-  Hashtbl.iter (fun k v ->
-      if string_startswith "flag-" k then
-        gconf.conf_user_flags <- (string_drop 5 k, bool_of_string v) :: gconf.conf_user_flags
-    ) setup;
-  (* load the environment *)
-  List.iter (fun (opt,_,set) -> set (bool_of_opt opt) ()) all_options;
+  (* all_options are restored from setup file *)
+  set_opts setup;
   let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
   (match ver with
    | major::minor::_-> (
@@ -193,14 +223,23 @@ let check proj_file reconf =
      )
    | _ -> gconf.conf_bin_annot <- false
   );
+  (* user_flags are also restored from setup file *)
+  let setup_flags = get_flags setup in
+  gconf.conf_user_flags <- setup_flags;
+  (* .obuild changed, maybe we should compare a little bit deeper to not retriggerd reconf too often ... *)
   if reconfigure then begin
-    let flags = get_flags_value proj_file [] in
+    (* let's call configure-script if available, however we don't care about the content of dist/configure *)
+    execute_configure_script proj_file;
+    (* user_flags needs to be set before calling Analyze.prepare *)
+    let flags = get_flags_value proj_file setup_flags [] in
     verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
+    gconf.conf_user_flags <- flags;
+    check_extra_tools proj_file;
     let project = Analyze.prepare proj_file in
     create_dist project flags;
     (* write setup file *)
     verbose Verbose "Writing new setup\n%!";
-    let currentSetup = makeSetup digestKV project in
-    Dist.write_setup currentSetup
+    let current_setup = makeSetup digestKV project in
+    Dist.write_setup current_setup
   end;
   ()
