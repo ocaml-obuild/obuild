@@ -150,7 +150,7 @@ let emptyExe (name : string) : obuild_exe =
 let emptyTest (name : string) : obuild_test =
     { test_name   = name
     ; test_main   = emptyFn
-    ; test_target = newTarget (TestName name) Test gconf.conf_build_tests false
+    ; test_target = newTarget (TestName name) Test (Gconf.get_target_option "build-tests") false
     ; test_rundir = None
     ; test_runopt = []
     ; test_type   = TestType_ExitCode
@@ -159,7 +159,7 @@ let emptyTest (name : string) : obuild_test =
 let emptyExample (name : string) : obuild_example =
     { example_name   = name
     ; example_main   = emptyFn
-    ; example_target = newTarget (ExampleName name) Test gconf.conf_build_examples false
+    ; example_target = newTarget (ExampleName name) Test (Gconf.get_target_option "build-examples") false
     }
 
 let findPath () =

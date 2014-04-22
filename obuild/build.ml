@@ -94,8 +94,8 @@ let get_all_modes target =
       match (t,o) with (ByteCode,WithProf) -> false | _ -> true) all_modes
 
 let annot_mode () =
-  if gconf.conf_annot && gconf.conf_bin_annot then AnnotationBoth
-  else if gconf.conf_annot then AnnotationText
+  if (Gconf.get_target_option "annot") && gconf.conf_bin_annot then AnnotationBoth
+  else if (Gconf.get_target_option "annot") then AnnotationText
   else if gconf.conf_bin_annot then AnnotationBin
   else AnnotationNone
 
@@ -395,7 +395,7 @@ let link task_index task bstate task_context dag =
   let funlist = List.fold_left (fun flist (compiledType,compileOpt) ->
       let normal = (link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
           compiledType compileOpt false) in
-      let res = if (is_target_lib target) && compiledType = Native && gconf.conf_library_plugin then
+      let res = if (is_target_lib target) && compiledType = Native && (Gconf.get_target_option "library-plugin") then
           (link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
              compiledType compileOpt true) @ normal
         else normal in

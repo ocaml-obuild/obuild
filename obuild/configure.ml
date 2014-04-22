@@ -12,46 +12,6 @@ exception ConfigurationMissingKey of string
 exception ConfigurationTypeMismatch of string * string * string
 exception ConfigureScriptFailed of string
 
-let set_lib_profiling v () = gconf.conf_library_profiling <- v
-let set_lib_debugging v () = gconf.conf_library_debugging <- v
-let set_exe_profiling v () =
-  gconf.conf_executable_profiling <- v;
-  if v then gconf.conf_library_profiling <- v
-let set_exe_debugging v () =
-  gconf.conf_executable_debugging <- v;
-  if v then gconf.conf_library_debugging <- v
-let set_lib_native v () = gconf.conf_library_native <- v
-let set_lib_plugin v () = gconf.conf_library_plugin <- v;
-  if v then set_lib_native v ()
-let set_lib_bytecode v () = gconf.conf_library_bytecode <- v
-let set_exe_native v () = gconf.conf_executable_native <- v
-let set_exe_bytecode v () = gconf.conf_executable_bytecode <- v
-let set_exe_as_obj v () = gconf.conf_executable_as_obj <- v
-let set_annot v () = gconf.conf_annot <- v
-
-let set_build_examples v () = gconf.conf_build_examples <- v
-let set_build_tests v () = gconf.conf_build_tests <- v
-let set_build_benchs v () = gconf.conf_build_benchs <- v
-
-let all_options = [
-  ("executable-profiling", (fun () -> gconf.conf_executable_profiling), set_exe_profiling);
-  ("executable-debugging", (fun () -> gconf.conf_executable_debugging), set_exe_debugging);
-  ("executable-native", (fun () -> gconf.conf_executable_native), set_exe_native);
-  ("executable-bytecode", (fun () -> gconf.conf_executable_bytecode), set_exe_bytecode);
-  ("executable-as-obj", (fun () -> gconf.conf_executable_as_obj), set_exe_as_obj);
-
-  ("library-profiling", (fun () -> gconf.conf_library_profiling), set_lib_profiling);
-  ("library-debugging", (fun () -> gconf.conf_library_debugging), set_lib_debugging);
-  ("library-native", (fun () -> gconf.conf_library_native), set_lib_native);
-  ("library-bytecode", (fun () -> gconf.conf_library_bytecode), set_lib_bytecode);
-  ("library-plugin", (fun () -> gconf.conf_library_plugin), set_lib_plugin);
-
-  ("build-benchs", (fun () -> gconf.conf_build_benchs), set_build_benchs);
-  ("build-tests", (fun () -> gconf.conf_build_tests), set_build_tests);
-  ("build-examples", (fun () -> gconf.conf_build_examples), set_build_examples);
-  ("annot", (fun () -> gconf.conf_annot), set_annot);
-]
-
 let getDigestKV () =
     let digest = Project.digest () in
     [ ("obuild-digest", digest) ]
@@ -77,7 +37,7 @@ let generateCFile project file flags =
 let makeSetup digestKV project = hashtbl_fromList (
     digestKV
     @ hashtbl_toList project.Analyze.project_ocamlcfg
-    @ (List.map (fun (opt,conf,_) -> (opt, string_of_bool (conf ()))) all_options)
+    @ (List.map (fun (opt,v) -> (opt, string_of_bool v)) (Gconf.get_target_options ()))
     @ List.map (fun (flagname,flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) gconf.conf_user_flags
   )
 
@@ -165,9 +125,9 @@ let bool_of_opt hashtable k =
   try bool_of_string v
   with Failure _ -> raise (ConfigurationTypeMismatch (k,"bool",v))
 
-let set_opts hashtable =
-  (* load the environment *)
-  List.iter (fun (opt,_,set) -> set (bool_of_opt hashtable opt) ()) all_options
+let set_opts hashtable = (* load the environment *)
+  let opts = Gconf.get_target_options_keys () in
+  List.iter (fun k -> Gconf.set_target_options k (bool_of_opt hashtable k)) opts
 
 let run proj_file user_flags =
   Dist.checkOrCreate ();

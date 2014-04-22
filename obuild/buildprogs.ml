@@ -142,7 +142,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
              @ (match linkingMode with
                  | LinkingPlugin    -> ["-shared"]
                  | LinkingLibrary    -> ["-a"]
-                 | LinkingExecutable -> if gconf.conf_executable_as_obj then ["-output-obj"] else [])
+                 | LinkingExecutable -> if (Gconf.get_target_option "executable-as-obj") then ["-output-obj"] else [])
              @ ["-o"; fp_to_string dest]
              @ (match compileType with
                  | Normal    -> []

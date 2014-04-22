@@ -56,10 +56,10 @@ let main () =
         | _   -> raise TooManyArgs
         in
 
-    Configure.set_exe_native !buildNative ();
-    Configure.set_exe_bytecode (not !buildNative) ();
-    Configure.set_exe_profiling (!profiling) ();
-    Configure.set_exe_debugging (!debugging) ();
+    Gconf.set_target_options "executable-native" !buildNative;
+    Gconf.set_target_options "executable-bytecode" (not !buildNative);
+    Gconf.set_target_options "executable-profiling" (!profiling);
+    Gconf.set_target_options "executable-debugging" (!debugging);
 
     let name = Filename.chop_extension main in
     let target =

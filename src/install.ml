@@ -63,7 +63,7 @@ let lib_to_meta proj_file lib =
                ([Pred_Byte]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name));
                ([Pred_Byte; Pred_Plugin]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name));
                ([Pred_Native], fn_to_string (cmca_of_lib Native Normal lib.lib_name))
-             ] @ (if gconf.conf_library_plugin then
+             ] @ (if (Gconf.get_target_option "library-plugin") then
                     [([Pred_Native; Pred_Plugin], fn_to_string (cmxs_of_lib Normal lib.lib_name))]
                   else [])
   } in

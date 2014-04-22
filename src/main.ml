@@ -22,29 +22,31 @@ let configure argv =
     in
     user_flags := tweak :: !user_flags
   in
-
-  let enable_disable_opt opt_name f doc = [
-    ("--enable-" ^ opt_name, Arg.Unit (f true), " enable " ^ doc);
-    ("--disable-" ^ opt_name, Arg.Unit (f false), "disable " ^ doc)
+  let set_target_options field value () =
+    let opt_name = if (List.mem field ["examples"; "benchs"; "tests"]) then ("build-" ^ field) else field in
+    Gconf.set_target_options opt_name value in
+  let enable_disable_opt opt_name doc = [
+    ("--enable-" ^ opt_name, Arg.Unit (set_target_options opt_name true), " enable " ^ doc);
+    ("--disable-" ^ opt_name, Arg.Unit (set_target_options opt_name false), "disable " ^ doc)
   ] in
   let opts = [
     ("--flag", Arg.String user_set_flags, "enable or disable a project's flag");
-    ("--executable-as-obj", Arg.Unit (Configure.set_exe_as_obj true), "output executable as obj file");
-    ("--annot", Arg.Unit (Configure.set_annot true), "generate .annot files")
+    ("--executable-as-obj", Arg.Unit (set_target_options "executable-as-obj" true), "output executable as obj file");
+    ("--annot", Arg.Unit (set_target_options "annot" true), "generate .annot files")
   ] in
   Arg.parse_argv (Array.of_list argv) (
-    enable_disable_opt "library-bytecode" Configure.set_lib_bytecode "library compilation as bytecode"
-    @ enable_disable_opt "library-native" Configure.set_lib_native "library compilation as native"
-    @ enable_disable_opt "library-plugin" Configure.set_lib_plugin "library compilation as native plugin"
-    @ enable_disable_opt "executable-bytecode" Configure.set_exe_bytecode "executable compilation as bytecode"
-    @ enable_disable_opt "executable-native" Configure.set_exe_native "executable compilation as native"
-    @ enable_disable_opt "library-profiling" Configure.set_lib_profiling "library profiling"
-    @ enable_disable_opt "library-debugging" Configure.set_lib_debugging "library debugging"
-    @ enable_disable_opt "executable-profiling" Configure.set_exe_profiling "executable profiling"
-    @ enable_disable_opt "executable-debugging" Configure.set_exe_debugging "executable debugging"
-    @ enable_disable_opt "examples" Configure.set_build_examples "building examples"
-    @ enable_disable_opt "benchs" Configure.set_build_benchs "building benchs"
-    @ enable_disable_opt "tests" Configure.set_build_tests "building tests"
+    enable_disable_opt "library-bytecode" "library compilation as bytecode"
+    @ enable_disable_opt "library-native" "library compilation as native"
+    @ enable_disable_opt "library-plugin" "library compilation as native plugin"
+    @ enable_disable_opt "executable-bytecode" "executable compilation as bytecode"
+    @ enable_disable_opt "executable-native" "executable compilation as native"
+    @ enable_disable_opt "library-profiling" "library profiling"
+    @ enable_disable_opt "library-debugging" "library debugging"
+    @ enable_disable_opt "executable-profiling" "executable profiling"
+    @ enable_disable_opt "executable-debugging" "executable debugging"
+    @ enable_disable_opt "examples" "building examples"
+    @ enable_disable_opt "benchs" "building benchs"
+    @ enable_disable_opt "tests" "building tests"
     @ opts
   ) (fun s -> failwith ("unknown option: " ^ s)) (usageStr "configure");
 
@@ -156,7 +158,7 @@ let mainTest argv =
 
     let proj_file = project_read () in
     Configure.check proj_file false;
-    if not gconf.conf_build_tests then (
+    if not (Gconf.get_target_option "build-tests") then (
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
         exit 1
     );
