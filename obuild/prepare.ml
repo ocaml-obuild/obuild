@@ -218,7 +218,7 @@ let get_modules_desc bstate target toplevelModules =
             verbose Debug "  %s is a generator\n%!" moduleName;
             let actual_src_path = Dist.getBuildDest (Dist.Target target.target_name) in
             let dest_file = filename_of_hier hier actual_src_path in
-            if not (Filesystem.exists dest_file) or
+            if not (Filesystem.exists dest_file) ||
                ((Filesystem.getModificationTime dest_file) < (Filesystem.getModificationTime f)) then begin
               let w = Generators.run (actual_src_path </> directory_of_module (hier_leaf hier)) f in
               print_warnings w

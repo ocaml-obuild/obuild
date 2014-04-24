@@ -6,22 +6,6 @@ type gconf = {
   mutable conf_verbosity : verbosity;
   mutable conf_withopt   : bool;
   mutable conf_strict    : bool;
-  mutable conf_prog_ocamlopt  : string option;
-  mutable conf_prog_ocamlc    : string option;
-  mutable conf_prog_ocaml    : string option;
-  mutable conf_prog_ocamldep  : string option;
-  mutable conf_prog_ocamldoc  : string option;
-  mutable conf_prog_ocamlyacc : string option;
-  mutable conf_prog_ocamllex  : string option;
-  mutable conf_prog_ocamlmklib : string option;
-  mutable conf_prog_ocamlmktop : string option;
-  mutable conf_prog_cc     : string option;
-  mutable conf_prog_ranlib : string option;
-  mutable conf_prog_ar     : string option;
-  mutable conf_prog_ld     : string option;
-  mutable conf_prog_pkgconfig : string option;
-  mutable conf_prog_camlp4 : string option;
-  mutable conf_findlib_path : string option;
   mutable conf_parallel_jobs : int;
   mutable conf_dump_dot : bool;
   mutable conf_color : bool;
@@ -32,6 +16,24 @@ type gconf = {
 }
 
 exception UnknownOption of string
+
+let env_variables = [
+  "ocamlopt"; "ocamlc"; "ocaml"; "ocamldep"; "ocamldoc"; "ocamlyacc"; "ocamllex"; "ocamlmklib";
+  "ocamlmktop"; "cc"; "ranlib"; "ar"; "ld"; "pkg-config"; "camlp4"; "findlib-path"
+]
+
+let env_ =
+  let h : (string,string option) Hashtbl.t = Hashtbl.create (List.length env_variables) in
+  List.iter (fun v -> Hashtbl.add h v None) env_variables;
+  h
+
+let get_env field = try
+    Hashtbl.find env_ field
+  with Not_found -> raise (UnknownOption field)
+
+let set_env field value =
+  if not (Hashtbl.mem env_ field) then raise (UnknownOption field);
+  Hashtbl.replace env_ field (Some value)
 
 let target_options_defaults = [
   ("executable-profiling", false);
@@ -66,30 +68,14 @@ let rec set_target_options field value =
 
 let get_target_options_keys () = hashtbl_keys target_options_
 let get_target_options () = hashtbl_toList target_options_
-let get_target_option field =
-  if not (Hashtbl.mem target_options_ field) then raise (UnknownOption field);
-  Hashtbl.find target_options_ field
+let get_target_option field = try
+    Hashtbl.find target_options_ field
+  with Not_found -> raise (UnknownOption field)
 
 let gconf_defaults = {
   conf_verbosity     = Report;
   conf_withopt       = true;
   conf_strict        = false;
-  conf_prog_ocamlopt = None;
-  conf_prog_ocaml    = None;
-  conf_prog_ocamlc   = None;
-  conf_prog_ocamldep = None;
-  conf_prog_ocamldoc = None;
-  conf_prog_ocamlyacc = None;
-  conf_prog_ocamllex = None;
-  conf_prog_ocamlmklib = None;
-  conf_prog_ocamlmktop = None;
-  conf_prog_cc       = None;
-  conf_prog_ranlib   = None;
-  conf_prog_ar       = None;
-  conf_prog_ld       = None;
-  conf_prog_pkgconfig= None;
-  conf_prog_camlp4   = None;
-  conf_findlib_path  = None;
   conf_parallel_jobs        = 2;
   conf_dump_dot             = false;
   conf_color                = false;

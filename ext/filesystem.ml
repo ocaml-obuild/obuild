@@ -6,26 +6,28 @@ exception UnexpectedFileType of string
 exception WriteFailed
 
 let removeDirContent wpath =
-    let path = fp_to_string wpath in
-    let rec rmdir_recursive f path =
-        let dirhandle = Unix.opendir path in
-        (try
-            while true do
-                let ent = Unix.readdir dirhandle in
-                if String.length ent > 0 && ent.[0] <> '.'
-                    then
-                        let fent = path ^ Filename.dir_sep ^ ent in
-                        match (Unix.lstat fent).Unix.st_kind with
-                        | Unix.S_DIR -> rmdir_recursive (Unix.rmdir) fent
-                        | Unix.S_REG -> Unix.unlink fent
-                        | _          -> raise (UnexpectedFileType fent)
-            done;
-        with End_of_file ->
-            ()
-        );
-        Unix.closedir dirhandle;
-        f path
-        in
+  let path = fp_to_string wpath in
+  let rec rmdir_recursive f path =
+    let dirhandle = Unix.opendir path in
+    (try
+       while true do
+         let ent = Unix.readdir dirhandle in
+         if String.length ent > 0 && ent.[0] <> '.'
+         then
+           let fent = path ^ Filename.dir_sep ^ ent in
+           match (Unix.lstat fent).Unix.st_kind with
+           | Unix.S_DIR -> rmdir_recursive (Unix.rmdir) fent
+           | Unix.S_REG -> Unix.unlink fent
+           | _          -> raise (UnexpectedFileType fent)
+       done;
+     with End_of_file ->
+       ()
+    );
+    Unix.closedir dirhandle;
+    f path
+  in
+  if Sys.file_exists path
+  then
     rmdir_recursive (const ()) path
 
 let removeDir path = removeDirContent path; Unix.rmdir (fp_to_string path); ()

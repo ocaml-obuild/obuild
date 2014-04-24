@@ -273,14 +273,14 @@ let parseGlobalArgs () =
                             | "--debug-with-cmd" -> gconf.conf_verbosity <- DebugPlus; xs
                             | "--silent"  -> gconf.conf_verbosity <- Silent; xs
                             | "--strict"  -> gconf.conf_strict    <- true; xs
-                            | "--findlib-conf" -> expect_param1 x xs (fun p -> gconf.conf_findlib_path <- Some p)
-                            | "--ocamlopt" -> expect_param1 x xs (fun p -> gconf.conf_prog_ocamlopt <- Some p)
-                            | "--ocamldep" -> expect_param1 x xs (fun p -> gconf.conf_prog_ocamldep <- Some p)
-                            | "--ocamlc"   -> expect_param1 x xs (fun p -> gconf.conf_prog_ocamlc <- Some p)
-                            | "--cc"       -> expect_param1 x xs (fun p -> gconf.conf_prog_cc <- Some p)
-                            | "--ar"       -> expect_param1 x xs (fun p -> gconf.conf_prog_ar <- Some p)
-                            | "--pkg-config"-> expect_param1 x xs (fun p -> gconf.conf_prog_pkgconfig <- Some p)
-                            | "--ranlib"   -> expect_param1 x xs (fun p -> gconf.conf_prog_ranlib <- Some p)
+                            | "--findlib-conf" -> expect_param1 x xs (fun p -> Gconf.set_env "findlib-path" p)
+                            | "--ocamlopt" -> expect_param1 x xs (fun p -> Gconf.set_env "ocamlopt" p)
+                            | "--ocamldep" -> expect_param1 x xs (fun p -> Gconf.set_env "ocamldep" p)
+                            | "--ocamlc"   -> expect_param1 x xs (fun p -> Gconf.set_env "ocamlc" p)
+                            | "--cc"       -> expect_param1 x xs (fun p -> Gconf.set_env "cc" p)
+                            | "--ar"       -> expect_param1 x xs (fun p -> Gconf.set_env "ar" p)
+                            | "--pkg-config"-> expect_param1 x xs (fun p -> Gconf.set_env "pkgconfig" p)
+                            | "--ranlib"   -> expect_param1 x xs (fun p -> Gconf.set_env "ranlib" p)
                             | _           -> failwith ("unknown global option: " ^ x)
                             in
                          processGlobalArgs retXs

@@ -10,40 +10,43 @@ exception PkgConfigErrorNoVersion
 exception PkgConfigErrorUnexpectedOutput of string
 exception ProgramNotFound of string
 
-let prog_cache = Hashtbl.create 64
-let getCache prog getNames =
-    try Hashtbl.find prog_cache prog
+let get_cache prog names =
+  let res = Gconf.get_env prog in
+  match res with
+  | Some p -> p
+  | None ->
+    try
+      let syspath = Utils.get_system_paths () in
+      let found = list_findmap (fun n ->
+          if Filename.is_implicit n
+          then (try
+                  let found_path = Utils.find_in_paths syspath (fn n) in
+                  Some (fp_to_string (found_path </> fn n))
+                with Utils.FileNotFoundInPaths _ -> None)
+          else (if Filesystem.exists (fp n) then Some n else None)
+        ) names
+      in
+      Gconf.set_env prog found;
+      found
     with Not_found ->
-        let names = getNames () in
-        try
-            let syspath = Utils.get_system_paths () in
-            list_findmap (fun n ->
-                if Filename.is_implicit n
-                    then (try
-                            let foundPath = Utils.find_in_paths syspath (fn n) in
-                            Some (fp_to_string (foundPath </> fn n))
-                         with Utils.FileNotFoundInPaths _ -> None)
-                    else (if Filesystem.exists (fp n) then Some n else None)
-            ) names
-        with Not_found ->
-            raise (ProgramNotFound prog)
+      raise (ProgramNotFound prog)
         
 
-let getOcamlOpt () = getCache "ocamlopt"   (fun n -> maybe ["ocamlopt.opt"; "ocamlopt"] list_singleton gconf.conf_prog_ocamlopt)
-let getOcamlC   () = getCache "ocamlc"     (fun n -> maybe ["ocamlc.opt"; "ocamlc"] list_singleton gconf.conf_prog_ocamlc)
-let getOcamlDep () = getCache "ocamldep"   (fun n -> maybe ["ocamldep.opt"; "ocamldep"] list_singleton gconf.conf_prog_ocamldep)
-let getOcamlDoc () = getCache "ocamldoc"   (fun n -> maybe ["ocamldoc.opt"; "ocamldoc"] list_singleton gconf.conf_prog_ocamldoc)
-let getOcamlYacc ()= getCache "ocamlyacc"  (fun n -> maybe ["ocamlyacc"] list_singleton gconf.conf_prog_ocamlyacc)
-let getOcamlLex () = getCache "ocamllex"   (fun n -> maybe ["ocamllex.opt"; "ocamllex"] list_singleton gconf.conf_prog_ocamllex)
-let getOcamlMklib () = getCache "ocamlmklib" (fun n -> maybe ["ocamlmklib"] list_singleton gconf.conf_prog_ocamlmklib)
-let getCamlp4   () = getCache "camlp4"     (fun n -> maybe ["camlp4"] list_singleton gconf.conf_prog_camlp4)
-let getCC       () = getCache "cc"         (fun n -> [ default "gcc" gconf.conf_prog_cc])
-let getRanlib   () = getCache "ranlib"     (fun n -> [ default "ranlib" gconf.conf_prog_ranlib])
-let getAR       () = getCache "ar"         (fun n -> [ default "ar" gconf.conf_prog_ar])
-let getLD       () = getCache "ld"         (fun n -> [ default "ld" gconf.conf_prog_ld])
-let getPkgConfig() = getCache "pkg-config" (fun n -> [ default "pkg-config" gconf.conf_prog_pkgconfig])
-let getOcaml () = getCache "ocaml" (fun n -> maybe ["ocaml"] list_singleton gconf.conf_prog_ocaml)
-let getOcamlMktop () = getCache "ocamlmktop" (fun n -> maybe ["ocamlmktop"] list_singleton gconf.conf_prog_ocamlmktop)
+let getOcamlOpt () = get_cache "ocamlopt" ["ocamlopt.opt"; "ocamlopt"]
+let getOcamlC   () = get_cache "ocamlc" ["ocamlc.opt"; "ocamlc"]
+let getOcamlDep () = get_cache "ocamldep" ["ocamldep.opt"; "ocamldep"]
+let getOcamlDoc () = get_cache "ocamldoc" ["ocamldoc.opt"; "ocamldoc"]
+let getOcamlYacc ()= get_cache "ocamlyacc" ["ocamlyacc"]
+let getOcamlLex () = get_cache "ocamllex" ["ocamllex.opt"; "ocamllex"]
+let getOcamlMklib () = get_cache "ocamlmklib" ["ocamlmklib"]
+let getCamlp4   () = get_cache "camlp4" ["camlp4"]
+let getCC       () = get_cache "cc" ["gcc"]
+let getRanlib   () = get_cache "ranlib" ["ranlib"]
+let getAR       () = get_cache "ar" ["ar"]
+let getLD       () = get_cache "ld" ["ld"]
+let getPkgConfig() = get_cache "pkg-config" ["pkg-config"]
+let getOcaml () = get_cache "ocaml" ["ocaml"]
+let getOcamlMktop () = get_cache "ocamlmktop" ["ocamlmktop"]
 
 let getOcamlVersion () =
     match Process.run [ getOcamlOpt (); "-vnum" ] with
