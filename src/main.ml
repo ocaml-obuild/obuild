@@ -17,6 +17,7 @@ let project_read () =
 
 let configure argv =
   let user_flags = ref [] in
+  let user_opts = ref [] in
   let user_set_flags s =
     let tweak = if string_startswith "-" s then ClearFlag (string_drop 1 s) else SetFlag s
     in
@@ -24,7 +25,8 @@ let configure argv =
   in
   let set_target_options field value () =
     let opt_name = if (List.mem field ["examples"; "benchs"; "tests"]) then ("build-" ^ field) else field in
-    Gconf.set_target_options opt_name value in
+    user_opts := (opt_name,value) :: !user_opts
+  in
   let enable_disable_opt opt_name doc = [
     ("--enable-" ^ opt_name, Arg.Unit (set_target_options opt_name true), " enable " ^ doc);
     ("--disable-" ^ opt_name, Arg.Unit (set_target_options opt_name false), "disable " ^ doc)
@@ -53,7 +55,7 @@ let configure argv =
   FindlibConf.load ();
   let proj_file = Project.read gconf.conf_strict in
   verbose Report "Configuring %s-%s...\n" proj_file.Project.name proj_file.Project.version;
-  Configure.run proj_file !user_flags;
+  Configure.run proj_file !user_flags !user_opts;
   (* check build deps of everything buildables *)
   ()
 

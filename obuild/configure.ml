@@ -129,21 +129,28 @@ let set_opts hashtable = (* load the environment *)
   let opts = Gconf.get_target_options_keys () in
   List.iter (fun k -> Gconf.set_target_options k (bool_of_opt hashtable k)) opts
 
-let run proj_file user_flags =
+let run proj_file user_flags user_opts =
   Dist.checkOrCreate ();
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
   let configure = try Some (Dist.read_configure ()) with _ -> None in
   let configure_flags = match configure with
     | None -> []
-    | Some h -> get_flags h in
+    | Some h ->
+      (* set opts and return the flags *)
+      Hashtbl.iter (fun k v ->
+          if not (string_startswith "flag-" k) then
+            Gconf.set_target_options k (bool_of_opt h k)
+        ) h;
+      get_flags h in
   (* user_flags needs to be set before calling Analyze.prepare *)
   let flags = get_flags_value proj_file configure_flags user_flags in
   verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
   gconf.conf_user_flags <- flags;
-
   check_extra_tools proj_file;
   let project = Analyze.prepare proj_file in
+  (* let's set the user opts before saving the setup file *)
+  List.iter (fun (o,v) -> Gconf.set_target_options o v) user_opts;
   let currentSetup = makeSetup digestKV project in
   let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
   let projectSystemChanged = match actualSetup with
