@@ -34,11 +34,11 @@ let generateCFile project file flags =
         ) flags;
     )
 
-let makeSetup digestKV project = hashtbl_fromList (
+let makeSetup digestKV project flags = hashtbl_fromList (
     digestKV
     @ hashtbl_toList project.Analyze.project_ocamlcfg
-    @ (List.map (fun (opt,v) -> (opt, string_of_bool v)) (Gconf.get_target_options ()))
-    @ List.map (fun (flagname,flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) gconf.conf_user_flags
+    @ List.map (fun (opt,v) -> (opt, string_of_bool v)) (Gconf.get_target_options ())
+    @ List.map (fun (flagname,flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) flags
   )
 
 let sanityCheck setup =
@@ -143,15 +143,13 @@ let run proj_file user_flags user_opts =
             Gconf.set_target_options k (bool_of_opt h k)
         ) h;
       get_flags h in
-  (* user_flags needs to be set before calling Analyze.prepare *)
   let flags = get_flags_value proj_file configure_flags user_flags in
   verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
-  gconf.conf_user_flags <- flags;
   check_extra_tools proj_file;
-  let project = Analyze.prepare proj_file in
+  let project = Analyze.prepare proj_file flags in
   (* let's set the user opts before saving the setup file *)
   List.iter (fun (o,v) -> Gconf.set_target_options o v) user_opts;
-  let currentSetup = makeSetup digestKV project in
+  let currentSetup = makeSetup digestKV project flags in
   let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
   let projectSystemChanged = match actualSetup with
     | None     -> true
@@ -192,21 +190,18 @@ let check proj_file reconf =
   );
   (* user_flags are also restored from setup file *)
   let setup_flags = get_flags setup in
-  gconf.conf_user_flags <- setup_flags;
+  let flags = get_flags_value proj_file setup_flags [] in
   (* .obuild changed, maybe we should compare a little bit deeper to not retriggerd reconf too often ... *)
   if reconfigure then begin
     (* let's call configure-script if available, however we don't care about the content of dist/configure *)
     execute_configure_script proj_file;
-    (* user_flags needs to be set before calling Analyze.prepare *)
-    let flags = get_flags_value proj_file setup_flags [] in
     verbose Debug "  configure flag: [%s]\n" (Utils.showList "," (fun (n,v) -> n^"="^string_of_bool v) flags);
-    gconf.conf_user_flags <- flags;
     check_extra_tools proj_file;
-    let project = Analyze.prepare proj_file in
+    let project = Analyze.prepare proj_file flags in
     create_dist project flags;
     (* write setup file *)
     verbose Verbose "Writing new setup\n%!";
-    let current_setup = makeSetup digestKV project in
+    let current_setup = makeSetup digestKV project flags in
     Dist.write_setup current_setup
   end;
-  ()
+  flags

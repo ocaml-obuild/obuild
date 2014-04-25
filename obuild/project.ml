@@ -581,14 +581,13 @@ let find_flag name projFile =
     try Some (List.find (fun fl -> fl.flag_name = name) projFile.flags)
     with Not_found -> None
 
-let get_all_buildable_targets projFile =
-    List.filter (fun target ->
-        match target.target_buildable with
-        | BoolConst t    -> t
-        | BoolVariable v ->
-            try List.assoc v gconf.conf_user_flags
-            with Not_found -> raise (UnknownFlag v)
-    ) (get_all_targets projFile)
+let get_all_buildable_targets proj_file user_flags =
+  List.filter (fun target -> match target.target_buildable with
+      | BoolConst t    -> t
+      | BoolVariable v ->
+        try List.assoc v user_flags
+        with Not_found -> raise (UnknownFlag v)
+    ) (get_all_targets proj_file)
 
 exception LibraryNotFound of lib_name
 exception ExecutableNotFound of exe_name

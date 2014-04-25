@@ -130,7 +130,7 @@ let readOcamlMkConfig filename =
 
 (* get all the dependencies required
  * and prepare the global bstate.of value *)
-let prepare projFile =
+let prepare projFile user_flags =
     verbose Verbose "analyzing project\n%!";
     let ocamlCfg = Prog.getOcamlConfig () in
     let ocamlMkCfg = readOcamlMkConfig (Hashtbl.find ocamlCfg "standard_library") in
@@ -153,7 +153,7 @@ let prepare projFile =
         )
         in
 
-    let allTargets = Project.get_all_buildable_targets projFile in
+    let allTargets = Project.get_all_buildable_targets projFile user_flags in
 
     let internalLibs = List.map (fun lib -> lib.Project.lib_name.lib_main_name) projFile.Project.libs in
     let isInternal lib = List.mem lib.lib_main_name internalLibs in

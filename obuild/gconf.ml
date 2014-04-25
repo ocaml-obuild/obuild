@@ -4,12 +4,10 @@ type verbosity = Silent | Report | Verbose | Debug | DebugPlus
 
 type gconf = {
   mutable conf_verbosity : verbosity;
-  mutable conf_withopt   : bool;
   mutable conf_strict    : bool;
   mutable conf_parallel_jobs : int;
   mutable conf_dump_dot : bool;
   mutable conf_color : bool;
-  mutable conf_user_flags : (string * bool) list; (* TODO moved not as global variable *)
   mutable conf_bin_annot : bool;
   mutable conf_short_path : bool;
   mutable conf_ocamlmklib : bool;
@@ -74,12 +72,10 @@ let get_target_option field = try
 
 let gconf_defaults = {
   conf_verbosity     = Report;
-  conf_withopt       = true;
   conf_strict        = false;
   conf_parallel_jobs        = 2;
   conf_dump_dot             = false;
   conf_color                = false;
-  conf_user_flags           = [];
   conf_bin_annot            = true;
   conf_short_path           = false;
   conf_ocamlmklib           = true;

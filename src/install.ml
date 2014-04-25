@@ -30,10 +30,10 @@ let list_exe_files lib build_dir = list_target_files_pred lib (fun f ->
     | Filetype.FileEXE -> true
     | _                -> false)
 
-let opam_install_file proj_file =
+let opam_install_file proj_file flags =
   let install_path = fp (proj_file.name ^ ".install") in
   Utils.generateFile install_path (fun add ->
-      let all_targets = Project.get_all_buildable_targets proj_file in
+      let all_targets = Project.get_all_buildable_targets proj_file flags in
       let print_target_files target list_files_fun =
         let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
         let (_, files) = list_files_fun target build_dir in

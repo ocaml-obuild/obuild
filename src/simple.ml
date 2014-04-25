@@ -110,7 +110,7 @@ let main () =
             let _ = Dist.createBuildDest (Dist.Autogen) in
             let buildDir = Dist.createBuildDest (Dist.Target exe.exe_target.target_name) in
             FindlibConf.load ();
-            let project = Analyze.prepare project_config in
+            let project = Analyze.prepare project_config [] in
             let bstate = Prepare.init project in
             Build.build_exe bstate exe;
             let files = Build.get_destination_files exe.exe_target in

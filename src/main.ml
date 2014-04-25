@@ -71,8 +71,8 @@ let mainBuild argv =
 
   FindlibConf.load ();
   let proj_file = project_read () in
-  Configure.check proj_file true;
-  let project = Analyze.prepare proj_file in
+  let flags = Configure.check proj_file true in
+  let project = Analyze.prepare proj_file flags in
   let bstate = Prepare.init project in
 
   let dag = match !anon with
@@ -136,7 +136,7 @@ let mainInstall argv =
     (usageStr "install");
 
   let proj_file = project_read () in
-  Configure.check proj_file false;
+  let flags = Configure.check proj_file false in
   FindlibConf.load ();
   let dest_dir =
     (if !dest_dir = ""
@@ -149,7 +149,7 @@ let mainInstall argv =
   (* install all the libs *)
   Install.install_libs proj_file dest_dir !opam_install;
   if !opam_install then
-    Install.opam_install_file proj_file
+    Install.opam_install_file proj_file flags
 
 let mainTest argv =
     let showTest = ref false in
@@ -159,7 +159,7 @@ let mainTest argv =
            (usageStr "test");
 
     let proj_file = project_read () in
-    Configure.check proj_file false;
+    let _ = Configure.check proj_file false in
     if not (Gconf.get_target_option "build-tests") then (
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
         exit 1
