@@ -193,7 +193,12 @@ let get_modules_desc bstate target toplevelModules =
         let modules = Filesystem.list_dir_pred_map (fun f ->
             let fp = srcDir </> f in
             if Filesystem.is_dir fp
-            then Some (module_of_directory f)
+            then
+              (* Should avoid directory such as .git/.svn etc. *)
+              if not (Modname.string_all Modname.char_is_valid_modchar (fn_to_string f)) then
+                None
+              else
+                Some (module_of_directory f)
             else (match Filetype.get_extension_path fp with
                 | Filetype.FileML  -> Some (module_of_filename f)
                 | Filetype.FileOther s -> if Generators.is_generator_ext s then Some (module_of_filename f)
