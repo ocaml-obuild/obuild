@@ -10,6 +10,13 @@ open Obuild
 let programName = "obuild"
 let usageStr cmd = "\nusage: " ^ programName ^ " " ^ cmd ^ " <options>\n\noptions:\n"
 
+let read_setup () =
+  FindlibConf.load ();
+  let setup = Dist.read_setup () in
+  (* all_options are restored from setup file *)
+  Configure.set_opts setup;
+  setup
+
 let project_read () =
   try Project.read gconf.conf_strict
   with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn);
@@ -69,9 +76,10 @@ let mainBuild argv =
   ] in
   Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
-  FindlibConf.load ();
+  Dist.checkOrFail ();
+  let setup = read_setup () in
   let proj_file = project_read () in
-  let flags = Configure.check proj_file true in
+  let flags = Configure.check proj_file true setup in
   let project = Analyze.prepare proj_file flags in
   let bstate = Prepare.init project in
 
@@ -135,9 +143,10 @@ let mainInstall argv =
   ] (fun s -> failwith ("unknown option: " ^ s))
     (usageStr "install");
 
+  Dist.checkOrFail ();
+  let setup = read_setup () in
   let proj_file = project_read () in
-  let flags = Configure.check proj_file false in
-  FindlibConf.load ();
+  let flags = Configure.check proj_file false setup in
   let dest_dir =
     (if !dest_dir = ""
      then (match FindlibConf.get_destdir () with
@@ -158,8 +167,9 @@ let mainTest argv =
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "test");
 
+    let setup = read_setup () in
     let proj_file = project_read () in
-    let _ = Configure.check proj_file false in
+    let _ = Configure.check proj_file false setup in
     if not (Gconf.get_target_option "build-tests") then (
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
         exit 1

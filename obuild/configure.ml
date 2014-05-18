@@ -166,9 +166,7 @@ let run proj_file user_flags user_opts =
     Dist.write_setup currentSetup
   )
 
-let check proj_file reconf =
-  Dist.checkOrFail ();
-  let setup = Dist.read_setup () in
+let check proj_file reconf setup =
   let ocamlCfg = Prog.getOcamlConfig () in
   let digestKV = getDigestKV () in
   (* check if the environment changed. *)
@@ -178,8 +176,6 @@ let check proj_file reconf =
       comparekvs "digest" setup digestKV;
       false
     with e -> if reconf then true else raise e in
-  (* all_options are restored from setup file *)
-  set_opts setup;
   let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
   (match ver with
    | major::minor::_-> (
