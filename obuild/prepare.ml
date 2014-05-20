@@ -177,7 +177,7 @@ let get_modules_desc bstate target toplevelModules =
         pp_some preproc (archive :: camlp4Strs)
     ) in
 
-  let module_lookup_method = filename_of_hier::generators_of_hier @ [directory_of_hier] in
+  let module_lookup_method = filename_of_hier::generators_of_hier @ [directory_of_hier; interface_of_hier] in
   let get_one hier =
     let moduleName = hier_to_string hier in
     verbose Verbose "Analysing %s\n%!" moduleName;
@@ -231,7 +231,7 @@ let get_modules_desc bstate target toplevelModules =
             actual_src_path
         in
         let srcFile = filename_of_hier hier srcPath in
-        let intfFile = interface_of_hier srcPath hier in
+        let intfFile = interface_of_hier hier srcPath in
         let modTime = Filesystem.getModificationTime srcFile in
         let hasInterface = Filesystem.exists intfFile in
         let intfModTime = Filesystem.getModificationTime intfFile in
@@ -263,7 +263,8 @@ let get_modules_desc bstate target toplevelModules =
         verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string allDeps));
         let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
             try
-              let _ = Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun x -> x (hier_of_modname dep)) module_lookup_method)
+              let _ = Utils.find_choice_in_paths (file_search_paths hier)
+                  (List.map (fun x -> x (hier_of_modname dep)) module_lookup_method)
               in true
             with
               Utils.FilesNotFoundInPaths _ -> false
@@ -355,11 +356,16 @@ let prepare_target_ bstate buildDir target toplevelModules =
       List.iter (fun m ->
           let mdep = Hashtbl.find modulesDeps m in
           let mStep = match mdep.module_ty with
-            | DescFile _ ->
-              if module_has_interface mdep then (
-                Dag.addEdge (CompileModule m) (CompileInterface m) stepsDag;
-              );
-              CompileModule m
+            | DescFile f ->
+              (* if it is a .mli only module ... *)
+              if not ((Filesystem.exists f.module_src_path)) && (f.module_file_type = SimpleModule) then
+                CompileInterface m
+              else begin
+                if module_has_interface mdep then (
+                  Dag.addEdge (CompileModule m) (CompileInterface m) stepsDag;
+                );
+                CompileModule m
+              end
             | DescDir descdir ->
               let mStep = CompileDirectory m in
               List.iter (fun dirChild ->

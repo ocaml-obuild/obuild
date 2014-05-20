@@ -40,7 +40,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
         match buildMode with
         | Interface ->
             (Prog.getOcamlC ()
-            ,interface_of_hier dirSpec.src_dir modhier
+            ,interface_of_hier modhier dirSpec.src_dir
             ,cmi_of_hier dstDir modhier
             )
         | Compiled ct ->

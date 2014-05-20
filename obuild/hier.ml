@@ -100,7 +100,7 @@ let directory_of_hier hier prefix_path = get_dirpath prefix_path hier
 let generators_of_hier = List.map (fun gen hier prefix_path ->
     get_filepath prefix_path hier (Filetype.FileOther gen.Generators.suffix)
   ) !Generators.generators
-let interface_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileMLI
+let interface_of_hier hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
 
 let cmx_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMX
 let cmo_of_hier prefix_path hier = get_filepath prefix_path hier Filetype.FileCMO
