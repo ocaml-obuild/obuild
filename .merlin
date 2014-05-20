@@ -1,3 +1,4 @@
+PRJ obuild
 PKG unix
 S ext
 S src
