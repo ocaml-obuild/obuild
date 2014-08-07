@@ -1,6 +1,5 @@
 open Printf
 open Helper
-open Modname
 open Ext.Filepath
 open Types
 
@@ -20,7 +19,7 @@ let show exn =
         exit 3
     | Project.ModuleDoesntExist (t,m) ->
         error "project is referencing in '%s', a module %s that cannot be found\n"
-                (Target.get_target_name t) (Hier.hier_to_string m);
+                (Target.get_target_name t) (Hier.to_string m);
         exit 3
     | Project.ModuleListEmpty l ->
         error "library %s doesn't have any modules defined.\n" (lib_name_to_string l);
@@ -67,14 +66,14 @@ let show exn =
     | Analyze.SublibraryDoesntExists dep ->
         error "dependency %s not found\n" (lib_name_to_string dep); exit 4
     (* build related failure *)
-    | Prepare.ModuleDependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.hier_to_string m); exit 5
+    | Prepare.ModuleDependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.to_string m); exit 5
     | Prepare.ModuleNotFound (paths,m) ->
-        error "module not found %s - search paths:\n" (Hier.hier_to_string m);
+        error "module not found %s - search paths:\n" (Hier.to_string m);
         List.iter (fun path -> eprintf "\t%s\n" (fp_to_string path)) paths;
         exit 5
     | Prepare.ModuleDependenciesProblem l ->
         error "cyclic dependency detected. cannot infer dependencies between modules:\n";
-        eprintf "\t%s\n" (Utils.showList ", " Hier.hier_to_string l);
+        eprintf "\t%s\n" (Utils.showList ", " Hier.to_string l);
         exit 5
     | Build.CompilationFailed e       -> eprintf "\n%s\n%!" e; exit 6
     | Build.CCompilationFailed e      -> eprintf "\n%s\n%!" e; exit 6

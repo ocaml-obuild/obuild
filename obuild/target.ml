@@ -1,10 +1,8 @@
 open Ext.Filepath
 open Ext.Fugue
-open Modname
 open Types
 open Gconf
 open Dependencies
-open Hier
 
 type target_type = Lib | Exe | Test | Bench
 type target_stdlib = Stdlib_None | Stdlib_Standard | Stdlib_Core
@@ -28,7 +26,7 @@ type target_obits =
     ; target_builddeps : dependency list
     ; target_oflags    : string list
     ; target_pp        : Pp.pp_type option
-    ; target_extradeps : (hier * hier) list
+    ; target_extradeps : (Hier.t * Hier.t) list
     ; target_stdlib    : target_stdlib
     }
 

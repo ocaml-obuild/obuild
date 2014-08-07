@@ -3,7 +3,6 @@ open Ext.Filepath
 open Ext
 open Types
 open Printf
-open Hier
 open Target
 open Dependencies
 open Gconf
@@ -14,7 +13,7 @@ exception InvalidConfFile of string
 exception MissingField of string
 exception UnknownDependencyName of string
 exception UnsupportedFutureVersion of int
-exception ModuleDoesntExist of target * hier
+exception ModuleDoesntExist of target * Hier.t
 exception ModuleListEmpty of lib_name
 exception FileDoesntExist of target * filename
 exception LicenseFileDoesntExist of filepath
@@ -28,7 +27,7 @@ type obuild_lib =
     { lib_name        : lib_name
     ; lib_description : string
     ; lib_target      : target
-    ; lib_modules     : hier list
+    ; lib_modules     : Hier.t list
     ; lib_pack        : bool
     ; lib_syntax      : bool
     ; lib_subs        : obuild_lib list
@@ -230,7 +229,7 @@ let parse strict lines =
         List.map parseDependency (Utils.parseCSV value)
         in
     let parseModuleName value =
-        let wrap_module_nice s = hier [(Modname.wrap (String.capitalize s))] in
+        let wrap_module_nice s = Hier.make [(Modname.wrap (String.capitalize s))] in
         List.map wrap_module_nice (Utils.parseCSV value)
         in
     let parseFilenames value = List.map fn (Utils.parseCSV value) in
@@ -239,7 +238,7 @@ let parse strict lines =
         List.map (fun v ->
             match string_words v with
             | [h1; "then"; h2] | [h1; "before"; h2] | [h1; "->"; h2] | [h1; h2] ->
-                (hier_of_string h1, hier_of_string h2)
+                (Hier.of_string h1, Hier.of_string h2)
             | _              -> raise (UnknownExtraDepFormat v)
         ) vs
         in
@@ -552,7 +551,7 @@ let write file proj =
             add "\n";
             add (sprintf "%slibrary %s\n" iStrSection (lib_name_to_string lib.lib_name));
             let iStr = iStrSection ^ "  " in
-            add (sprintf "%smodules: %s\n" iStr (Utils.showList "," hier_to_string lib.lib_modules));
+            add (sprintf "%smodules: %s\n" iStr (Utils.showList "," Hier.to_string lib.lib_modules));
             if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);
             if lib.lib_syntax then add (sprintf "%ssyntax: %b\n" iStr lib.lib_syntax);
             if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);

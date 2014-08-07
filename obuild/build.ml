@@ -9,7 +9,6 @@ open Analyze
 open Target
 open Prepare
 open Gconf
-open Hier
 open Buildprogs
 open Dependencies
 open Pp
@@ -140,12 +139,12 @@ let compile_c task_index task c_file bstate task_context dag =
 (* compile a set of modules in directory into a pack *)
 let compile_directory task_index task h task_context dag =
   let (cstate,target) = Hashtbl.find task_context task in
-  let pack_opt = hier_parent h in
+  let pack_opt = Hier.parent h in
   (* get all the modules defined at level h+1 *)
   let modules_task = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [task] in
-  let filter_modules t : hier option = match t with
+  let filter_modules t : Hier.t option = match t with
     | (CompileC _) | (CompileInterface _) | (LinkTarget _) | (CheckTarget _) -> None
-    | (CompileDirectory m) | (CompileModule m) -> if hier_lvl m = (hier_lvl h + 1) then Some m else None
+    | (CompileDirectory m) | (CompileModule m) -> if Hier.lvl m = (Hier.lvl h + 1) then Some m else None
   in
   let modules = List.rev $ list_filter_map filter_modules modules_task in
   let all_modes = get_all_modes target in
@@ -156,9 +155,9 @@ let compile_directory task_index task h task_context dag =
     let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) all_modes in
     (List.map (fun pair_list ->
          List.map (fun (build_mode, comp_opt) ->
-             let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) h) in
+             let dest = (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
              let mdeps = List.map (fun m ->
-                 (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) m)) modules in
+                 (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) m)) modules in
              let dir = cstate.compilation_builddir_ml comp_opt in
              let fcompile = (fun () -> runOcamlPack dir dir annot_mode build_mode pack_opt h modules) in
              match check_destination_valid_with mdeps cstate dest with
@@ -177,7 +176,7 @@ let compile_directory task_index task h task_context dag =
   in
   if ops <> [] then (
     let (nb_step,nb_step_len) = get_nb_step dag in
-    verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nb_step_len task_index nb_step (hier_to_string h) reason;
+    verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nb_step_len task_index nb_step (Hier.to_string h) reason;
     Scheduler.AddTask (task, ops)
   ) else
     Scheduler.FinishTask task
@@ -195,23 +194,23 @@ let dep_descs is_intf hdesc bstate cstate target h =
       | Some intf -> intf
     in
     List.map (fun comp_opt ->
-        let dest = (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) h) in
+        let dest = (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
         let src  = [ (FileMLI, intf_desc.module_intf_path) ] in
         let m_deps = List.map (fun module_dep ->
-            (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
+            (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
         let internal_deps = List.assoc (comp_opt,ByteCode) internal_libs_paths_all_modes in
         (dest,Interface,comp_opt, src @ internal_deps @ m_deps)
       ) compile_opts
   ) else (
     List.map (fun (compiled_ty, comp_opt) ->
         let file_compile_ty = buildmode_to_filety compiled_ty in
-        let dest = (file_compile_ty, cmc_of_hier compiled_ty (cstate.compilation_builddir_ml comp_opt) h) in
+        let dest = (file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) h) in
         let src = (match hdesc.module_intf_desc with
               None -> []
             | Some intf -> [FileMLI,intf.module_intf_path]) @ [(FileML, hdesc.module_src_path)] in
         let m_deps = List.concat (List.map (fun module_dep ->
-            [(file_compile_ty, cmc_of_hier compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
-             (FileCMI, cmi_of_hier (cstate.compilation_builddir_ml comp_opt) module_dep)]
+            [(file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
+             (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)]
           ) module_deps) in
         let internal_deps = List.assoc (comp_opt,compiled_ty) internal_libs_paths_all_modes in
         (dest,Compiled compiled_ty,comp_opt,src @ internal_deps @ m_deps)
@@ -222,14 +221,14 @@ let dep_descs is_intf hdesc bstate cstate target h =
 let compile_module task_index task is_intf h bstate task_context dag =
   let all = Hashtbl.find_all task_context task in
   let process_one_target cstate target =
-    let pack_opt = hier_parent h in
+    let pack_opt = Hier.parent h in
     let hdesc =
       let desc = Hashtbl.find cstate.compilation_modules h in
       match desc.module_ty with
       | DescFile z -> z
       | DescDir _  ->
         failwith (sprintf "internal error compile module on directory (%s). steps dag internal error"
-                    (hier_to_string h))
+                    (Hier.to_string h))
     in
     let src_path = path_dirname hdesc.module_src_path in
     let use_thread = hdesc.module_use_threads in
@@ -245,7 +244,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
       | (dest,build_mode,comp_opt,srcs) :: xs ->
         let r_dir_spec = {
           dir_spec with
-          dst_dir = cstate.compilation_builddir_ml comp_opt <//> hier_to_dirpath h;
+          dst_dir = cstate.compilation_builddir_ml comp_opt <//> Hier.to_dirpath h;
           include_dirs = cstate.compilation_include_paths comp_opt h
         } in
         let fcompile =
@@ -284,7 +283,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
 
     let verb = if is_intf then "Intfing" else "Compiling" in
     let (nb_step, nb_step_len) = get_nb_step dag in
-    verbose Report "[%*d of %d] %s %-.30s%s\n%!" nb_step_len task_index nb_step verb (hier_to_string h)
+    verbose Report "[%*d of %d] %s %-.30s%s\n%!" nb_step_len task_index nb_step verb (Hier.to_string h)
       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
     Scheduler.AddTask (task, all_fun_lists)
 
@@ -348,7 +347,7 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
   let destTime = Filesystem.getModificationTime dest in
   let depsTime =
     try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p)
-                (List.map (fun m -> cmc_of_hier compiledType (cstate.compilation_builddir_ml compileOpt) m)
+                (List.map (fun m -> Hier.to_cmc compiledType (cstate.compilation_builddir_ml compileOpt) m)
                    compiled))
     with Not_found -> None
   in
@@ -366,7 +365,7 @@ let link task_index task bstate task_context dag =
   let (cstate,target) = Hashtbl.find task_context task in
   let cbits = target.target_cbits in
   let compiled = get_compilation_order cstate in
-  verbose Debug "  compilation order: %s\n" (Utils.showList "," hier_to_string compiled);
+  verbose Debug "  compilation order: %s\n" (Utils.showList "," Hier.to_string compiled);
   let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
   verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
   let selfLibDirs = List.map (fun dep -> Dist.getBuildDest (Dist.Target (LibName dep))) selfDeps in
@@ -472,7 +471,7 @@ let compile (bstate: build_state) task_context dag =
 
 let build_exe bstate exe =
   let target = Project.exe_to_target exe in
-  let modules = [hier_of_filename exe.Project.exe_main] in
+  let modules = [Hier.of_filename exe.Project.exe_main] in
   let task_context = Hashtbl.create 64 in
   let build_dir = Dist.createBuildDest (Dist.Target target.target_name) in
   let cstate = prepare_target bstate build_dir target modules in
@@ -501,19 +500,19 @@ let build_dag bstate proj_file targets_dag =
        let cur_dag = (match ntask with
         | ExeName name   ->
           let exe = Project.find_exe proj_file name in
-          prepare_state (Project.exe_to_target exe) [hier_of_filename exe.Project.exe_main]
+          prepare_state (Project.exe_to_target exe) [Hier.of_filename exe.Project.exe_main]
         | LibName name   ->
           let lib = Project.find_lib proj_file name in
           prepare_state (Project.lib_to_target lib) lib.Project.lib_modules
         | BenchName name ->
           let bench = Project.find_bench proj_file name in
-          prepare_state (Project.bench_to_target bench) [hier_of_filename bench.Project.bench_main]
+          prepare_state (Project.bench_to_target bench) [Hier.of_filename bench.Project.bench_main]
         | TestName name  ->
           let test = Project.find_test proj_file name in
-          prepare_state (Project.test_to_target test) [hier_of_filename test.Project.test_main]
+          prepare_state (Project.test_to_target test) [Hier.of_filename test.Project.test_main]
         | ExampleName name ->
           let example = Project.find_example proj_file name in
-          prepare_state (Project.example_to_target example) [hier_of_filename example.Project.example_main]
+          prepare_state (Project.example_to_target example) [Hier.of_filename example.Project.example_main]
        ) in
        if (Hashtbl.mem targets_deps ntask) then begin
          let children = Dag.getLeaves cur_dag in

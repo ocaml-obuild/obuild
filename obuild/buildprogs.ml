@@ -10,8 +10,6 @@ open Analyze
 open Target
 open Prepare
 open Gconf
-open Modname
-open Hier
 open Pp
 
 exception LinkingFailed of string
@@ -23,7 +21,7 @@ type linking_mode = LinkingLibrary | LinkingPlugin | LinkingExecutable
 
 type annotation_mode = AnnotationNone | AnnotationBin | AnnotationText | AnnotationBoth
 
-type packopt = hier option
+type packopt = Hier.t option
 
 let annotToOpts annotMode =
     match annotMode with
@@ -40,13 +38,13 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
         match buildMode with
         | Interface ->
             (Prog.getOcamlC ()
-            ,interface_of_hier modhier dirSpec.src_dir
-            ,cmi_of_hier dstDir modhier
+            ,Hier.to_interface modhier dirSpec.src_dir
+            ,Hier.to_cmi dstDir modhier
             )
         | Compiled ct ->
             ((if ct = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt ())
-            ,filename_of_hier modhier dirSpec.src_dir
-            ,cmc_of_hier ct dstDir modhier
+            ,Hier.to_filename modhier dirSpec.src_dir
+            ,Hier.to_cmc ct dstDir modhier
             )
         in
     let args = [prog]
@@ -61,7 +59,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
              @ annotToOpts annotMode
              @ oflags
              @ pp_to_params pp
-             @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; hier_to_string x ] else []) packopt
+             @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else []) packopt
              @ (if gconf.conf_short_path then [ "-short-paths" ] else [])
 
              @ ["-o"; fp_to_string dstFile ]
@@ -73,10 +71,10 @@ let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
     Filesystem.mkdirSafeRecursive dstDir 0o755;
     let args = [prog]
-             @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; hier_to_string x ] else []) packOpt
+             @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; Hier.to_string x ] else []) packOpt
              @ annotToOpts annotMode
-             @ [ "-pack"; "-o"; fp_to_string (cmc_of_hier buildMode dstDir dest); ]
-             @ List.map (fun m -> fp_to_string (cmc_of_hier buildMode srcDir m)) modules
+             @ [ "-pack"; "-o"; fp_to_string (Hier.to_cmc buildMode dstDir dest); ]
+             @ List.map (fun m -> fp_to_string (Hier.to_cmc buildMode srcDir m)) modules
         in
     Process.create args
 
@@ -84,7 +82,7 @@ let runOcamlInfer srcDir includes pp modname =
     let args = [Prog.getOcamlC (); "-i"]
              @ pp_to_params pp
              @ (Utils.to_include_path_options includes)
-             @ [fp_to_string (filename_of_hier srcDir modname)]
+             @ [fp_to_string (Hier.to_filename srcDir modname)]
         in
     match run args with
     | Success (mli, _, _) -> mli
@@ -155,7 +153,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                       | Native -> "-cclib"
                       | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
                  ; x ]) cclibs))
-             @ (List.map fp_to_string $ List.map (cmc_of_hier buildMode currentDir) modules)
+             @ (List.map fp_to_string $ List.map (Hier.to_cmc buildMode currentDir) modules)
   in
   Process.create args
 

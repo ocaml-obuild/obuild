@@ -13,12 +13,11 @@ open Gconf
 open Target
 open Dependencies
 open Pp
-open Hier
 
-exception ModuleDependsItself of hier
-exception ModuleDependenciesProblem of hier list
+exception ModuleDependsItself of Hier.t
+exception ModuleDependenciesProblem of Hier.t list
 exception ModuleDependencyNoOutput
-exception ModuleNotFound of (filepath list * hier)
+exception ModuleNotFound of (filepath list * Hier.t)
 
 type module_intf_desc = {
   module_intf_mtime : float;
@@ -36,13 +35,13 @@ type module_desc_file = {
   module_intf_desc   : module_intf_desc option;
   module_use_pp      : pp;
   module_oflags      : string list;
-  dep_cwd_modules    : hier list;
+  dep_cwd_modules    : Hier.t list;
   dep_other_modules  : Modname.t list;
 }
 
 type module_desc_dir = {
   module_dir_path    : filepath;
-  module_dir_modules : hier list
+  module_dir_modules : Hier.t list
 }
 
 type module_desc_ty = DescFile of module_desc_file | DescDir of module_desc_dir
@@ -67,31 +66,31 @@ type dir_spec = {
   include_dirs : filepath list;
 }
 
-type compile_step = CompileModule    of hier
-                  | CompileInterface of hier
-                  | CompileDirectory of hier
+type compile_step = CompileModule    of Hier.t
+                  | CompileInterface of Hier.t
+                  | CompileDirectory of Hier.t
                   | CompileC         of filename
                   | LinkTarget       of target
                   | CheckTarget      of target
 
 let string_of_compile_step cs = match cs with
-  | CompileDirectory x -> "dir " ^ (hier_to_string x)
-  | CompileModule x    -> "mod " ^ (hier_to_string x)
-  | CompileInterface x -> "intf " ^ (hier_to_string x)
+  | CompileDirectory x -> "dir " ^ (Hier.to_string x)
+  | CompileModule x    -> "mod " ^ (Hier.to_string x)
+  | CompileInterface x -> "intf " ^ (Hier.to_string x)
   | CompileC x         -> "C " ^ (fn_to_string x)
   | LinkTarget x       -> "link " ^ (Target.get_target_name x)
   | CheckTarget x      -> "check " ^ (Target.get_target_name x)
 
 (* represent a single compilation *)
 type compilation_state = {
-  compilation_modules  : (hier, module_desc) Hashtbl.t;
+  compilation_modules  : (Hier.t, module_desc) Hashtbl.t;
   compilation_csources : filename list;
   compilation_dag      : compile_step Dag.t;
   compilation_pp       : pp;
   compilation_filesdag : file_id Dag.t;
   compilation_builddir_c  : filepath;
   compilation_builddir_ml : Types.ocaml_compilation_option -> filepath;
-  compilation_include_paths : Types.ocaml_compilation_option -> hier -> filepath list;
+  compilation_include_paths : Types.ocaml_compilation_option -> Hier.t -> filepath list;
   compilation_linking_paths : filepath list;
   compilation_linking_paths_d : filepath list;
   compilation_linking_paths_p : filepath list;
@@ -102,9 +101,9 @@ type compilation_state = {
 let init project = { bstate_config = project }
 
 let get_compilation_order cstate =
-  let filter_modules t : hier option = match t with
+  let filter_modules t : Hier.t option = match t with
     | (CompileC _) | (CompileInterface _) | (LinkTarget _) | (CheckTarget _) -> None
-    | (CompileDirectory m) | (CompileModule m) -> if hier_lvl m = 0 then Some m else None
+    | (CompileDirectory m) | (CompileModule m) -> if Hier.lvl m = 0 then Some m else None
   in
   list_filter_map filter_modules (Dagutils.linearize cstate.compilation_dag)
 
@@ -151,7 +150,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
 let get_modules_desc bstate target toplevelModules =
   let autogenDir = Dist.getBuildDest Dist.Autogen in
   let modulesDeps = Hashtbl.create 64 in
-  let file_search_paths hier = [target.target_obits.target_srcdir <//> hier_to_dirpath hier; autogenDir] in
+  let file_search_paths hier = [target.target_obits.target_srcdir <//> Hier.to_dirpath hier; autogenDir] in
 
   let targetPP = (match target.target_obits.target_pp with
       | None    -> pp_none
@@ -176,15 +175,15 @@ let get_modules_desc bstate target toplevelModules =
         pp_some preproc (archive :: camlp4Strs)
     ) in
 
-  let module_lookup_method = filename_of_hier::generators_of_hier @ [directory_of_hier; interface_of_hier] in
+  let module_lookup_method = Hier.to_filename::Hier.to_generators @ [Hier.to_directory; Hier.to_interface] in
   let get_one hier =
-    let moduleName = hier_to_string hier in
+    let moduleName = Hier.to_string hier in
     verbose Verbose "Analysing %s\n%!" moduleName;
     let srcPath =
       try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f hier) module_lookup_method)
       with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths, hier))
     in
-    let srcDir = srcPath </> Modname.to_directory (hier_leaf hier) in
+    let srcDir = srcPath </> Modname.to_directory (Hier.leaf hier) in
 
     let module_desc_ty =
       if Filesystem.is_dir srcDir
@@ -208,10 +207,10 @@ let get_modules_desc bstate target toplevelModules =
         in
         DescDir {
           module_dir_path    = currentDir;
-          module_dir_modules = List.map (fun m -> hier_append hier m) modules
+          module_dir_modules = List.map (fun m -> Hier.append hier m) modules
         }
       ) else (
-        let generators_files = List.map (fun gen_fun -> gen_fun hier srcPath) generators_of_hier in
+        let generators_files = List.map (fun gen_fun -> gen_fun hier srcPath) Hier.to_generators in
         let generator_file = try
             Some (List.find (fun file -> Filesystem.exists file) generators_files)
           with Not_found -> None in
@@ -221,16 +220,16 @@ let get_modules_desc bstate target toplevelModules =
           | Some f ->
             verbose Debug "  %s is a generator\n%!" moduleName;
             let actual_src_path = Dist.getBuildDest (Dist.Target target.target_name) in
-            let dest_file = filename_of_hier hier actual_src_path in
+            let dest_file = Hier.to_filename hier actual_src_path in
             if not (Filesystem.exists dest_file) ||
                ((Filesystem.getModificationTime dest_file) < (Filesystem.getModificationTime f)) then begin
-              let w = Generators.run (actual_src_path </> Modname.to_directory (hier_leaf hier)) f in
+              let w = Generators.run (actual_src_path </> Modname.to_directory (Hier.leaf hier)) f in
               print_warnings w
             end;
             actual_src_path
         in
-        let srcFile = filename_of_hier hier srcPath in
-        let intfFile = interface_of_hier hier srcPath in
+        let srcFile = Hier.to_filename hier srcPath in
+        let intfFile = Hier.to_interface hier srcPath in
         let modTime = Filesystem.getModificationTime srcFile in
         let hasInterface = Filesystem.exists intfFile in
         let intfModTime = Filesystem.getModificationTime intfFile in
@@ -242,7 +241,7 @@ let get_modules_desc bstate target toplevelModules =
             (* FIXME: we should re-use the dependency DAG here, otherwise we might end up in the case
              * where the extra dependencies are depending not in the correct order
             *)
-            let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) (find_extra_matching target (hier_to_string hier))) in
+            let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) (find_extra_matching target (Hier.to_string hier))) in
             pp_append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
         in
 
@@ -263,7 +262,7 @@ let get_modules_desc bstate target toplevelModules =
         let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
             try
               let _ = Utils.find_choice_in_paths (file_search_paths hier)
-                  (List.map (fun x -> x (hier_of_modname dep)) module_lookup_method)
+                  (List.map (fun x -> x (Hier.of_modname dep)) module_lookup_method)
               in true
             with
               Utils.FilesNotFoundInPaths _ -> false
@@ -276,7 +275,7 @@ let get_modules_desc bstate target toplevelModules =
           then WithThread
           else NoThread
         in
-        let cwdDeps = List.map (fun x -> maybe (Hier.hier [x]) (fun z -> hier_append z x) (hier_parent hier)) cwdDepsInDir in
+        let cwdDeps = List.map (fun x -> maybe (Hier.make [x]) (fun z -> Hier.append z x) (Hier.parent hier)) cwdDepsInDir in
         (if List.mem hier cwdDeps then
            raise (ModuleDependsItself hier)
         );
@@ -295,7 +294,7 @@ let get_modules_desc bstate target toplevelModules =
           ; module_intf_desc     = intfDesc
           ; module_use_threads   = use_thread
           ; module_use_pp        = pp
-          ; module_oflags        = target.target_obits.target_oflags @ (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (hier_to_string hier))))
+          ; module_oflags        = target.target_obits.target_oflags @ (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier))))
           ; dep_cwd_modules      = cwdDeps
           ; dep_other_modules    = otherDeps
           }
@@ -499,7 +498,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
       ((match m with
           | Normal    -> buildDir
           | WithDebug -> buildDirD
-          | WithProf  -> buildDirP) <//> hier_to_dirpath hier) :: [autogenDir; obits.target_srcdir <//> hier_to_dirpath hier ] @
+          | WithProf  -> buildDirP) <//> Hier.to_dirpath hier) :: [autogenDir; obits.target_srcdir <//> Hier.to_dirpath hier ] @
       (match m with
        | Normal    -> depIncludePaths
        | WithDebug -> depIncludePathsD

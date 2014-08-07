@@ -2,7 +2,6 @@ open Obuild
 open Ext.Fugue
 open Ext.Filepath
 open Printf
-open Modname
 open Project
 open Types
 open Meta
@@ -60,11 +59,11 @@ let lib_to_meta proj_file lib =
     pkg with package_requires    = requires_of_lib lib;
              package_description = if lib.lib_description <> "" then lib.lib_description else proj_file.description;
              package_archives    = [
-               ([Pred_Byte]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name));
-               ([Pred_Byte; Pred_Plugin]  , fn_to_string (cmca_of_lib ByteCode Normal lib.lib_name));
-               ([Pred_Native], fn_to_string (cmca_of_lib Native Normal lib.lib_name))
+               ([Pred_Byte]  , fn_to_string (Modname.cmca_of_lib ByteCode Normal lib.lib_name));
+               ([Pred_Byte; Pred_Plugin]  , fn_to_string (Modname.cmca_of_lib ByteCode Normal lib.lib_name));
+               ([Pred_Native], fn_to_string (Modname.cmca_of_lib Native Normal lib.lib_name))
              ] @ (if (Gconf.get_target_option "library-plugin") then
-                    [([Pred_Native; Pred_Plugin], fn_to_string (cmxs_of_lib Normal lib.lib_name))]
+                    [([Pred_Native; Pred_Plugin], fn_to_string (Modname.cmxs_of_lib Normal lib.lib_name))]
                   else [])
   } in
   let subPkgs = List.map (fun sub ->
