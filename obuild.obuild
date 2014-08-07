@@ -71,3 +71,8 @@ test dag
   src-dir: tests
   main-is: test_dag.ml
   build-deps: obuild
+
+test path
+  src-dir: tests
+  main-is: test_path.ml
+  build-deps: obuild, obuild.ext

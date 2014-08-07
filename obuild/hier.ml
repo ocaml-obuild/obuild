@@ -46,18 +46,18 @@ let add_prefix prefix_path hier =
       to_fp 
     else
       let rec loop path hier_list =
-	match hier_list with
-	  [] -> path <//> to_fp
-	| x :: xs ->
-	  if (path_basename path) = fn (modname_to_dir (List.hd hier_list)) then
-	    if (path_length prefix_path) = 1 then
-	      to_fp (* prefix_path is fully included in hier *)
-	    else
-	      loop (path_dirname path) (List.tl hier_list)
-	  else
-	    path <//> to_fp
+        match hier_list with
+        | [] -> path <//> to_fp
+        | x :: xs ->
+          if (path_basename path) = fn (modname_to_dir (List.hd hier_list)) then
+            if (path_length prefix_path) = 1 then
+              to_fp (* prefix_path is fully included in hier *)
+            else
+              loop (path_dirname path) (List.tl hier_list)
+          else
+            path <//> to_fp
       in
-      loop prefix_path hier._hier
+      loop prefix_path (List.tl (List.rev hier._hier))
   end
 
 let check_file path filename ext =
@@ -74,10 +74,10 @@ let get_filename path hier ext =
       Hashtbl.add hiers hier modname;
       modname
     end else begin
-	let name = String.uncapitalize modname in
-	if (check_file path name ext) then
-	  Hashtbl.add hiers hier name;
-	name
+  let name = String.uncapitalize modname in
+  if (check_file path name ext) then
+    Hashtbl.add hiers hier name;
+  name
     end in
     filename
   end
