@@ -10,7 +10,6 @@ open Types
 open Filetype
 open Helper
 open Gconf
-open Modname
 open Target
 open Dependencies
 open Pp
@@ -38,7 +37,7 @@ type module_desc_file = {
   module_use_pp      : pp;
   module_oflags      : string list;
   dep_cwd_modules    : hier list;
-  dep_other_modules  : modname list;
+  dep_other_modules  : Modname.t list;
 }
 
 type module_desc_dir = {
@@ -128,7 +127,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
         then (
           (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
           let dir = Dist.getBuildDest (Dist.Target (LibName lib.Project.lib_name)) in
-          Some { pp_pkg_strs = [fp_to_string (dir </> cmca_of_lib ByteCode Normal lib.Project.lib_name) ]}
+          Some { pp_pkg_strs = [fp_to_string (dir </> Modname.cmca_of_lib ByteCode Normal lib.Project.lib_name) ]}
         ) else None
       ) else (
         let meta = Analyze.get_pkg_meta spkg conf in
@@ -185,7 +184,7 @@ let get_modules_desc bstate target toplevelModules =
       try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f hier) module_lookup_method)
       with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths, hier))
     in
-    let srcDir = srcPath </> directory_of_module (hier_leaf hier) in
+    let srcDir = srcPath </> Modname.to_directory (hier_leaf hier) in
 
     let module_desc_ty =
       if Filesystem.is_dir srcDir
@@ -198,10 +197,10 @@ let get_modules_desc bstate target toplevelModules =
               if not (Modname.string_all Modname.char_is_valid_modchar (fn_to_string f)) then
                 None
               else
-                Some (module_of_directory f)
+                Some (Modname.of_directory f)
             else (match Filetype.get_extension_path fp with
-                | Filetype.FileML  -> Some (module_of_filename f)
-                | Filetype.FileOther s -> if Generators.is_generator_ext s then Some (module_of_filename f)
+                | Filetype.FileML  -> Some (Modname.of_filename f)
+                | Filetype.FileOther s -> if Generators.is_generator_ext s then Some (Modname.of_filename f)
                   else None
                 | _                -> None
               )
@@ -225,7 +224,7 @@ let get_modules_desc bstate target toplevelModules =
             let dest_file = filename_of_hier hier actual_src_path in
             if not (Filesystem.exists dest_file) ||
                ((Filesystem.getModificationTime dest_file) < (Filesystem.getModificationTime f)) then begin
-              let w = Generators.run (actual_src_path </> directory_of_module (hier_leaf hier)) f in
+              let w = Generators.run (actual_src_path </> Modname.to_directory (hier_leaf hier)) f in
               print_warnings w
             end;
             actual_src_path
@@ -260,7 +259,7 @@ let get_modules_desc bstate target toplevelModules =
           | ml::mli::_ -> list_uniq (ml @ mli)
           | x::_ -> x
         in
-        verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string allDeps));
+        verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," allDeps);
         let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
             try
               let _ = Utils.find_choice_in_paths (file_search_paths hier)
@@ -269,11 +268,11 @@ let get_modules_desc bstate target toplevelModules =
             with
               Utils.FilesNotFoundInPaths _ -> false
           ) allDeps in
-        verbose Debug "  %s internally depends on %s\n%!" moduleName (String.concat "," (List.map modname_to_string cwdDepsInDir));
+        verbose Debug "  %s internally depends on %s\n%!" moduleName (String.concat "," (List.map Modname.to_string cwdDepsInDir));
         let use_thread =
-          if List.mem (wrap_module "Thread") otherDeps
-          || List.mem (wrap_module "Condition") otherDeps
-          || List.mem (wrap_module "Mutex") otherDeps
+          if List.mem (Modname.wrap "Thread") otherDeps
+          || List.mem (Modname.wrap "Condition") otherDeps
+          || List.mem (Modname.wrap "Mutex") otherDeps
           then WithThread
           else NoThread
         in

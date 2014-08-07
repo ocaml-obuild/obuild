@@ -3,7 +3,6 @@ open Ext.Filepath
 open Ext
 open Types
 open Printf
-open Modname
 open Hier
 open Target
 open Dependencies
@@ -231,7 +230,7 @@ let parse strict lines =
         List.map parseDependency (Utils.parseCSV value)
         in
     let parseModuleName value =
-        let wrap_module_nice s = hier [(wrap_module (String.capitalize s))] in
+        let wrap_module_nice s = hier [(Modname.wrap (String.capitalize s))] in
         List.map wrap_module_nice (Utils.parseCSV value)
         in
     let parseFilenames value = List.map fn (Utils.parseCSV value) in

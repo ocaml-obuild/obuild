@@ -9,7 +9,6 @@ open Analyze
 open Target
 open Prepare
 open Gconf
-open Modname
 open Hier
 open Buildprogs
 open Dependencies
@@ -69,7 +68,7 @@ let reason_from_paths (_,dest) (srcTy,changedSrc) =
           let bmli = Filetype.replace_extension bdest FileMLI in
           if bml = bsrc then "Source changed"
           else if bmli = bsrc then "Interface changed"
-          else ("Dependency " ^ modname_to_string (module_of_filename (trim_pd_exts bsrc)) ^ " changed " ^ fp_to_string changedSrc)
+          else ("Dependency " ^ Modname.to_string (Modname.of_filename (trim_pd_exts bsrc)) ^ " changed " ^ fp_to_string changedSrc)
         | FileCMXA | FileCMA ->
           "Library changed " ^ fp_to_string changedSrc
         | _ ->
@@ -112,7 +111,7 @@ let internal_libs_paths self_deps =
       ((compile_opt,compile_type), List.map (fun dep ->
            let dirname = Dist.getBuildDest (Dist.Target (LibName dep)) in
            let filety = buildmode_to_library_filety compile_type in
-           let libpath = dirname </> cmca_of_lib compile_type compile_opt dep in
+           let libpath = dirname </> Modname.cmca_of_lib compile_type compile_opt dep in
            (filety, libpath)
          ) self_deps)
     ) [ (Normal,Native);(Normal,ByteCode);(WithProf,Native);(WithProf,ByteCode);(WithDebug,Native);(WithDebug,ByteCode)]
@@ -318,7 +317,7 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
   let buildDeps =  if is_target_lib target then []
     else list_filter_map (fun dep ->
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-        | Internal -> Some (in_current_dir (cmca_of_lib compiledType compileOpt dep))
+        | Internal -> Some (in_current_dir (Modname.cmca_of_lib compiledType compileOpt dep))
         | System   ->
           let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
           let pred = match compiledType with
@@ -334,9 +333,9 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
   let dest = match target.target_name with
     | LibName libname ->
       if plugin then
-        cstate.compilation_builddir_ml Normal </> cmxs_of_lib compileOpt libname
+        cstate.compilation_builddir_ml Normal </> Modname.cmxs_of_lib compileOpt libname
       else
-        cstate.compilation_builddir_ml Normal </> cmca_of_lib compiledType compileOpt libname
+        cstate.compilation_builddir_ml Normal </> Modname.cmca_of_lib compiledType compileOpt libname
     | _ ->
       let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
       cstate.compilation_builddir_ml Normal </> outputName
@@ -410,7 +409,7 @@ let get_destination_files target =
   let all_modes = get_all_modes target in
   match target.Target.target_name with
   | LibName libname ->
-    List.map (fun (typ,opt) -> cmca_of_lib typ opt libname) all_modes
+    List.map (fun (typ,opt) -> Modname.cmca_of_lib typ opt libname) all_modes
   | ExeName e | TestName e | BenchName e | ExampleName e ->
     List.map (fun (ty,opt) ->
         Utils.to_exe_name opt ty (Target.get_target_dest_name target)

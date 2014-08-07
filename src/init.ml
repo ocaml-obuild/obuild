@@ -5,7 +5,6 @@ open Ext
 open Obuild.Helper
 open Obuild.Target
 open Obuild.Project
-open Obuild.Modname
 open Obuild
 
 exception ProjectAlreadyExists
@@ -103,7 +102,7 @@ let run () =
             let target = { itarget with target_obits = question_obits itarget.target_obits
                                       ; target_cbits = question_cbits itarget.target_cbits } in
             { obuild with
-                libs = [ { nlib with lib_modules = List.map (compose Hier.hier_of_modname wrap_module) modules; lib_target = target } ]
+                libs = [ { nlib with lib_modules = List.map (compose Hier.hier_of_modname Modname.wrap) modules; lib_target = target } ]
             }
         | _ -> assert false
         in

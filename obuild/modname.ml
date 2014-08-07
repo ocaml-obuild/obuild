@@ -1,7 +1,7 @@
 open Ext.Filepath
 open Types
 
-type modname = { _modname : string }
+type t = string
 
 exception InvalidModuleName of string
 exception EmptyModuleName
@@ -18,15 +18,15 @@ let string_all p s =
     for i = 0 to String.length s - 1 do valid := !valid && p s.[i] done;
     !valid
 
-let wrap_module x =
+let wrap x =
     if String.length x = 0 then (raise EmptyModuleName)
     else if not (string_all char_is_valid_modchar x) then (raise (InvalidModuleName x))
     else if Char.uppercase x.[0] <> x.[0] then (raise (InvalidModuleName x))
-    else { _modname = x }
+    else x
 
-let modname_of_string x = wrap_module x
-let modname_to_string x = x._modname
-let modname_to_dir x = String.uncapitalize x._modname
+let of_string x = wrap x
+let to_string x = x
+let to_dir x = String.uncapitalize x
 
 let to_libstring lib = String.concat "_" (lib_name_to_string_nodes lib)
 let cmxs_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cmxs")
@@ -36,20 +36,20 @@ let cmca_of_lib b = if b = Native then cmxa_of_lib else cma_of_lib
 
 (* only used for stdlib stuff *)
 let lib_of_cmca b file =
-    let suffix = if b = Native then ".cmxa" else ".cma" in
-    Filename.chop_suffix (fn_to_string file) suffix
+  let suffix = if b = Native then ".cmxa" else ".cma" in
+  Filename.chop_suffix (fn_to_string file) suffix
 
-let o_of_module modname = fn (String.uncapitalize modname._modname ^ ".o")
+let to_x ext modname = fn (String.uncapitalize modname ^ ext)
+let to_o = to_x ".o"
+let to_directory = to_x ""
+let to_filename = to_x ".ml"
+let to_parser = to_x ".mly"
+let to_lexer = to_x ".mll"
 
-let directory_of_module modname = fn (String.uncapitalize modname._modname)
-let filename_of_module modname = fn (String.uncapitalize modname._modname ^ ".ml")
-let parser_of_module modname = fn (String.uncapitalize modname._modname ^ ".mly")
-let lexer_of_module modname = fn (String.uncapitalize modname._modname ^ ".mll")
+let module_lookup_methods = [ to_directory; to_parser; to_lexer; to_filename ]
 
-let module_lookup_methods = [ directory_of_module; parser_of_module; lexer_of_module; filename_of_module ]
-
-let module_of_directory filename = wrap_module (String.capitalize (fn_to_string filename))
-let module_of_filename filename =
-    try wrap_module (String.capitalize (Filename.chop_extension (fn_to_string filename)))
-    with EmptyModuleName -> raise (ModuleFilenameNotValid (fn_to_string filename))
-       | Invalid_argument _ -> raise (ModuleFilenameNotValid (fn_to_string filename))
+let of_directory filename = wrap (String.capitalize (fn_to_string filename))
+let of_filename filename =
+  try wrap (String.capitalize (Filename.chop_extension (fn_to_string filename)))
+  with EmptyModuleName -> raise (ModuleFilenameNotValid (fn_to_string filename))
+     | Invalid_argument _ -> raise (ModuleFilenameNotValid (fn_to_string filename))
