@@ -4,7 +4,6 @@ open Ext
 open Types
 open Helper
 open Printf
-open Filetype
 open Analyze
 open Target
 open Prepare
@@ -30,18 +29,18 @@ let check_destination_valid_with srcs cstate (filety, dest) =
       ) srcs)
     with Not_found -> None
   ) else
-    Some (FileO, currentDir)
+    Some (Filetype.FileO, currentDir)
 
 (* same as before but the list of sources is automatically determined
  * from the file DAG
 *)
 let check_destination_valid cstate (filety, dest) =
   let children =
-    try Dag.getChildren cstate.compilation_filesdag (file_id (filety, dest))
+    try Dag.getChildren cstate.compilation_filesdag (Filetype.make_id (filety, dest))
     with Dag.DagNode_Not_found ->
-      raise (Internal_Inconsistancy ((file_type_to_string filety), ("missing destination: " ^ fp_to_string dest)))
+      raise (Internal_Inconsistancy ((Filetype.to_string filety), ("missing destination: " ^ fp_to_string dest)))
   in
-  check_destination_valid_with (List.map un_file_id children) cstate (filety,dest)
+  check_destination_valid_with (List.map Filetype.get_id children) cstate (filety,dest)
 
 (* get a nice reason of why a destination is not deemed valid against
  * the source filepath that triggered the unvalid check.
@@ -60,22 +59,22 @@ let reason_from_paths (_,dest) (srcTy,changedSrc) =
     let bdest = path_basename dest in
     let bsrc  = path_basename changedSrc  in
     match Filetype.get_extension bdest with
-    | FileCMX | FileCMO -> (
+    | Filetype.FileCMX | Filetype.FileCMO -> (
         match srcTy with
-        | FileCMX | FileCMO ->
-          let bml = Filetype.replace_extension bdest FileML in
-          let bmli = Filetype.replace_extension bdest FileMLI in
+        | Filetype.FileCMX | Filetype.FileCMO ->
+          let bml = Filetype.replace_extension bdest Filetype.FileML in
+          let bmli = Filetype.replace_extension bdest Filetype.FileMLI in
           if bml = bsrc then "Source changed"
           else if bmli = bsrc then "Interface changed"
           else ("Dependency " ^ Modname.to_string (Modname.of_filename (trim_pd_exts bsrc)) ^ " changed " ^ fp_to_string changedSrc)
-        | FileCMXA | FileCMA ->
+        | Filetype.FileCMXA | Filetype.FileCMA ->
           "Library changed " ^ fp_to_string changedSrc
         | _ ->
           "Dependencies changed " ^ fp_to_string changedSrc
       )
-    | FileO ->
-      let bc = Filetype.replace_extension bdest FileC in
-      let bh = Filetype.replace_extension bdest FileH in
+    | Filetype.FileO ->
+      let bc = Filetype.replace_extension bdest Filetype.FileC in
+      let bh = Filetype.replace_extension bdest Filetype.FileH in
       if bc = bsrc then ("C file " ^ fn_to_string bsrc ^ " changed")
       else if bh = bsrc then ("H file " ^ fn_to_string bsrc ^ " changed")
       else ("file changed " ^ fp_to_string changedSrc)
@@ -102,8 +101,8 @@ let get_nb_step dag =
   let nb_step_len = String.length (string_of_int nb_step) in
   (nb_step, nb_step_len)
 
-let buildmode_to_filety bmode = if bmode = Native then FileCMX else FileCMO
-let buildmode_to_library_filety bmode = if bmode = Native then FileCMXA else FileCMA
+let buildmode_to_filety bmode = if bmode = Native then Filetype.FileCMX else Filetype.FileCMO
+let buildmode_to_library_filety bmode = if bmode = Native then Filetype.FileCMXA else Filetype.FileCMA
 
 let internal_libs_paths self_deps =
   List.map (fun (compile_opt,compile_type) ->
@@ -124,7 +123,7 @@ let compile_c task_index task c_file bstate task_context dag =
     dst_dir      = cstate.compilation_builddir_c;
     src_dir      = cbits.target_cdir
   } in
-  let dest = (FileO, c_dir_spec.dst_dir </> o_from_cfile c_file) in
+  let dest = (Filetype.FileO, c_dir_spec.dst_dir </> o_from_cfile c_file) in
   (match check_destination_valid cstate dest with
    | None            -> Scheduler.FinishTask task
    | Some src_changed ->
@@ -155,9 +154,9 @@ let compile_directory task_index task h task_context dag =
     let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) all_modes in
     (List.map (fun pair_list ->
          List.map (fun (build_mode, comp_opt) ->
-             let dest = (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
+             let dest = (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
              let mdeps = List.map (fun m ->
-                 (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) m)) modules in
+                 (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) m)) modules in
              let dir = cstate.compilation_builddir_ml comp_opt in
              let fcompile = (fun () -> runOcamlPack dir dir annot_mode build_mode pack_opt h modules) in
              match check_destination_valid_with mdeps cstate dest with
@@ -194,10 +193,10 @@ let dep_descs is_intf hdesc bstate cstate target h =
       | Some intf -> intf
     in
     List.map (fun comp_opt ->
-        let dest = (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
-        let src  = [ (FileMLI, intf_desc.module_intf_path) ] in
+        let dest = (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
+        let src  = [ (Filetype.FileMLI, intf_desc.module_intf_path) ] in
         let m_deps = List.map (fun module_dep ->
-            (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
+            (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
         let internal_deps = List.assoc (comp_opt,ByteCode) internal_libs_paths_all_modes in
         (dest,Interface,comp_opt, src @ internal_deps @ m_deps)
       ) compile_opts
@@ -207,10 +206,10 @@ let dep_descs is_intf hdesc bstate cstate target h =
         let dest = (file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) h) in
         let src = (match hdesc.module_intf_desc with
               None -> []
-            | Some intf -> [FileMLI,intf.module_intf_path]) @ [(FileML, hdesc.module_src_path)] in
+            | Some intf -> [Filetype.FileMLI,intf.module_intf_path]) @ [(Filetype.FileML, hdesc.module_src_path)] in
         let m_deps = List.concat (List.map (fun module_dep ->
             [(file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
-             (FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)]
+             (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)]
           ) module_deps) in
         let internal_deps = List.assoc (comp_opt,compiled_ty) internal_libs_paths_all_modes in
         (dest,Compiled compiled_ty,comp_opt,src @ internal_deps @ m_deps)

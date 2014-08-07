@@ -60,7 +60,7 @@ let add_prefix prefix_path hier =
 
 let check_file path filename ext =
   if ext <>  Filetype.FileOther "" then
-    Ext.Filesystem.exists (path </> ((fn filename) <.> (Filetype.file_type_to_string ext)))
+    Ext.Filesystem.exists (path </> ((fn filename) <.> (Filetype.to_string ext)))
   else
     Ext.Filesystem.exists (path </> (fn filename))
 
@@ -87,7 +87,7 @@ let add modname filename =
 
 let get_filepath path hier ext =
   let path = add_prefix path hier in
-  path </> ((fn (get_filename path hier ext)) <.> (Filetype.file_type_to_string ext))
+  path </> ((fn (get_filename path hier ext)) <.> (Filetype.to_string ext))
 
 let get_dirpath path hier =
   let path = add_prefix path hier in

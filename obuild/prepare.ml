@@ -7,7 +7,6 @@ open Ext.Filepath
 open Ext
 open Analyze
 open Types
-open Filetype
 open Helper
 open Gconf
 open Target
@@ -87,7 +86,7 @@ type compilation_state = {
   compilation_csources : filename list;
   compilation_dag      : compile_step Dag.t;
   compilation_pp       : pp;
-  compilation_filesdag : file_id Dag.t;
+  compilation_filesdag : Filetype.id Dag.t;
   compilation_builddir_c  : filepath;
   compilation_builddir_ml : Types.ocaml_compilation_option -> filepath;
   compilation_include_paths : Types.ocaml_compilation_option -> Hier.t -> filepath list;
@@ -420,12 +419,12 @@ let prepare_target_ bstate buildDir target toplevelModules =
             with _ -> failwith ("cannot find dependencies for " ^ fn_to_string cSource)
           in
           let cFile = cbits.target_cdir </> cSource in
-          let hFiles = List.map (fun x -> { fdep_ty = Filetype.FileH; fdep_path = x })
+          let hFiles = List.map (fun x -> Filetype.make_id (Filetype.FileH, x))
               (List.filter (fun x -> Filetype.get_extension_path x = Filetype.FileH) fps)
           in
           let oFile = buildDir </> (cSource <.> "o") in
-          let cNode = { fdep_ty = Filetype.FileC; fdep_path = cFile } in
-          let oNode = { fdep_ty = Filetype.FileO; fdep_path = oFile } in
+          let cNode = Filetype.make_id (Filetype.FileC, cFile) in
+          let oNode = Filetype.make_id (Filetype.FileO, oFile) in
 
           (* add C source information into the files DAG *)
           Dag.addEdge oNode cNode filesDag;
@@ -449,7 +448,8 @@ let prepare_target_ bstate buildDir target toplevelModules =
     Filesystem.writeFile path dotContent;
 
     let path = dotDir </> fn (Target.get_target_name target ^ ".files.dot") in
-    let dotContent = Dag.toDot (fun fdep -> Filetype.file_type_to_string fdep.fdep_ty ^ " " ^ fp_to_string fdep.fdep_path)
+    let dotContent = Dag.toDot (fun fdep -> Filetype.to_string (Filetype.get_type fdep) ^ " " ^ 
+                                            fp_to_string (Filetype.get_path fdep))
         (Target.get_target_name target) true fdag in
     Filesystem.writeFile path dotContent;
 
