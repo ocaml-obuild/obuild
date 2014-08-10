@@ -31,7 +31,7 @@ let main () =
     let anonParams = ref [] in
     let removeDist = ref true in
     Arg.parse
-        [ ("--debug", Arg.Unit (fun () -> gconf.conf_verbosity <- DebugPlus; removeDist := false), "activate build system debug")
+        [ ("--debug", Arg.Unit (fun () -> gconf.verbosity <- DebugPlus; removeDist := false), "activate build system debug")
         ; ("--native", Arg.Set buildNative , "build native executable")
         ; ("--bytecode", Arg.Clear buildNative, "build bytecode executable")
         ; ("-p", Arg.Set profiling, "build with profiling")

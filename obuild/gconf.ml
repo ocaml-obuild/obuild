@@ -1,16 +1,16 @@
 open Ext.Fugue
 
-type verbosity = Silent | Report | Verbose | Debug | DebugPlus
+type verbosity_t = Silent | Report | Verbose | Debug | DebugPlus
 
-type gconf = {
-  mutable conf_verbosity : verbosity;
-  mutable conf_strict    : bool;
-  mutable conf_parallel_jobs : int;
-  mutable conf_dump_dot : bool;
-  mutable conf_color : bool;
-  mutable conf_bin_annot : bool;
-  mutable conf_short_path : bool;
-  mutable conf_ocamlmklib : bool;
+type t = {
+  mutable verbosity : verbosity_t;
+  mutable strict    : bool;
+  mutable parallel_jobs : int;
+  mutable dump_dot : bool;
+  mutable color : bool;
+  mutable bin_annot : bool;
+  mutable short_path : bool;
+  mutable ocamlmklib : bool;
 }
 
 exception UnknownOption of string
@@ -70,15 +70,15 @@ let get_target_option field = try
     Hashtbl.find target_options_ field
   with Not_found -> raise (UnknownOption field)
 
-let gconf_defaults = {
-  conf_verbosity     = Report;
-  conf_strict        = false;
-  conf_parallel_jobs        = 2;
-  conf_dump_dot             = false;
-  conf_color                = false;
-  conf_bin_annot            = true;
-  conf_short_path           = false;
-  conf_ocamlmklib           = true;
+let defaults = {
+  verbosity     = Report;
+  strict        = false;
+  parallel_jobs = 2;
+  dump_dot      = false;
+  color         = false;
+  bin_annot     = true;
+  short_path    = false;
+  ocamlmklib    = true;
 }
 
-let gconf = gconf_defaults
+let gconf = defaults

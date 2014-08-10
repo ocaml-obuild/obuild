@@ -60,7 +60,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
              @ oflags
              @ pp_to_params pp
              @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else []) packopt
-             @ (if gconf.conf_short_path then [ "-short-paths" ] else [])
+             @ (if gconf.short_path then [ "-short-paths" ] else [])
 
              @ ["-o"; fp_to_string dstFile ]
              @ ["-c"; fp_to_string srcFile ]
@@ -113,7 +113,7 @@ let runRanlib dest =
   Process.create [ Prog.getRanlib (); fp_to_string dest ]
 
 let runCLinking sharingMode depfiles dest =
-  let args = if gconf.conf_ocamlmklib then
+  let args = if gconf.ocamlmklib then
       [ Prog.getOcamlMklib () ] @ (match sharingMode with
           | LinkingStatic -> ["-custom"]
           | LinkingShared   -> [])

@@ -9,7 +9,7 @@ if [[ $OCAMLOPT_OPT != "" ]] ; then
 fi
 
 extmodules="fugue filepath filesystem"
-libmodules="gconf types dag pp filetype expr utils modname taskdep dist helper dagutils process findlibConf scheduler prog dependencies generators hier meta target project analyze configure prepare buildprogs build exception"
+libmodules="types gconf filetype dag pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta target dist project analyze configure prepare buildprogs build exception"
 mainmodules="sdist doc init help install path_generated main"
 
 set -e

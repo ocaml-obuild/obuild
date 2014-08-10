@@ -18,7 +18,7 @@ let read_setup () =
   setup
 
 let project_read () =
-  try Project.read gconf.conf_strict
+  try Project.read gconf.strict
   with exn -> verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn);
     raise exn
 
@@ -60,7 +60,7 @@ let configure argv =
   ) (fun s -> failwith ("unknown option: " ^ s)) (usageStr "configure");
 
   FindlibConf.load ();
-  let proj_file = Project.read gconf.conf_strict in
+  let proj_file = Project.read gconf.strict in
   verbose Report "Configuring %s-%s...\n" proj_file.Project.name proj_file.Project.version;
   Configure.run proj_file !user_flags !user_opts;
   (* check build deps of everything buildables *)
@@ -69,10 +69,10 @@ let configure argv =
 let mainBuild argv =
   let anon = ref [] in
   let build_options = [
-    ("-j", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel");
-    ("--jobs", Arg.Int (fun i -> gconf.conf_parallel_jobs <- i), "maximum number of jobs in parallel");
-    ("--dot", Arg.Unit (fun () -> gconf.conf_dump_dot <- true), "dump dependencies dot files during build");
-    ("--noocamlmklib", Arg.Unit (fun () -> gconf.conf_ocamlmklib <- false), "do not use ocamlmklib when linking C code")
+    ("-j", Arg.Int (fun i -> gconf.parallel_jobs <- i), "maximum number of jobs in parallel");
+    ("--jobs", Arg.Int (fun i -> gconf.parallel_jobs <- i), "maximum number of jobs in parallel");
+    ("--dot", Arg.Unit (fun () -> gconf.dump_dot <- true), "dump dependencies dot files during build");
+    ("--noocamlmklib", Arg.Unit (fun () -> gconf.ocamlmklib <- false), "do not use ocamlmklib when linking C code")
   ] in
   Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
@@ -278,13 +278,13 @@ let parseGlobalArgs () =
                             match x with
                             | "--help"    -> printHelp ()
                             | "--version" -> printVersion ()
-                            | "--verbose" -> gconf.conf_verbosity <- Verbose; xs
-                            | "--color"   -> gconf.conf_color <- true; xs
-                            | "--debug"   -> gconf.conf_verbosity <- Debug; xs
-                            | "--debug+"  -> gconf.conf_verbosity <- DebugPlus; xs
-                            | "--debug-with-cmd" -> gconf.conf_verbosity <- DebugPlus; xs
-                            | "--silent"  -> gconf.conf_verbosity <- Silent; xs
-                            | "--strict"  -> gconf.conf_strict    <- true; xs
+                            | "--verbose" -> gconf.verbosity <- Verbose; xs
+                            | "--color"   -> gconf.color <- true; xs
+                            | "--debug"   -> gconf.verbosity <- Debug; xs
+                            | "--debug+"  -> gconf.verbosity <- DebugPlus; xs
+                            | "--debug-with-cmd" -> gconf.verbosity <- DebugPlus; xs
+                            | "--silent"  -> gconf.verbosity <- Silent; xs
+                            | "--strict"  -> gconf.strict    <- true; xs
                             | "--findlib-conf" -> expect_param1 x xs (fun p -> Gconf.set_env "findlib-path" p)
                             | "--ocamlopt" -> expect_param1 x xs (fun p -> Gconf.set_env "ocamlopt" p)
                             | "--ocamldep" -> expect_param1 x xs (fun p -> Gconf.set_env "ocamldep" p)

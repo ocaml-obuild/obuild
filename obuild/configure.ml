@@ -179,10 +179,10 @@ let check proj_file reconf setup =
   let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
   (match ver with
    | major::minor::_-> (
-       if int_of_string major < 4 then gconf.conf_bin_annot <- false;
-       if int_of_string major > 4 && int_of_string minor > 1 then gconf.conf_short_path <- true
+       if int_of_string major < 4 then gconf.bin_annot <- false;
+       if int_of_string major > 4 && int_of_string minor > 1 then gconf.short_path <- true
      )
-   | _ -> gconf.conf_bin_annot <- false
+   | _ -> gconf.bin_annot <- false
   );
   (* user_flags are also restored from setup file *)
   let setup_flags = get_flags setup in

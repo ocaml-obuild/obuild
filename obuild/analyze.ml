@@ -248,7 +248,7 @@ let prepare projFile user_flags =
         ) target.target_cbits.target_cpkgs
     ) allTargets;
 
-    if gconf.conf_dump_dot
+    if gconf.dump_dot
         then (
             let dotDir = Dist.create_build Dist.Dot in
             let path = dotDir </> fn "dependencies.dot" in

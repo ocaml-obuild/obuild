@@ -439,7 +439,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   in
   let (dag, fdag) = get_dags () in
 
-  if gconf.conf_dump_dot
+  if gconf.dump_dot
   then (
     let dotDir = Dist.create_build Dist.Dot in
     let path = dotDir </> fn (Target.get_target_name target ^ ".dot") in

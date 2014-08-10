@@ -91,9 +91,9 @@ let get_all_modes target =
       match (t,o) with (ByteCode,WithProf) -> false | _ -> true) all_modes
 
 let annot_mode () =
-  if (Gconf.get_target_option "annot") && gconf.conf_bin_annot then AnnotationBoth
+  if (Gconf.get_target_option "annot") && gconf.bin_annot then AnnotationBoth
   else if (Gconf.get_target_option "annot") then AnnotationText
-  else if gconf.conf_bin_annot then AnnotationBin
+  else if gconf.bin_annot then AnnotationBin
   else AnnotationNone
 
 let get_nb_step dag =
@@ -301,7 +301,7 @@ let link_c cstate clib_name =
   while not (wait_for_files cdep_files) do
     ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
   done;
-  if gconf.conf_ocamlmklib then
+  if gconf.ocamlmklib then
     [[(fun () -> runCLinking LinkingShared cdep_files lib_name)]]
   else (
     let so_file = cstate.compilation_builddir_c </> fn ("dll" ^ clib_name ^ ".so") in
@@ -463,7 +463,7 @@ let compile (bstate: build_state) task_context dag =
     | (CheckTarget t)      -> check task_index task task_context dag
   in
 
-  let stat = Scheduler.schedule gconf.conf_parallel_jobs taskdep dispatch schedule_finish in
+  let stat = Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish in
   verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes
     stat.Scheduler.max_runqueue;
   ()
