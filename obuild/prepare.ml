@@ -107,11 +107,11 @@ let get_compilation_order cstate =
   list_filter_map filter_modules (Dagutils.linearize cstate.compilation_dag)
 
 let camlp4Libname = lib_name_of_string "camlp4"
-let syntaxPredsCommon = [Meta.Pred_Syntax;Meta.Pred_Preprocessor]
+let syntaxPredsCommon = [Meta.Predicate.Syntax;Meta.Predicate.Preprocessor]
 
 let get_p4pred preprocessor = match preprocessor with
-  | CamlP4O -> Meta.Pred_Camlp4o
-  | CamlP4R -> Meta.Pred_Camlp4r
+  | CamlP4O -> Meta.Predicate.Camlp4o
+  | CamlP4R -> Meta.Predicate.Camlp4r
 
 let get_syntax_pp bstate preprocessor buildDeps =
   let conf = bstate.bstate_config in
@@ -134,10 +134,10 @@ let get_syntax_pp bstate preprocessor buildDeps =
           then p4pred :: syntaxPredsCommon
           else syntaxPredsCommon
         in
-        if Meta.isSyntax meta spkg
+        if Meta.Pkg.is_syntax meta spkg
         then (
           let includePath = Meta.getIncludeDir stdlib meta in
-          Some { pp_pkg_strs = ["-I"; fp_to_string includePath; Meta.getArchive meta spkg preds] }
+          Some { pp_pkg_strs = ["-I"; fp_to_string includePath; Meta.Pkg.get_archive meta spkg preds] }
         ) else
           None
       )
@@ -166,8 +166,8 @@ let get_modules_desc bstate target toplevelModules =
         verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxPkgs);
         let p4pred = get_p4pred pp in
         let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
-        let preproc = (snd p4Meta).Meta.package_preprocessor in
-        let archive = { pp_pkg_strs = [Meta.getArchive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] } in
+        let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
+        let archive = { pp_pkg_strs = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] } in
 
         (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
         let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in

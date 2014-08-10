@@ -4,7 +4,6 @@ open Ext.Filepath
 open Printf
 open Project
 open Types
-open Meta
 open Target
 open Helper
 open Gconf
@@ -56,24 +55,24 @@ let lib_to_meta proj_file lib =
     [ (None, List.map (fun d -> fst d) deps) ]
   in
   let set_meta_field_from_lib pkg lib = {
-    pkg with package_requires    = requires_of_lib lib;
-             package_description = if lib.lib_description <> "" then lib.lib_description else proj_file.description;
-             package_archives    = [
-               ([Pred_Byte]  , fn_to_string (Modname.cmca_of_lib ByteCode Normal lib.lib_name));
-               ([Pred_Byte; Pred_Plugin]  , fn_to_string (Modname.cmca_of_lib ByteCode Normal lib.lib_name));
-               ([Pred_Native], fn_to_string (Modname.cmca_of_lib Native Normal lib.lib_name))
+    pkg with Meta.Pkg.requires    = requires_of_lib lib;
+             Meta.Pkg.description = if lib.lib_description <> "" then lib.lib_description else proj_file.description;
+             Meta.Pkg.archives    = [
+               ([Meta.Predicate.Byte]  , fn_to_string (Modname.cmca_of_lib ByteCode Normal lib.lib_name));
+               ([Meta.Predicate.Byte; Meta.Predicate.Plugin]  , fn_to_string (Modname.cmca_of_lib ByteCode Normal lib.lib_name));
+               ([Meta.Predicate.Native], fn_to_string (Modname.cmca_of_lib Native Normal lib.lib_name))
              ] @ (if (Gconf.get_target_option "library-plugin") then
-                    [([Pred_Native; Pred_Plugin], fn_to_string (Modname.cmxs_of_lib Normal lib.lib_name))]
+                    [([Meta.Predicate.Native; Meta.Predicate.Plugin], fn_to_string (Modname.cmxs_of_lib Normal lib.lib_name))]
                   else [])
   } in
   let subPkgs = List.map (fun sub ->
-      let npkg = newPkg (list_last (lib_name_to_string_nodes sub.lib_name)) in
+      let npkg = Meta.Pkg.make (list_last (lib_name_to_string_nodes sub.lib_name)) in
       set_meta_field_from_lib npkg sub
     ) lib.lib_subs
   in
-  let pkg = set_meta_field_from_lib (newPkg "") lib in {
-    pkg with package_version          = proj_file.version;
-             package_subs             = subPkgs
+  let pkg = set_meta_field_from_lib (Meta.Pkg.make "") lib in {
+    pkg with Meta.Pkg.version          = proj_file.version;
+             Meta.Pkg.subs             = subPkgs
   }
 
 let write_lib_meta projFile lib =

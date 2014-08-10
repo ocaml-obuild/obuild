@@ -26,7 +26,7 @@ type cpkg_config =
  *)
 type project_config =
     { project_dep_data    : (lib_name, dep_type) Hashtbl.t
-    ; project_pkg_meta    : (dep_main_name, Meta.meta) Hashtbl.t
+    ; project_pkg_meta    : (dep_main_name, Meta.t) Hashtbl.t
     ; project_pkgdeps_dag : dependency_tag Dag.t
     ; project_targets_dag : Types.name Dag.t
     ; project_all_deps    : dependency list
@@ -104,14 +104,14 @@ let initializeSystemStdlib ocamlCfg metaTable =
             let libCmxa = lib ^ ".cmxa" in
             let libCma  = lib ^ ".cma" in
             let archives =
-                  (if List.mem (fn libCmxa) stdlibLibs then [([Meta.Pred_Native], libCmxa)] else [])
-                @ (if List.mem (fn libCma) stdlibLibs then [([Meta.Pred_Byte], libCma)] else [])
+                  (if List.mem (fn libCmxa) stdlibLibs then [([Meta.Predicate.Native], libCmxa)] else [])
+                @ (if List.mem (fn libCma) stdlibLibs then [([Meta.Predicate.Byte], libCma)] else [])
                 in
-            let meta = { (Meta.newPkg lib) with
-                              Meta.package_directory = fp_to_string stdlibPath
-                            ; Meta.package_requires  = [] (* AFAIK this is always empty for stdlibs *)
-                            ; Meta.package_version   = sprintf "%d.%d.%s" majorVer minorVer otherVer
-                            ; Meta.package_archives  = archives
+            let meta = { (Meta.Pkg.make lib) with
+                              Meta.Pkg.directory = fp_to_string stdlibPath
+                            ; Meta.Pkg.requires  = [] (* AFAIK this is always empty for stdlibs *)
+                            ; Meta.Pkg.version   = sprintf "%d.%d.%s" majorVer minorVer otherVer
+                            ; Meta.Pkg.archives  = archives
                        } in
             Hashtbl.add metaTable lib (stdlibPath </> fn ("META-" ^ lib), meta)
         )
@@ -149,7 +149,7 @@ let prepare projFile user_flags =
     let () =
         let stdlibPath = fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg) in
         if not (List.exists (fun p -> string_startswith (fp_to_string p) (fp_to_string stdlibPath)) (FindlibConf.get_paths ())) then (
-            Meta.meta_path_warning := true
+            Meta.path_warning := true
         )
         in
 
@@ -194,20 +194,20 @@ let prepare projFile user_flags =
                   let (_, meta) = get_meta_cache metaTable dep in
                   Dag.addNode (Dependency dep) depsDag;
                   let pkg =
-                      try Meta.find dep.lib_subnames meta
+                      try Meta.Pkg.find dep.lib_subnames meta
                       with Not_found -> raise (SublibraryDoesntExists dep)
                          | Meta.SubpackageNotFound _ -> raise (SublibraryDoesntExists dep)
                       in
                   List.iter (fun (preds, reqDeps) ->
                       match preds with
-                      | Some [Meta.Pred_Toploop] -> ()
+                      | Some [Meta.Predicate.Toploop] -> ()
                       | _ ->
                           List.iter (fun reqDep ->
                               verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
                               Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
                               loop reqDep
                           ) reqDeps
-                  ) pkg.Meta.package_requires;
+                  ) pkg.Meta.Pkg.requires;
                   System
                 end with DependencyMissing dep -> (add_missing dep; System)
             )

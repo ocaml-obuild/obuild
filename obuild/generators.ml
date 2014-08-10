@@ -3,7 +3,7 @@ open Ext.Filepath
 exception GeneratorFailed of string
 exception GeneratorNotFound of string
 
-type generator = {
+type t = {
   suffix : string;
   command : string list;
   dest_suffix : string;

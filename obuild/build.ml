@@ -319,10 +319,10 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
         | System   ->
           let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
           let pred = match compiledType with
-            | Native    -> Meta.Pred_Native
-            | ByteCode  -> Meta.Pred_Byte
+            | Native    -> Meta.Predicate.Native
+            | ByteCode  -> Meta.Predicate.Byte
           in
-          let archives = Meta.getArchiveWithFilter meta dep pred in
+          let archives = Meta.Pkg.get_archive_with_filter meta dep pred in
           match archives with
           | []              -> None
           | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
