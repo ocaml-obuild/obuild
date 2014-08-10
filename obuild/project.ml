@@ -14,7 +14,7 @@ exception MissingField of string
 exception UnknownDependencyName of string
 exception UnsupportedFutureVersion of int
 exception ModuleDoesntExist of target * Hier.t
-exception ModuleListEmpty of lib_name
+exception ModuleListEmpty of Libname.t
 exception FileDoesntExist of target * filename
 exception LicenseFileDoesntExist of filepath
 exception BlockSectionAsValue of string
@@ -24,7 +24,7 @@ exception UnknownExtraDepFormat of string
 exception UnknownFlag of string
 
 type obuild_lib =
-    { lib_name        : lib_name
+    { lib_name        : Libname.t
     ; lib_description : string
     ; lib_target      : target
     ; lib_modules     : Hier.t list
@@ -34,7 +34,7 @@ type obuild_lib =
     }
 
 type obuild_exe =
-    { exe_name      : exe_name
+    { exe_name      : string
     ; exe_main      : filename
     ; exe_target    : target
     }
@@ -42,7 +42,7 @@ type obuild_exe =
 type test_type = TestType_ExitCode
 
 type obuild_test =
-    { test_name     : exe_name
+    { test_name     : string
     ; test_main     : filename
     ; test_target   : target
     ; test_rundir   : filepath option
@@ -51,7 +51,7 @@ type obuild_test =
     }
 
 type obuild_bench =
-    { bench_name     : exe_name
+    { bench_name     : string
     ; bench_main     : filename
     ; bench_target   : target
     (* TODO add bench type *)
@@ -61,7 +61,7 @@ type obuild_bench =
  * or maybe install in a documentation directory
  *)
 type obuild_example =
-    { example_name     : exe_name
+    { example_name     : string
     ; example_main     : filename
     ; example_target   : target
     }
@@ -132,23 +132,23 @@ let emptyLibLname lname : obuild_lib =
     ; lib_modules     = []
     ; lib_pack        = false
     ; lib_syntax      = false
-    ; lib_target      = newTarget (LibName lname) Lib true true
+    ; lib_target      = newTarget (Name.Lib lname) Lib true true
     ; lib_subs        = []
     }
 
-let emptyLibPrefix libname subname = emptyLibLname (lib_name_append libname subname)
-let emptyLib libname = emptyLibLname (lib_name_of_string libname)
+let emptyLibPrefix libname subname = emptyLibLname (Libname.append libname subname)
+let emptyLib libname = emptyLibLname (Libname.of_string libname)
 
 let emptyExe (name : string) : obuild_exe =
     { exe_name   = name
     ; exe_main   = emptyFn
-    ; exe_target = newTarget (ExeName name) Exe true false
+    ; exe_target = newTarget (Name.Exe name) Exe true false
     }
 
 let emptyTest (name : string) : obuild_test =
     { test_name   = name
     ; test_main   = emptyFn
-    ; test_target = newTarget (TestName name) Test (Gconf.get_target_option "build-tests") false
+    ; test_target = newTarget (Name.Test name) Test (Gconf.get_target_option "build-tests") false
     ; test_rundir = None
     ; test_runopt = []
     ; test_type   = TestType_ExitCode
@@ -157,7 +157,7 @@ let emptyTest (name : string) : obuild_test =
 let emptyExample (name : string) : obuild_example =
     { example_name   = name
     ; example_main   = emptyFn
-    ; example_target = newTarget (ExampleName name) Test (Gconf.get_target_option "build-examples") false
+    ; example_target = newTarget (Name.Example name) Test (Gconf.get_target_option "build-examples") false
     }
 
 let findPath () =
@@ -253,7 +253,7 @@ let parse strict lines =
     let parseTargetObits t k value =
         match k with
         | "builddepends" | "builddeps"
-        | "build-deps" -> Handled { t with target_builddeps = parseDeps lib_name_of_string value @ t.target_builddeps }
+        | "build-deps" -> Handled { t with target_builddeps = parseDeps Libname.of_string value @ t.target_builddeps }
         | "path" | "srcdir"
         | "src-dir"    -> Handled { t with target_srcdir    = fp value }
         | "preprocessor"
@@ -313,7 +313,7 @@ let parse strict lines =
             let (value: string) = String.concat "\n" (v :: List.map snd cont) in
             match String.lowercase k with
             | "builddepends" | "builddeps"
-            | "build-deps" -> { acc with target_extra_builddeps = parseDeps lib_name_of_string value @ acc.target_extra_builddeps }
+            | "build-deps" -> { acc with target_extra_builddeps = parseDeps Libname.of_string value @ acc.target_extra_builddeps }
             | "oflags"     -> { acc with target_extra_oflags = acc.target_extra_oflags @ string_words_noempty value }
             | _            -> raise_if_strict ("unexpected item in : " ^ k); acc
         in
@@ -536,7 +536,7 @@ let write file proj =
             let obits = target.target_obits in
             let cbits = target.target_cbits in
             add (sprintf "%ssrc-dir: %s\n" iStr (fp_to_string obits.target_srcdir));
-            add_string (iStr ^ "build-deps") (Utils.showList ", " (fun (l,_) -> lib_name_to_string l) obits.target_builddeps);
+            add_string (iStr ^ "build-deps") (Utils.showList ", " (fun (l,_) -> Libname.to_string l) obits.target_builddeps);
             add_string (iStr ^ "oflags") (Utils.showList " " id obits.target_oflags);
             add_string (iStr ^ "pp") (maybe "" (fun ppty -> Pp.pp_type_to_string ppty) obits.target_pp);
 
@@ -549,7 +549,7 @@ let write file proj =
             in
         let rec show_lib iStrSection lib = 
             add "\n";
-            add (sprintf "%slibrary %s\n" iStrSection (lib_name_to_string lib.lib_name));
+            add (sprintf "%slibrary %s\n" iStrSection (Libname.to_string lib.lib_name));
             let iStr = iStrSection ^ "  " in
             add (sprintf "%smodules: %s\n" iStr (Utils.showList "," Hier.to_string lib.lib_modules));
             if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);
@@ -587,11 +587,11 @@ let get_all_buildable_targets proj_file user_flags =
         with Not_found -> raise (UnknownFlag v)
     ) (get_all_targets proj_file)
 
-exception LibraryNotFound of lib_name
-exception ExecutableNotFound of exe_name
-exception BenchNotFound of exe_name
-exception TestNotFound of exe_name
-exception ExampleNotFound of exe_name
+exception LibraryNotFound of Libname.t
+exception ExecutableNotFound of string
+exception BenchNotFound of string
+exception TestNotFound of string
+exception ExampleNotFound of string
 
 let find_lib projFile name =
     try List.find (fun l -> l.lib_name = name) (List.concat (List.map lib_flatten projFile.libs))

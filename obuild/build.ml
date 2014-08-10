@@ -107,9 +107,9 @@ let buildmode_to_library_filety bmode = if bmode = Native then Filetype.FileCMXA
 let internal_libs_paths self_deps =
   List.map (fun (compile_opt,compile_type) ->
       ((compile_opt,compile_type), List.map (fun dep ->
-           let dirname = Dist.get_build_exn (Dist.Target (LibName dep)) in
+           let dirname = Dist.get_build_exn (Dist.Target (Name.Lib dep)) in
            let filety = buildmode_to_library_filety compile_type in
-           let libpath = dirname </> Modname.cmca_of_lib compile_type compile_opt dep in
+           let libpath = dirname </> Libname.to_cmca compile_type compile_opt dep in
            (filety, libpath)
          ) self_deps)
     ) [ (Normal,Native);(Normal,ByteCode);(WithProf,Native);(WithProf,ByteCode);(WithDebug,Native);(WithDebug,ByteCode)]
@@ -315,7 +315,7 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
   let buildDeps =  if is_target_lib target then []
     else list_filter_map (fun dep ->
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-        | Internal -> Some (in_current_dir (Modname.cmca_of_lib compiledType compileOpt dep))
+        | Internal -> Some (in_current_dir (Libname.to_cmca compiledType compileOpt dep))
         | System   ->
           let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
           let pred = match compiledType with
@@ -329,11 +329,11 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
       ) pkgDeps
   in
   let dest = match target.target_name with
-    | LibName libname ->
+    | Name.Lib libname ->
       if plugin then
-        cstate.compilation_builddir_ml Normal </> Modname.cmxs_of_lib compileOpt libname
+        cstate.compilation_builddir_ml Normal </> Libname.to_cmxs compileOpt libname
       else
-        cstate.compilation_builddir_ml Normal </> Modname.cmca_of_lib compiledType compileOpt libname
+        cstate.compilation_builddir_ml Normal </> Libname.to_cmca compiledType compileOpt libname
     | _ ->
       let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
       cstate.compilation_builddir_ml Normal </> outputName
@@ -366,8 +366,8 @@ let link task_index task bstate task_context dag =
   let compiled = get_compilation_order cstate in
   verbose Debug "  compilation order: %s\n" (Utils.showList "," Hier.to_string compiled);
   let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
-  verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
-  let selfLibDirs = List.map (fun dep -> Dist.get_build_exn (Dist.Target (LibName dep))) selfDeps in
+  verbose Debug "  self deps: %s\n" (Utils.showList "," Libname.to_string selfDeps);
+  let selfLibDirs = List.map (fun dep -> Dist.get_build_exn (Dist.Target (Name.Lib dep))) selfDeps in
   let internal_cclibs = if cstate.compilation_csources <> []
     then [Target.get_target_clibname target]
     else []
@@ -379,9 +379,9 @@ let link task_index task bstate task_context dag =
                @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ internal_cclibs)
   in
   let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
-  verbose Verbose "package deps: [%s]\n" (Utils.showList "," lib_name_to_string pkgDeps);
+  verbose Verbose "package deps: [%s]\n" (Utils.showList "," Libname.to_string pkgDeps);
   let useThreadLib =
-    if List.mem (lib_name_of_string "threads") pkgDeps || List.mem (lib_name_of_string "threads.posix") pkgDeps
+    if List.mem (Libname.of_string "threads") pkgDeps || List.mem (Libname.of_string "threads.posix") pkgDeps
     then WithThread
     else NoThread
   in
@@ -406,9 +406,9 @@ let link task_index task bstate task_context dag =
 let get_destination_files target =
   let all_modes = get_all_modes target in
   match target.Target.target_name with
-  | LibName libname ->
-    List.map (fun (typ,opt) -> Modname.cmca_of_lib typ opt libname) all_modes
-  | ExeName e | TestName e | BenchName e | ExampleName e ->
+  | Name.Lib libname ->
+    List.map (fun (typ,opt) -> Libname.to_cmca typ opt libname) all_modes
+  | Name.Exe e | Name.Test e | Name.Bench e | Name.Example e ->
     List.map (fun (ty,opt) ->
         Utils.to_exe_name opt ty (Target.get_target_dest_name target)
       ) all_modes
@@ -495,21 +495,21 @@ let build_dag bstate proj_file targets_dag =
     (match Taskdep.getnext taskdep with
      | None -> failwith "no free task in targets"
      | Some (step,ntask) ->
-       verbose Verbose "preparing target %s\n%!" (name_to_string ntask);
+       verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
        let cur_dag = (match ntask with
-        | ExeName name   ->
+        | Name.Exe name   ->
           let exe = Project.find_exe proj_file name in
           prepare_state (Project.exe_to_target exe) [Hier.of_filename exe.Project.exe_main]
-        | LibName name   ->
+        | Name.Lib name   ->
           let lib = Project.find_lib proj_file name in
           prepare_state (Project.lib_to_target lib) lib.Project.lib_modules
-        | BenchName name ->
+        | Name.Bench name ->
           let bench = Project.find_bench proj_file name in
           prepare_state (Project.bench_to_target bench) [Hier.of_filename bench.Project.bench_main]
-        | TestName name  ->
+        | Name.Test name  ->
           let test = Project.find_test proj_file name in
           prepare_state (Project.test_to_target test) [Hier.of_filename test.Project.test_main]
-        | ExampleName name ->
+        | Name.Example name ->
           let example = Project.find_example proj_file name in
           prepare_state (Project.example_to_target example) [Hier.of_filename example.Project.example_main]
        ) in

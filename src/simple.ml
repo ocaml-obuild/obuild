@@ -43,8 +43,8 @@ let main () =
         ; ("--clib", Arg.String (append id clibs), "append one system library")
         ; ("--cfile", Arg.String (append fn cfiles), "append one c file")
         ; ("--cpkg", Arg.String (append id cpkgs), "append one c pckage")
-        ; ("--dep", Arg.String (append lib_name_of_string depends), "append one dependency")
-        ; ("--depends", Arg.String (append lib_name_of_string depends), "append one dependency")
+        ; ("--dep", Arg.String (append Libname.of_string depends), "append one dependency")
+        ; ("--depends", Arg.String (append Libname.of_string depends), "append one dependency")
         ]
         (fun anon -> anonParams := anon :: !anonParams)
         "usage: obuild-simple [opts] main.ml";
@@ -63,7 +63,7 @@ let main () =
 
     let name = Filename.chop_extension main in
     let target =
-        { target_name = ExeName name
+        { target_name = Name.Exe name
         ; target_type = Exe
         ; target_cbits =
             { target_cdir      = !cDir

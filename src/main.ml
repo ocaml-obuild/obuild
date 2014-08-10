@@ -26,7 +26,7 @@ let configure argv =
   let user_flags = ref [] in
   let user_opts = ref [] in
   let user_set_flags s =
-    let tweak = if string_startswith "-" s then ClearFlag (string_drop 1 s) else SetFlag s
+    let tweak = if string_startswith "-" s then Configure.ClearFlag (string_drop 1 s) else Configure.SetFlag s
     in
     user_flags := tweak :: !user_flags
   in
@@ -86,7 +86,7 @@ let mainBuild argv =
   let dag = match !anon with
     | [] -> project.Analyze.project_targets_dag
     | _  ->
-      let targets = List.map name_of_string !anon in
+      let targets = List.map Target.Name.of_string !anon in
       Dag.subset project.Analyze.project_targets_dag targets
   in
   Build.build_dag bstate proj_file dag

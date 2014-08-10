@@ -6,9 +6,59 @@ open Dependencies
 
 type target_type = Lib | Exe | Test | Bench
 
-let to_dirname = function
-  | ExeName e | BenchName e | TestName e | ExampleName e -> fn e
-  | LibName l -> fn ("lib-" ^ lib_name_to_string l)
+exception TargetNameNoType of string
+exception TargetUnknownType of string * string
+exception TargetNotRecognized of string
+
+
+module Name = struct
+  type t =
+      Lib of Libname.t
+    | Exe of string
+    | Test of string
+    | Bench of string
+    | Example of string
+
+  let to_string = function
+    | Exe e   -> "exe-" ^ e
+    | Bench e -> "bench-" ^ e
+    | Test e  -> "test-" ^ e
+    | Example e -> "example-" ^ e
+    | Lib l   -> "lib-" ^ Libname.to_string l
+
+  let of_string name = match string_split ~limit:2 '-' name with
+    | ["exe"; n]     -> Exe n
+    | ["lib"; n]     -> Lib (Libname.of_string n)
+    | ["test"; n]    -> Test n
+    | ["bench"; n]   -> Bench n
+    | ["example"; n] -> Example n
+    | [prefix; n]    -> raise (TargetUnknownType (prefix, n))
+    | [_]            -> raise (TargetNameNoType name)
+    | _              -> raise (TargetNotRecognized name)
+
+  let to_dirname = function
+    | Exe e | Bench e | Test e | Example e -> fn e
+    | Lib l -> fn ("lib-" ^ Libname.to_string l)
+
+  let get_clibname = function
+    | Exe e     -> "stubs_" ^ e
+    | Bench e   -> "stubs_" ^ e
+    | Test  e   -> "stubs_" ^ e
+    | Example e -> "stubs_" ^ e
+    | Lib l     -> "stubs_" ^ list_last (Libname.to_string_nodes l)
+
+  (* get the core name of the final object representing the object
+   * for an executable/test/bench it will be the name of the executable apart from the extension
+   * for a test it will be the name of the library created (.cmxa/.cma) apart from the extension
+  *)
+  let get_dest_name = function
+    | Exe e   -> e
+    | Bench e -> "bench-" ^ e
+    | Test e  -> "test-" ^ e
+    | Example e  -> "example-" ^ e
+    | Lib l   -> String.concat "_" (Libname.to_string_nodes l)
+
+end
 
 type target_stdlib = Stdlib_None | Stdlib_Standard | Stdlib_Core
 
@@ -43,7 +93,7 @@ type target_extra =
     }
 
 type target =
-    { target_name        : name
+    { target_name        : Name.t
     ; target_type        : target_type
     ; target_cbits       : target_cbits
     ; target_obits       : target_obits
@@ -87,29 +137,11 @@ let newTargetExtra objs =
     ; target_extra_cflags    = []
     }
 
-let get_target_name target = name_to_string target.target_name
-
-let get_target_clibname target =
-    match target.target_name with
-    | ExeName e     -> "stubs_" ^ e
-    | BenchName e   -> "stubs_" ^ e
-    | TestName  e   -> "stubs_" ^ e
-    | ExampleName e -> "stubs_" ^ e
-    | LibName l     -> "stubs_" ^ list_last (lib_name_to_string_nodes l)
-
-(* get the core name of the final object representing the object
- * for an executable/test/bench it will be the name of the executable apart from the extension
- * for a test it will be the name of the library created (.cmxa/.cma) apart from the extension
- *)
-let get_target_dest_name target =
-    match target.target_name with
-    | ExeName e   -> e
-    | BenchName e -> "bench-" ^ e
-    | TestName e  -> "test-" ^ e
-    | ExampleName e  -> "example-" ^ e
-    | LibName l   -> String.concat "_" (lib_name_to_string_nodes l)
-
 let is_target_lib target = target.target_type = Lib
+
+let get_target_name target = Name.to_string target.target_name
+let get_target_dest_name target = Name.get_dest_name target.target_name
+let get_target_clibname target = Name.get_clibname target.target_name
 
 let get_ocaml_compiled_types target =
     let (nat,byte) =

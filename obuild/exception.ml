@@ -22,7 +22,7 @@ let show exn =
                 (Target.get_target_name t) (Hier.to_string m);
         exit 3
     | Project.ModuleListEmpty l ->
-        error "library %s doesn't have any modules defined.\n" (lib_name_to_string l);
+        error "library %s doesn't have any modules defined.\n" (Libname.to_string l);
         exit 3
     | Project.InvalidConfFile c ->
         error "configuration file appears invalid: %s\n" c; exit 3
@@ -38,15 +38,15 @@ let show exn =
     | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4
     | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.to_string dir); exit 4
     (* types stuff *)
-    | Types.TargetNameNoType s      ->
+    | Target.TargetNameNoType s      ->
         error "Unknown target '%s' with no prefix:\n" s;
         error "  targets need to start by one of lib-,exe-,bench-,test-,example-\n";
         exit 4
-    | Types.TargetUnknownType (p,s) ->
+    | Target.TargetUnknownType (p,s) ->
         error "unknown type prefix '%s' in '%s':\n" p s;
         error "  targets need to start by one of lib-,exe-,bench-,test-,example-\n";
         exit 4
-    | Types.TargetNotRecognized s   ->
+    | Target.TargetNotRecognized s   ->
         error "Unknown target specified '%s'\n" s;
         exit 4
     (* reconfigure *)
@@ -62,9 +62,9 @@ let show exn =
     | Meta.MetaParseError (fp,err) ->
         error "unexpected parse error '%s' in meta file %s\n" err (fp_to_string fp); exit 4
     | Meta.ArchiveNotFound (path, dep, preds) ->
-        error "archive %s not found in %s (%s)\n" (Utils.showList "," Meta.Predicate.to_string preds) (lib_name_to_string dep) (fp_to_string path); exit 4
+        error "archive %s not found in %s (%s)\n" (Utils.showList "," Meta.Predicate.to_string preds) (Libname.to_string dep) (fp_to_string path); exit 4
     | Analyze.SublibraryDoesntExists dep ->
-        error "dependency %s not found\n" (lib_name_to_string dep); exit 4
+        error "dependency %s not found\n" (Libname.to_string dep); exit 4
     (* build related failure *)
     | Prepare.ModuleDependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.to_string m); exit 5
     | Prepare.ModuleNotFound (paths,m) ->

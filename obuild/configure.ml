@@ -12,6 +12,8 @@ exception ConfigurationMissingKey of string
 exception ConfigurationTypeMismatch of string * string * string
 exception ConfigureScriptFailed of string
 
+type flag_action = SetFlag of string | ClearFlag of string
+
 let getDigestKV () =
     let digest = Project.digest () in
     [ ("obuild-digest", digest) ]

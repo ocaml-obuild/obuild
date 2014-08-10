@@ -17,7 +17,7 @@ type dep_constraint = Expr.expr
 type dep_main_name = string
 
 (* represent a dependency in a form abc[.def.xyz] *)
-type dep_name = lib_name
+type dep_name = Libname.t
 
 type dependency = dep_name * (dep_constraint option)
 

@@ -106,7 +106,7 @@ let get_compilation_order cstate =
   in
   list_filter_map filter_modules (Dagutils.linearize cstate.compilation_dag)
 
-let camlp4Libname = lib_name_of_string "camlp4"
+let camlp4Libname = Libname.of_string "camlp4"
 let syntaxPredsCommon = [Meta.Predicate.Syntax;Meta.Predicate.Preprocessor]
 
 let get_p4pred preprocessor = match preprocessor with
@@ -124,8 +124,8 @@ let get_syntax_pp bstate preprocessor buildDeps =
         if lib.Project.lib_syntax
         then (
           (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
-          let dir = Dist.get_build_exn (Dist.Target (LibName lib.Project.lib_name)) in
-          Some { pp_pkg_strs = [fp_to_string (dir </> Modname.cmca_of_lib ByteCode Normal lib.Project.lib_name) ]}
+          let dir = Dist.get_build_exn (Dist.Target (Name.Lib lib.Project.lib_name)) in
+          Some { pp_pkg_strs = [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.lib_name) ]}
         ) else None
       ) else (
         let meta = Analyze.get_pkg_meta spkg conf in
@@ -163,7 +163,7 @@ let get_modules_desc bstate target toplevelModules =
             | _              -> None
           ) nodes
         in
-        verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," lib_name_to_string syntaxPkgs);
+        verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
         let p4pred = get_p4pred pp in
         let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
         let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
@@ -464,17 +464,17 @@ let prepare_target_ bstate buildDir target toplevelModules =
       | Internal -> true
       | _ -> false) depPkgs in
   let depIncPathInter = List.map (fun dep ->
-      Dist.get_build_exn (Dist.Target (LibName dep))) depsInternal in
+      Dist.get_build_exn (Dist.Target (Name.Lib dep))) depsInternal in
   let depIncPathSystem = List.map (fun dep ->
-      Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)) depsSystem in
+      Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.Libname.main_name)) depsSystem in
   let depIncludePaths = depIncPathInter @ depIncPathSystem in
   let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncPathInter @ depIncPathSystem in
   let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncPathInter @ depIncPathSystem in
   let depLinkingPaths =
     List.map (fun dep ->
         match Hashtbl.find conf.project_dep_data dep with
-        | Internal -> Dist.get_build_exn (Dist.Target (LibName dep))
-        | System   -> Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)
+        | Internal -> Dist.get_build_exn (Dist.Target (Name.Lib dep))
+        | System   -> Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.Libname.main_name)
       ) depPkgs
   in
   let cdepsIncludePaths : filepath list =

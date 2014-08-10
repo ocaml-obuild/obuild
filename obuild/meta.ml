@@ -61,7 +61,7 @@ end
 
 exception LibraryNotFound of string
 exception SubpackageNotFound of string
-exception ArchiveNotFound of filepath * lib_name * (Predicate.t list)
+exception ArchiveNotFound of filepath * Libname.t * (Predicate.t list)
 exception MetaParseError of filepath * string
 
 module Pkg = struct
@@ -111,18 +111,54 @@ module Pkg = struct
 
   let is_syntax_ pkg = List.length (get_syntaxes pkg) > 0
 
-  let is_syntax (path, rootPkg) dep = is_syntax_ (find dep.lib_subnames rootPkg)
+  let is_syntax (path, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
 
   let get_archive_with_filter (path, root) dep pred =
-    let pkg = find dep.lib_subnames root in
+    let pkg = find dep.Libname.subnames root in
     List.find_all (fun (preds,_) -> List.mem pred preds) pkg.archives
 
   let get_archive (path, root) dep csv =
-    let pkg = find dep.lib_subnames root in
+    let pkg = find dep.Libname.subnames root in
     try
       snd (List.find (fun (e,_) -> list_eq_noorder e csv) pkg.archives)
     with Not_found ->
       raise (ArchiveNotFound (path, dep, csv))
+
+  let write path package =
+    let out = Buffer.create 1024 in
+    let append = Buffer.add_string out in
+    let rec write_one indent pkg =
+      let indent_str = String.make indent ' ' in
+      let output_field field name =
+        if field <> "" then
+          append (sprintf "%s%s = \"%s\"\n" indent_str name field);
+      in
+      output_field pkg.description "description";
+      output_field pkg.version "version";
+      output_field pkg.browse_interface "browse_interface";
+      output_field pkg.exists_if "exists_if";
+
+      List.iter (fun (mpred,deps) ->
+          let pred_str = match mpred with
+            | None -> ""
+            | Some l -> "(" ^ String.concat "," (List.map Predicate.to_string l) ^ ")"
+          in
+          let dep_str = String.concat "," (List.map (fun dep -> Libname.to_string dep) deps) in
+          append (sprintf "%srequires%s = \"%s\"\n" indent_str pred_str dep_str);
+        ) pkg.requires;
+
+      List.iter (fun (csv,v) ->
+          let k = String.concat "," (List.map Predicate.to_string csv) in
+          append (sprintf "%sarchive(%s) = \"%s\"\n" indent_str k v)
+        ) pkg.archives;
+      List.iter (fun spkg ->
+          append (sprintf "%spackage \"%s\" (\n" indent_str spkg.name);
+          write_one (indent+2) spkg;
+          append (sprintf "%s)\n" indent_str)
+        ) pkg.subs
+    in
+    write_one 0 package;
+    Filesystem.writeFile path (Buffer.contents out)
 
 end
 
@@ -260,7 +296,7 @@ let parse name content =
         match tokens with
         | PLUSEQ :: S reqs :: xs
         | EQ :: S reqs :: xs ->
-            let deps = List.map (fun r -> lib_name_of_string r)
+            let deps = List.map (fun r -> Libname.of_string r)
                 $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
                 in
             ((mpreds, (List.rev deps)), xs)
@@ -342,45 +378,6 @@ let parse name content =
 let read path =
     let metaContent = Filesystem.readFile path in
     parse path metaContent
-
-let write path package =
-    let out = Buffer.create 1024 in
-    let append = Buffer.add_string out in
-    let rec write_one indent pkg =
-        let indentStr = String.make indent ' ' in
-        if pkg.Pkg.description <> ""
-            then append (sprintf "%sdescription = \"%s\"\n" indentStr pkg.Pkg.description);
-        if pkg.Pkg.version <> ""
-            then append (sprintf "%sversion = \"%s\"\n" indentStr pkg.Pkg.version);
-        if pkg.Pkg.browse_interface <> ""
-            then append (sprintf "%sbrowse_interfaces = \"%s\"\n" indentStr pkg.Pkg.browse_interface);
-        if pkg.Pkg.exists_if <> ""
-            then append (sprintf "%sexists_if = \"%s\"\n" indentStr pkg.Pkg.exists_if);
-
-        List.iter (fun (mpred,deps) ->
-            let predStr =
-                match mpred with
-                | None -> ""
-                | Some l -> "(" ^ String.concat "," (List.map Predicate.to_string l) ^ ")"
-                in
-            let depStr = String.concat "," (List.map (fun dep -> lib_name_to_string dep) deps)
-                in
-            append (sprintf "%srequires%s = \"%s\"\n" indentStr predStr depStr);
-        ) pkg.Pkg.requires;
-
-        List.iter (fun (csv,v) ->
-            let k = String.concat "," (List.map Predicate.to_string csv) in
-            append (sprintf "%sarchive(%s) = \"%s\"\n" indentStr k v)
-        ) pkg.Pkg.archives;
-        List.iter (fun spkg ->
-            append (sprintf "%spackage \"%s\" (\n" indentStr spkg.Pkg.name);
-            write_one (indent+2) spkg;
-            append (sprintf "%s)\n" indentStr)
-        ) pkg.Pkg.subs
-        in
-
-    write_one 0 package;
-    Filesystem.writeFile path (Buffer.contents out)
 
 (* get the META file path associated to a library *)
 let findLibPath name =

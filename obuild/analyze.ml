@@ -15,7 +15,7 @@ exception OcamlConfigMissing of string
 (* differentiate if the dependency is system or is internal to the project *)
 type dep_type = System | Internal
 
-type dependency_tag = Target of name | Dependency of lib_name
+type dependency_tag = Target of Name.t | Dependency of Libname.t
 
 type cpkg_config =
     { cpkg_conf_libs : string list
@@ -25,10 +25,10 @@ type cpkg_config =
 (* this is a read only config of the project for configuring and building.
  *)
 type project_config =
-    { project_dep_data    : (lib_name, dep_type) Hashtbl.t
+    { project_dep_data    : (Libname.t, dep_type) Hashtbl.t
     ; project_pkg_meta    : (dep_main_name, Meta.t) Hashtbl.t
     ; project_pkgdeps_dag : dependency_tag Dag.t
-    ; project_targets_dag : Types.name Dag.t
+    ; project_targets_dag : Name.t Dag.t
     ; project_all_deps    : dependency list
     ; project_file        : Project.obuild
     ; project_ocamlcfg    : (string, string) Hashtbl.t
@@ -37,16 +37,16 @@ type project_config =
     }
 
 let get_meta_from_disk dep =
-    verbose Debug "  fetching META %s\n%!" dep.lib_main_name;
-    try Meta.findLib dep.lib_main_name
+    verbose Debug "  fetching META %s\n%!" dep.Libname.main_name;
+    try Meta.findLib dep.Libname.main_name
     with Meta.LibraryNotFound name -> raise (DependencyMissing name)
 
 let get_meta_cache metaTable dep =
     try
-        Hashtbl.find metaTable dep.lib_main_name
+        Hashtbl.find metaTable dep.Libname.main_name
     with Not_found ->
         let r = get_meta_from_disk dep in
-        Hashtbl.add metaTable dep.lib_main_name r;
+        Hashtbl.add metaTable dep.Libname.main_name r;
         r
 
 let get_ocaml_config_key_hashtbl key h =
@@ -67,14 +67,14 @@ let is_pkg_internal project pkg = Hashtbl.find project.project_dep_data pkg = In
 let is_pkg_system project pkg   = Hashtbl.find project.project_dep_data pkg = System
 
 let get_pkg_meta lib project =
-    try Hashtbl.find project.project_pkg_meta lib.lib_main_name
-    with Not_found -> failwith (sprintf "package %s not found in the hashtbl: internal error" (lib_name_to_string lib))
+    try Hashtbl.find project.project_pkg_meta lib.Libname.main_name
+    with Not_found -> failwith (sprintf "package %s not found in the hashtbl: internal error" (Libname.to_string lib))
 
 let get_internal_library_deps project target =
     let internalDeps = Dag.getChildren project.project_targets_dag target.target_name in
     list_filter_map (fun name ->
         match name with
-        | LibName lname -> Some lname
+        | Name.Lib lname -> Some lname
         | _             -> None
     ) internalDeps
 
@@ -155,8 +155,8 @@ let prepare projFile user_flags =
 
     let allTargets = Project.get_all_buildable_targets projFile user_flags in
 
-    let internalLibs = List.map (fun lib -> lib.Project.lib_name.lib_main_name) projFile.Project.libs in
-    let isInternal lib = List.mem lib.lib_main_name internalLibs in
+    let internalLibs = List.map (fun lib -> lib.Project.lib_name.Libname.main_name) projFile.Project.libs in
+    let isInternal lib = List.mem lib.Libname.main_name internalLibs in
 
     (* establish inter-dependencies in the project.
      * only consider internal libraries *)
@@ -164,8 +164,8 @@ let prepare projFile user_flags =
         Dag.addNode target.target_name targetsDag;
         List.iter (fun (dep, _) ->
             if isInternal dep then (
-                verbose Debug "  internal depends: %s\n" (lib_name_to_string dep);
-                Dag.addEdge target.target_name (LibName dep) targetsDag;
+                verbose Debug "  internal depends: %s\n" (Libname.to_string dep);
+                Dag.addEdge target.target_name (Name.Lib dep) targetsDag;
             )
         ) (Target.get_all_builddeps target);
     ) allTargets;
@@ -184,7 +184,7 @@ let prepare projFile user_flags =
                 let iLibDep = Dependency iLib.Project.lib_name in
                 Dag.addNode iLibDep depsDag;
                 List.iter (fun (reqDep,_) ->
-                    verbose Debug "  library %s depends on %s\n" (lib_name_to_string iLib.Project.lib_name) (lib_name_to_string reqDep);
+                    verbose Debug "  library %s depends on %s\n" (Libname.to_string iLib.Project.lib_name) (Libname.to_string reqDep);
                     Dag.addEdge iLibDep (Dependency reqDep) depsDag;
                     loop reqDep
                 ) iLib.Project.lib_target.target_obits.target_builddeps;
@@ -194,7 +194,7 @@ let prepare projFile user_flags =
                   let (_, meta) = get_meta_cache metaTable dep in
                   Dag.addNode (Dependency dep) depsDag;
                   let pkg =
-                      try Meta.Pkg.find dep.lib_subnames meta
+                      try Meta.Pkg.find dep.Libname.subnames meta
                       with Not_found -> raise (SublibraryDoesntExists dep)
                          | Meta.SubpackageNotFound _ -> raise (SublibraryDoesntExists dep)
                       in
@@ -203,7 +203,7 @@ let prepare projFile user_flags =
                       | Some [Meta.Predicate.Toploop] -> ()
                       | _ ->
                           List.iter (fun reqDep ->
-                              verbose Debug "  library %s depends on %s\n" (lib_name_to_string dep) (lib_name_to_string reqDep);
+                              verbose Debug "  library %s depends on %s\n" (Libname.to_string dep) (Libname.to_string reqDep);
                               Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
                               loop reqDep
                           ) reqDeps
@@ -224,7 +224,7 @@ let prepare projFile user_flags =
         (* if a lib, then we insert ourself as dependency for executable or other library *)
         let insertEdgeForDependency =
             (match target.target_name with
-            | LibName l -> Dag.addNode (Dependency l) depsDag; Dag.addEdge (Dependency l)
+            | Name.Lib l -> Dag.addNode (Dependency l) depsDag; Dag.addEdge (Dependency l)
             | _         -> fun _ _ -> ()
             )
             in
@@ -253,14 +253,14 @@ let prepare projFile user_flags =
             let dotDir = Dist.create_build Dist.Dot in
             let path = dotDir </> fn "dependencies.dot" in
             let toString t = match t with
-                             | Target s     -> "target(" ^ name_to_string s ^ ")"
-                             | Dependency s -> lib_name_to_string s
+                             | Target s     -> "target(" ^ Name.to_string s ^ ")"
+                             | Dependency s -> Libname.to_string s
                              in
             let dotContent = Dag.toDot toString "dependencies" true depsDag in
             Filesystem.writeFile path dotContent;
 
             let ipath = dotDir </> fn "internal-dependencies.dot" in
-            let dotIContent = Dag.toDot name_to_string "internal-dependencies" true targetsDag in
+            let dotIContent = Dag.toDot Name.to_string "internal-dependencies" true targetsDag in
             Filesystem.writeFile ipath dotIContent;
         );
 

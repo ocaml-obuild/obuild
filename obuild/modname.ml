@@ -7,11 +7,9 @@ exception InvalidModuleName of string
 exception EmptyModuleName
 exception ModuleFilenameNotValid of string
 
-let char_isalpha c =
-    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+let char_isalpha c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 
-let char_is_valid_modchar c =
-    char_isalpha c || (c >= '0' && c <= '9') || c == '_'
+let char_is_valid_modchar c = char_isalpha c || (c >= '0' && c <= '9') || c == '_'
  
 let string_all p s =
     let valid = ref true in
@@ -27,18 +25,6 @@ let wrap x =
 let of_string x = wrap x
 let to_string x = x
 let to_dir x = String.uncapitalize x
-
-let to_libstring lib = String.concat "_" (lib_name_to_string_nodes lib)
-let cmxs_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cmxs")
-let cmxa_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cmxa")
-let cma_of_lib (compileType: ocaml_compilation_option) lib = fn (to_libstring lib ^ extDP compileType ^ ".cma")
-let cmca_of_lib b = if b = Native then cmxa_of_lib else cma_of_lib
-
-(* only used for stdlib stuff *)
-let lib_of_cmca b file =
-  let suffix = if b = Native then ".cmxa" else ".cma" in
-  Filename.chop_suffix (fn_to_string file) suffix
-
 let to_x ext modname = fn (String.uncapitalize modname ^ ext)
 let to_o = to_x ".o"
 let to_directory = to_x ""

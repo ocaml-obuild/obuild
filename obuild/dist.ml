@@ -4,15 +4,15 @@ open Ext
 open Types
 open Gconf
 
-type t = Autogen | Dot | Target of name
+type t = Autogen | Dot | Target of Target.Name.t
 
 let to_string = function
   | Autogen  -> "autogen"
   | Dot      -> "dot"
-  | Target n -> "target(" ^ name_to_string n ^ ")"
+  | Target n -> "target(" ^ Target.Name.to_string n ^ ")"
 
 let to_filename = function
-  | Target tn    -> Target.to_dirname tn
+  | Target tn    -> Target.Name.to_dirname tn
   | Dot          -> fn ("dot")
   | Autogen      -> fn ("autogen")
 
