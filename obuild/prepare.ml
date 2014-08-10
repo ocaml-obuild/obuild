@@ -124,7 +124,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
         if lib.Project.lib_syntax
         then (
           (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
-          let dir = Dist.getBuildDest (Dist.Target (LibName lib.Project.lib_name)) in
+          let dir = Dist.get_build_exn (Dist.Target (LibName lib.Project.lib_name)) in
           Some { pp_pkg_strs = [fp_to_string (dir </> Modname.cmca_of_lib ByteCode Normal lib.Project.lib_name) ]}
         ) else None
       ) else (
@@ -147,7 +147,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
  * and their relationship with each other
 *)
 let get_modules_desc bstate target toplevelModules =
-  let autogenDir = Dist.getBuildDest Dist.Autogen in
+  let autogenDir = Dist.get_build_exn Dist.Autogen in
   let modulesDeps = Hashtbl.create 64 in
   let file_search_paths hier = [target.target_obits.target_srcdir <//> Hier.to_dirpath hier; autogenDir] in
 
@@ -196,7 +196,7 @@ let get_modules_desc bstate target toplevelModules =
                 None
               else
                 Some (Modname.of_directory f)
-            else (match Filetype.get_extension_path fp with
+            else (match Filetype.of_filepath fp with
                 | Filetype.FileML  -> Some (Modname.of_filename f)
                 | Filetype.FileOther s -> if Generators.is_generator_ext s then Some (Modname.of_filename f)
                   else None
@@ -218,7 +218,7 @@ let get_modules_desc bstate target toplevelModules =
           | None -> srcPath
           | Some f ->
             verbose Debug "  %s is a generator\n%!" moduleName;
-            let actual_src_path = Dist.getBuildDest (Dist.Target target.target_name) in
+            let actual_src_path = Dist.get_build_exn (Dist.Target target.target_name) in
             let dest_file = Hier.to_filename hier actual_src_path in
             if not (Filesystem.exists dest_file) ||
                ((Filesystem.getModificationTime dest_file) < (Filesystem.getModificationTime f)) then begin
@@ -322,7 +322,7 @@ let get_modules_desc bstate target toplevelModules =
  * that is going to be required for compilation and linking.
 *)
 let prepare_target_ bstate buildDir target toplevelModules =
-  let autogenDir = Dist.getBuildDest Dist.Autogen in
+  let autogenDir = Dist.get_build_exn Dist.Autogen in
   let buildDirP = buildDir </> fn "opt-p" in
   let buildDirD = buildDir </> fn "opt-d" in
 
@@ -420,7 +420,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
           in
           let cFile = cbits.target_cdir </> cSource in
           let hFiles = List.map (fun x -> Filetype.make_id (Filetype.FileH, x))
-              (List.filter (fun x -> Filetype.get_extension_path x = Filetype.FileH) fps)
+              (List.filter (fun x -> Filetype.of_filepath x = Filetype.FileH) fps)
           in
           let oFile = buildDir </> (cSource <.> "o") in
           let cNode = Filetype.make_id (Filetype.FileC, cFile) in
@@ -441,7 +441,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
 
   if gconf.conf_dump_dot
   then (
-    let dotDir = Dist.createBuildDest Dist.Dot in
+    let dotDir = Dist.create_build Dist.Dot in
     let path = dotDir </> fn (Target.get_target_name target ^ ".dot") in
     let reducedDag = Dag.transitive_reduction dag in
     let dotContent = Dag.toDot string_of_compile_step (Target.get_target_name target) true reducedDag in
@@ -464,7 +464,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
       | Internal -> true
       | _ -> false) depPkgs in
   let depIncPathInter = List.map (fun dep ->
-      Dist.getBuildDest (Dist.Target (LibName dep))) depsInternal in
+      Dist.get_build_exn (Dist.Target (LibName dep))) depsInternal in
   let depIncPathSystem = List.map (fun dep ->
       Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)) depsSystem in
   let depIncludePaths = depIncPathInter @ depIncPathSystem in
@@ -473,7 +473,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   let depLinkingPaths =
     List.map (fun dep ->
         match Hashtbl.find conf.project_dep_data dep with
-        | Internal -> Dist.getBuildDest (Dist.Target (LibName dep))
+        | Internal -> Dist.get_build_exn (Dist.Target (LibName dep))
         | System   -> Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.lib_main_name)
       ) depPkgs
   in

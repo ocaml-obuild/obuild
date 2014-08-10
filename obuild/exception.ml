@@ -36,7 +36,7 @@ let show exn =
     (* dist directory related *)
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
     | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4
-    | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.buildtype_to_string dir); exit 4
+    | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.to_string dir); exit 4
     (* types stuff *)
     | Types.TargetNameNoType s      ->
         error "Unknown target '%s' with no prefix:\n" s;

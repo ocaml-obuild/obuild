@@ -10,7 +10,7 @@ open Helper
 open Gconf
 
 let list_target_files_pred target pred =
-  let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+  let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
   Build.sanity_check build_dir target;
   (* don't play with matches *)
   let matches = Ext.Filesystem.list_dir_pred pred build_dir in
@@ -19,13 +19,13 @@ let list_target_files_pred target pred =
 let list_lib_files lib build_dir = list_target_files_pred lib (fun f ->
     if (fn_to_string f) = "META" then true
     else
-      match Filetype.get_extension_path (build_dir </> f) with
+      match Filetype.of_filepath (build_dir </> f) with
       | Filetype.FileCMX | Filetype.FileCMI | Filetype.FileA | Filetype.FileCMXS
       | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
       | _                  -> false)
 
 let list_exe_files lib build_dir = list_target_files_pred lib (fun f ->
-    match Filetype.get_extension_path (build_dir </> f) with
+    match Filetype.of_filepath (build_dir </> f) with
     | Filetype.FileEXE -> true
     | _                -> false)
 
@@ -34,7 +34,7 @@ let opam_install_file proj_file flags =
   Utils.generateFile install_path (fun add ->
       let all_targets = Project.get_all_buildable_targets proj_file flags in
       let print_target_files target list_files_fun =
-        let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+        let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
         let (_, files) = list_files_fun target build_dir in
         List.iter (fun file -> let file_str = fn_to_string file in
                     add (sprintf "  \"%s/%s\" {\"%s\"}\n" (fp_to_string build_dir) file_str file_str)
@@ -77,7 +77,7 @@ let lib_to_meta proj_file lib =
   }
 
 let write_lib_meta projFile lib =
-    let dir = Dist.getBuildDest (Dist.Target lib.lib_target.target_name) in
+    let dir = Dist.get_build_exn (Dist.Target lib.lib_target.target_name) in
     let metadir_path = dir </> fn "META" in
     let pkg = lib_to_meta projFile lib in
     Meta.write metadir_path pkg
@@ -92,7 +92,7 @@ let copy_files files dest_dir dir_name =
 let install_lib proj_file lib dest_dir =
   write_lib_meta proj_file lib;
   let all_files = List.map (fun target ->
-      let build_dir = Dist.getBuildDest (Dist.Target target.Target.target_name) in
+      let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
       Build.sanity_check build_dir target;
       list_lib_files target build_dir
     ) (Project.lib_to_targets lib) in

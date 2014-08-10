@@ -76,7 +76,7 @@ let mainBuild argv =
   ] in
   Arg.parse_argv (Array.of_list argv) build_options (fun s -> anon := s :: !anon) (usageStr "build");
 
-  Dist.checkOrFail ();
+  Dist.exist ();
   let setup = read_setup () in
   let proj_file = project_read () in
   let flags = Configure.check proj_file true setup in
@@ -92,8 +92,8 @@ let mainBuild argv =
   Build.build_dag bstate proj_file dag
 
 let mainClean argv =
-    if Filesystem.exists (Dist.getDistPath ())
-        then Filesystem.removeDir (Dist.getDistPath ())
+    if Filesystem.exists (Dist.get_path ())
+        then Filesystem.removeDir (Dist.get_path ())
         else ()
 
 let mainSdist argv =
@@ -102,7 +102,7 @@ let mainSdist argv =
            [ ("--snapshot", Arg.Set isSnapshot, "build a snapshot of the project")
            ] (fun s -> failwith ("unknown option: " ^ s))
            (usageStr "sdist");
-    Dist.check (fun () -> ());
+    Dist.check_exn (fun () -> ());
 
     let proj_file = project_read () in
     Sdist.run proj_file !isSnapshot;
@@ -143,7 +143,7 @@ let mainInstall argv =
   ] (fun s -> failwith ("unknown option: " ^ s))
     (usageStr "install");
 
-  Dist.checkOrFail ();
+  Dist.exist ();
   let setup = read_setup () in
   let proj_file = project_read () in
   let flags = Configure.check proj_file false setup in
@@ -181,7 +181,7 @@ let mainTest argv =
                 List.map (fun test ->
                     let testTarget = Project.test_to_target test in
                     let outputName = Utils.to_exe_name Normal Native (Target.get_target_dest_name testTarget) in
-                    let dir = Dist.getBuildDest (Dist.Target testTarget.Target.target_name) in
+                    let dir = Dist.get_build_exn (Dist.Target testTarget.Target.target_name) in
                     let exePath = dir </> outputName in
                     if not (Filesystem.exists exePath) then (
                         eprintf "error: %s doesn't appears built, make sure build has been run first\n" (Target.get_target_name testTarget);

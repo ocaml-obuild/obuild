@@ -58,7 +58,7 @@ let reason_from_paths (_,dest) (srcTy,changedSrc) =
   else (
     let bdest = path_basename dest in
     let bsrc  = path_basename changedSrc  in
-    match Filetype.get_extension bdest with
+    match Filetype.of_filename bdest with
     | Filetype.FileCMX | Filetype.FileCMO -> (
         match srcTy with
         | Filetype.FileCMX | Filetype.FileCMO ->
@@ -107,7 +107,7 @@ let buildmode_to_library_filety bmode = if bmode = Native then Filetype.FileCMXA
 let internal_libs_paths self_deps =
   List.map (fun (compile_opt,compile_type) ->
       ((compile_opt,compile_type), List.map (fun dep ->
-           let dirname = Dist.getBuildDest (Dist.Target (LibName dep)) in
+           let dirname = Dist.get_build_exn (Dist.Target (LibName dep)) in
            let filety = buildmode_to_library_filety compile_type in
            let libpath = dirname </> Modname.cmca_of_lib compile_type compile_opt dep in
            (filety, libpath)
@@ -367,7 +367,7 @@ let link task_index task bstate task_context dag =
   verbose Debug "  compilation order: %s\n" (Utils.showList "," Hier.to_string compiled);
   let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
   verbose Debug "  self deps: %s\n" (Utils.showList "," lib_name_to_string selfDeps);
-  let selfLibDirs = List.map (fun dep -> Dist.getBuildDest (Dist.Target (LibName dep))) selfDeps in
+  let selfLibDirs = List.map (fun dep -> Dist.get_build_exn (Dist.Target (LibName dep))) selfDeps in
   let internal_cclibs = if cstate.compilation_csources <> []
     then [Target.get_target_clibname target]
     else []
@@ -427,7 +427,7 @@ let sanity_check build_dir target =
 
 let check task_index task task_context dag =
   let (cstate,target) = Hashtbl.find task_context task in
-  let buildDir = Dist.getBuildDest_path (Dist.Target target.target_name) in
+  let buildDir = Dist.get_build_path (Dist.Target target.target_name) in
   let (nb_step,nb_step_len) = get_nb_step dag in
   verbose Report "[%*d of %d] Checking %s\n%!" nb_step_len task_index nb_step (fp_to_string buildDir);
   sanity_check buildDir target;
@@ -472,7 +472,7 @@ let build_exe bstate exe =
   let target = Project.exe_to_target exe in
   let modules = [Hier.of_filename exe.Project.exe_main] in
   let task_context = Hashtbl.create 64 in
-  let build_dir = Dist.createBuildDest (Dist.Target target.target_name) in
+  let build_dir = Dist.create_build (Dist.Target target.target_name) in
   let cstate = prepare_target bstate build_dir target modules in
   List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
     (Dag.getNodes cstate.compilation_dag);
@@ -484,7 +484,7 @@ let build_dag bstate proj_file targets_dag =
   let taskdep = Taskdep.init targets_dag in
   let targets_deps = Hashtbl.create 64 in
   let prepare_state target modules =
-    let build_dir = Dist.createBuildDest (Dist.Target target.target_name) in
+    let build_dir = Dist.create_build (Dist.Target target.target_name) in
     let cstate = prepare_target bstate build_dir target modules in
     List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
       (Dag.getNodes cstate.compilation_dag);

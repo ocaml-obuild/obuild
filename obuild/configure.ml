@@ -78,7 +78,7 @@ let create_dist project flags =
   verbose Verbose "configuration changed, deleting dist\n%!";
   Filesystem.removeDirContent (Dist.build_path);
   verbose Verbose "auto-generating configuration files\n%!";
-  let autogenDir = Dist.createBuildDest Dist.Autogen in
+  let autogenDir = Dist.create_build Dist.Autogen in
   generateMlFile project (autogenDir </> fn "path_generated.ml") flags;
   generateCFile project (autogenDir </> fn "obuild_macros.h") flags
 
@@ -130,7 +130,7 @@ let set_opts hashtable = (* load the environment *)
   List.iter (fun k -> Gconf.set_target_options k (bool_of_opt hashtable k)) opts
 
 let run proj_file user_flags user_opts =
-  Dist.checkOrCreate ();
+  Dist.create_maybe ();
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
   let configure = try Some (Dist.read_configure ()) with _ -> None in

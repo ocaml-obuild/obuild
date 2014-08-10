@@ -17,7 +17,7 @@ let generators = ref [
 let is_generator_ext ext = List.exists (fun gen -> gen.suffix = ext) !generators
 
 let run dest src =
-  let ext = Filetype.get_extension_path src in
+  let ext = Filetype.of_filepath src in
   let s = match ext with Filetype.FileOther s -> s | _ -> raise (GeneratorNotFound (fp_to_string src)) in
   let gen = List.find (fun gen -> gen.suffix = s) !generators in
   let args = gen.command @ [ (fp_to_string dest) ^ gen.dest_suffix; fp_to_string src ] in

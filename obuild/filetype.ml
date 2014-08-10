@@ -66,7 +66,7 @@ let get_id fdep = (fdep.fdep_ty, fdep.fdep_path)
 let get_type fdep = fdep.fdep_ty
 let get_path fdep = fdep.fdep_path
 
-let get_extension (name : filename) : t =
+let of_filename (name : filename) : t =
   try
     let nameUnpack = fn_to_string name in
     let len = String.length (Filename.chop_extension nameUnpack) in
@@ -74,7 +74,7 @@ let get_extension (name : filename) : t =
     of_string (String.sub nameUnpack (len+1) (String.length nameUnpack - len - 1))
   with Invalid_argument _ -> FileEXE (* best effort, suit our case for unix *)
 
-let get_extension_path (path : filepath) : t = get_extension (path_basename path)
+let of_filepath (path : filepath) : t = of_filename (path_basename path)
 
 let replace_extension (name:filename) ext =
   let extStr = to_string ext in

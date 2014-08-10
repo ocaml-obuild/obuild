@@ -4,7 +4,6 @@ open Ext.Filepath
 open Ext
 open Obuild.Types
 open Obuild.Helper
-open Obuild.Filetype
 open Obuild.Target
 open Obuild.Gconf
 open Obuild
@@ -15,7 +14,7 @@ let run projFile isSnapshot =
     let sdistDir = name ^ "-" ^ ver in
     let sdistName = fn (sdistDir ^ ".tar.gz") in
 
-    let dest = Dist.getDistPath () </> fn sdistDir in
+    let dest = Dist.get_path () </> fn sdistDir in
     let currentDir = Unix.getcwd () in
     let _ = Filesystem.mkdirSafe dest 0o755 in
 
@@ -27,16 +26,16 @@ let run projFile isSnapshot =
     let copy_obits obits =
         Filesystem.iterate (fun ent -> 
            let fpath = obits.target_srcdir </> ent in
-           match Filetype.get_extension_path fpath with
-           | FileML | FileMLI -> Filesystem.copy_to_dir fpath dest
+           match Filetype.of_filepath fpath with
+           | Filetype.FileML | Filetype.FileMLI -> Filesystem.copy_to_dir fpath dest
            | _                -> ()
         ) obits.target_srcdir
         in
     let copy_cbits cbits =
         Filesystem.iterate (fun ent -> 
             let fpath = cbits.target_cdir </> ent in
-            match Filetype.get_extension_path fpath with
-            | FileC | FileH -> Filesystem.copy_to_dir fpath dest
+            match Filetype.of_filepath fpath with
+            | Filetype.FileC | Filetype.FileH -> Filesystem.copy_to_dir fpath dest
             | _ -> ()
         ) cbits.target_cdir
         in
@@ -52,9 +51,9 @@ let run projFile isSnapshot =
     List.iter (fun extra -> Filesystem.copy_to_dir extra dest) projFile.Project.extra_srcs;
 
     finally (fun () ->
-        Unix.chdir (fp_to_string (Dist.getDistPath ()));
+        Unix.chdir (fp_to_string (Dist.get_path ()));
         Prog.runTar (fn_to_string sdistName) sdistDir
     ) (fun () -> Unix.chdir currentDir);
 
-    verbose Report "Source tarball created: %s\n" (fp_to_string (Dist.getDistPath () </> sdistName));
+    verbose Report "Source tarball created: %s\n" (fp_to_string (Dist.get_path () </> sdistName));
     ()

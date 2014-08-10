@@ -4,68 +4,59 @@ open Ext
 open Types
 open Gconf
 
-type buildType = Autogen | Dot | Target of name
+type t = Autogen | Dot | Target of name
 
-let buildtype_to_string ty =
-    match ty with
-    | Autogen  -> "autogen"
-    | Dot      -> "dot"
-    | Target n -> "target(" ^ name_to_string n ^ ")"
+let to_string = function
+  | Autogen  -> "autogen"
+  | Dot      -> "dot"
+  | Target n -> "target(" ^ name_to_string n ^ ")"
+
+let to_filename = function
+  | Target tn    -> Target.to_dirname tn
+  | Dot          -> fn ("dot")
+  | Autogen      -> fn ("autogen")
 
 exception NotADirectory
-exception MissingDestinationDirectory of buildType
+exception MissingDestinationDirectory of t
 exception DoesntExist
 exception FileDoesntExist of string
 
-let distPath = ref (fp "dist")
+let path = ref (fp "dist")
 
-let setDistPath p = distPath := p
-let getDistPath () = !distPath
+let set_path p = path := p
+let get_path () = !path
 
-let setupPath = getDistPath () </> fn "setup"
-let configure_path = getDistPath () </> fn "configure"
-let build_path = getDistPath () </> fn "build"
+let setup_path = get_path () </> fn "setup"
+let configure_path = get_path () </> fn "configure"
+let build_path = get_path () </> fn "build"
 
-let check f =
-    if Filesystem.exists (getDistPath ())
-        then (if Sys.is_directory $ fp_to_string (getDistPath ())
-                then ()
-                else raise NotADirectory
-        ) else
-            f ()
+let check_exn f =
+  if Filesystem.exists (get_path ()) then
+    (if Sys.is_directory $ fp_to_string (get_path ()) then ()
+     else raise NotADirectory)
+  else
+    f ()
 
-let checkOrFail () = check (fun () -> raise DoesntExist)
-let checkOrCreate () = check (fun () -> let _ = Filesystem.mkdirSafe (getDistPath ()) 0o755 in ())
+let exist () = check_exn (fun () -> raise DoesntExist)
+let create_maybe () = check_exn (fun () -> let _ = Filesystem.mkdirSafe (get_path ()) 0o755 in ())
 
-let get_target_dirname tname =
-    match tname with
-    | ExeName e | BenchName e | TestName e | ExampleName e -> fn e
-    | LibName l -> fn ("lib-" ^ lib_name_to_string l)
+let get_build () = get_path () </> fn "build"
 
-let getBuildDest_path buildtype =
-    let buildDir = getDistPath () </> fn "build" in
-    match buildtype with
-    | Target tn    -> buildDir </> get_target_dirname tn
-    | Dot          -> buildDir </> fn ("dot")
-    | Autogen      -> buildDir </> fn ("autogen")
+let get_build_path buildtype =
+    get_build () </> (to_filename buildtype)
 
-let getBuildDest buildtype =
-    let distPath = getBuildDest_path buildtype in
-    if not (Filesystem.is_dir distPath)
-        then raise (MissingDestinationDirectory buildtype)
-        else distPath
+let get_build_exn buildtype =
+  let dist = get_build_path buildtype in
+  if not (Filesystem.is_dir dist) then
+    raise (MissingDestinationDirectory buildtype)
+  else
+    dist
 
-let createBuildDest buildtype =
-    let buildDir = getDistPath () </> fn "build" in
-    let _ = Filesystem.mkdirSafe buildDir 0o755 in
-    let destDir =
-        match buildtype with
-        | Target tn    -> buildDir </> get_target_dirname tn
-        | Dot          -> buildDir </> fn ("dot")
-        | Autogen      -> buildDir </> fn ("autogen")
-        in
-    let _ = Filesystem.mkdirSafe destDir 0o755 in
-    destDir
+let create_build buildtype =
+    let _ = Filesystem.mkdirSafe (get_build ()) 0o755 in
+    let dest = get_build_path buildtype in
+    let _ = Filesystem.mkdirSafe dest 0o755 in
+    dest
 
 let read_dist_file path =
   try
@@ -73,9 +64,9 @@ let read_dist_file path =
     hashtbl_fromList (List.map (fun l -> second (default "") $ Utils.toKV l) $ string_split '\n' content)
   with _ -> raise (FileDoesntExist (fp_to_string path))
 
-let read_setup () = read_dist_file setupPath
+let read_setup () = read_dist_file setup_path
 let read_configure () = read_dist_file configure_path
 
 let write_setup setup =
     let kv (k,v) = k ^ ": " ^ v in
-    Filesystem.writeFile setupPath (String.concat "\n" $ List.map kv (hashtbl_toList setup))
+    Filesystem.writeFile setup_path (String.concat "\n" $ List.map kv (hashtbl_toList setup))

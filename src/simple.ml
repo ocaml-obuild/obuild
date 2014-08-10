@@ -103,12 +103,12 @@ let main () =
 
 
     let tmpDir = Filesystem.mktemp_dir_in "dist-" in
-    Dist.setDistPath tmpDir;
+    Dist.set_path tmpDir;
     try
         finally (fun () ->
-            Dist.checkOrCreate ();
-            let _ = Dist.createBuildDest (Dist.Autogen) in
-            let buildDir = Dist.createBuildDest (Dist.Target exe.exe_target.target_name) in
+            Dist.create_maybe ();
+            let _ = Dist.create_build (Dist.Autogen) in
+            let buildDir = Dist.create_build (Dist.Target exe.exe_target.target_name) in
             FindlibConf.load ();
             let project = Analyze.prepare project_config [] in
             let bstate = Prepare.init project in

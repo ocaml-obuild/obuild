@@ -90,7 +90,7 @@ let initializeSystemStdlib ocamlCfg metaTable =
     let stdlibPath = fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg) in
     let stdlibLibs =
         Filesystem.list_dir_pred_map (fun n ->
-            let ext = Filetype.get_extension n in
+            let ext = Filetype.of_filename n in
             if ext = Filetype.FileCMXA || ext = Filetype.FileCMA
                 then Some n
                 else None
@@ -250,7 +250,7 @@ let prepare projFile user_flags =
 
     if gconf.conf_dump_dot
         then (
-            let dotDir = Dist.createBuildDest Dist.Dot in
+            let dotDir = Dist.create_build Dist.Dot in
             let path = dotDir </> fn "dependencies.dot" in
             let toString t = match t with
                              | Target s     -> "target(" ^ name_to_string s ^ ")"

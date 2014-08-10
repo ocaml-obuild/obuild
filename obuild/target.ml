@@ -5,6 +5,11 @@ open Gconf
 open Dependencies
 
 type target_type = Lib | Exe | Test | Bench
+
+let to_dirname = function
+  | ExeName e | BenchName e | TestName e | ExampleName e -> fn e
+  | LibName l -> fn ("lib-" ^ lib_name_to_string l)
+
 type target_stdlib = Stdlib_None | Stdlib_Standard | Stdlib_Core
 
 type runtime_bool = BoolConst of bool
