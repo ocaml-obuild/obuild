@@ -132,7 +132,7 @@ let compile_c task_index task c_file bstate task_context dag =
    | Some src_changed ->
      let reason = reason_from_paths dest src_changed in
      let (nb_step,nb_step_len) = get_nb_step dag in
-     verbose Report "[%*d of %d] Compiling C %-.30s%s\n%!" nb_step_len task_index nb_step (fn_to_string c_file)
+     verbose Report "[%*d of %d] Compiling C %-30s%s\n%!" nb_step_len task_index nb_step (fn_to_string c_file)
        (if reason <> "" then "    ( " ^ reason ^ " )" else "");
      let cflags = cbits.target_cflags in
      Scheduler.AddProcess (task, runCCompile bstate.bstate_config c_dir_spec cflags c_file)
@@ -178,7 +178,7 @@ let compile_directory task_index task h task_context dag =
   in
   if ops <> [] then (
     let (nb_step,nb_step_len) = get_nb_step dag in
-    verbose Report "[%*d of %d] Packing %-.30s%s\n%!" nb_step_len task_index nb_step (hier_to_string h) reason;
+    verbose Report "[%*d of %d] Packing %-30s%s\n%!" nb_step_len task_index nb_step (hier_to_string h) reason;
     Scheduler.AddTask (task, ops)
   ) else
     Scheduler.FinishTask task
@@ -285,7 +285,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
 
     let verb = if is_intf then "Intfing" else "Compiling" in
     let (nb_step, nb_step_len) = get_nb_step dag in
-    verbose Report "[%*d of %d] %s %-.30s%s\n%!" nb_step_len task_index nb_step verb (hier_to_string h)
+    verbose Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb (hier_to_string h)
       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
     Scheduler.AddTask (task, all_fun_lists)
 
