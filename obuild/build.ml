@@ -175,7 +175,7 @@ let compile_directory task_index task h task_context dag =
   in
   if ops <> [] then (
     let (nb_step,nb_step_len) = get_nb_step dag in
-    verbose Report "[%*d of %d] Packing %-30s%s\n%!" nb_step_len task_index nb_step (hier_to_string h) reason;
+    verbose Report "[%*d of %d] Packing %-30s%s\n%!" nb_step_len task_index nb_step (Hier.to_string h) reason;
     Scheduler.AddTask (task, ops)
   ) else
     Scheduler.FinishTask task
@@ -282,7 +282,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
 
     let verb = if is_intf then "Intfing" else "Compiling" in
     let (nb_step, nb_step_len) = get_nb_step dag in
-    verbose Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb (hier_to_string h)
+    verbose Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb (Hier.to_string h)
       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
     Scheduler.AddTask (task, all_fun_lists)
 

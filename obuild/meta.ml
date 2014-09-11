@@ -115,7 +115,7 @@ module Pkg = struct
 
   let get_archive_with_filter (path, root) dep pred =
     let pkg = find dep.Libname.subnames root in
-    List.find_all (fun (preds,_) -> List.mem pred preds) pkg.archives
+    List.find_all (fun (preds,_) -> List.mem pred preds && (not (List.mem Predicate.Toploop preds))) pkg.archives
 
   let get_archive (path, root) dep csv =
     let pkg = find dep.Libname.subnames root in
