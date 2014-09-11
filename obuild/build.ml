@@ -478,6 +478,18 @@ let build_exe bstate exe =
     (Dag.getNodes cstate.compilation_dag);
   compile bstate task_context cstate.compilation_dag
 
+let rec select_leaves children duplicate dag =
+  let (good,bad) = List.partition (fun a -> not (List.mem a duplicate)) children in
+  let new_ = ref [] in
+  List.iter (fun a ->
+      let parents = Dag.getParents dag a in
+      List.iter (fun p -> new_ := p :: !new_) parents
+    ) bad;
+  if List.length bad > 0 then
+    select_leaves (!new_ @ good) duplicate dag
+  else
+    good
+
 let build_dag bstate proj_file targets_dag =
   let dag = Dag.init () in
   let task_context = Hashtbl.create 64 in
@@ -488,15 +500,15 @@ let build_dag bstate proj_file targets_dag =
     let cstate = prepare_target bstate build_dir target modules in
     List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
       (Dag.getNodes cstate.compilation_dag);
-    Dag.merge dag cstate.compilation_dag;
-    cstate.compilation_dag
+    let duplicate = Dag.merge dag cstate.compilation_dag in
+    (cstate.compilation_dag, duplicate)
   in
   while not (Taskdep.isComplete taskdep) do
     (match Taskdep.getnext taskdep with
      | None -> failwith "no free task in targets"
      | Some (step,ntask) ->
        verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
-       let cur_dag = (match ntask with
+       let (cur_dag,dups) = (match ntask with
         | Name.Exe name   ->
           let exe = Project.find_exe proj_file name in
           prepare_state (Project.exe_to_target exe) [Hier.of_filename exe.Project.exe_main]
@@ -515,6 +527,7 @@ let build_dag bstate proj_file targets_dag =
        ) in
        if (Hashtbl.mem targets_deps ntask) then begin
          let children = Dag.getLeaves cur_dag in
+         let children = select_leaves children dups cur_dag in
          let roots = Hashtbl.find targets_deps ntask in
          List.iter (fun child ->
              List.iter (fun root ->
