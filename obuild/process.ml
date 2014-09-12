@@ -25,10 +25,9 @@ type t = {
 (* create a new process with stdout and stderr redirected
  * and returns a new process_state
  *)
-let create args =
+let make args =
   let escape s = try
-      let _ = String.index s ' ' in
-      "\"" ^ s ^ "\""
+      let _ = String.index s ' ' in "\"" ^ s ^ "\""
     with Not_found -> s in
   verbose DebugPlus "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
   let (r1,w1) = Unix.pipe () in
@@ -99,6 +98,6 @@ let terminate (_, p) =
 
 (* simple helper for a single process spawn|process|terminate *)
 let run args =
-  let p = create args in
+  let p = make args in
   let (p2, _) = wait [((), p)] in
   terminate p2

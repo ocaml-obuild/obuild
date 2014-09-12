@@ -10,7 +10,6 @@ open Prepare
 open Gconf
 open Buildprogs
 open Dependencies
-open Pp
 
 exception CCompilationFailed of string
 exception CompilationFailed of string
@@ -183,18 +182,18 @@ let compile_directory task_index task h task_context dag =
 let dep_descs is_intf hdesc bstate cstate target h =
   let self_deps = Analyze.get_internal_library_deps bstate.bstate_config target in
   let internal_libs_paths_all_modes = internal_libs_paths self_deps in
-  let module_deps = hdesc.dep_cwd_modules in
+  let module_deps = hdesc.Module.dep_cwd_modules in
   let compile_opts = Target.get_compilation_opts target in
   let all_modes = get_all_modes target in
   if is_intf then (
     let intf_desc =
-      match hdesc.module_intf_desc with
+      match hdesc.Module.intf_desc with
       | None      -> failwith "assertion error, task interface and no module_intf"
       | Some intf -> intf
     in
     List.map (fun comp_opt ->
         let dest = (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
-        let src  = [ (Filetype.FileMLI, intf_desc.module_intf_path) ] in
+        let src  = [ (Filetype.FileMLI, intf_desc.Module.path) ] in
         let m_deps = List.map (fun module_dep ->
             (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
         let internal_deps = List.assoc (comp_opt,ByteCode) internal_libs_paths_all_modes in
@@ -204,9 +203,9 @@ let dep_descs is_intf hdesc bstate cstate target h =
     List.map (fun (compiled_ty, comp_opt) ->
         let file_compile_ty = buildmode_to_filety compiled_ty in
         let dest = (file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) h) in
-        let src = (match hdesc.module_intf_desc with
+        let src = (match hdesc.Module.intf_desc with
               None -> []
-            | Some intf -> [Filetype.FileMLI,intf.module_intf_path]) @ [(Filetype.FileML, hdesc.module_src_path)] in
+            | Some intf -> [Filetype.FileMLI,intf.Module.path]) @ [(Filetype.FileML, hdesc.Module.src_path)] in
         let m_deps = List.concat (List.map (fun module_dep ->
             [(file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
              (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)]
@@ -223,14 +222,14 @@ let compile_module task_index task is_intf h bstate task_context dag =
     let pack_opt = Hier.parent h in
     let hdesc =
       let desc = Hashtbl.find cstate.compilation_modules h in
-      match desc.module_ty with
-      | DescFile z -> z
-      | DescDir _  ->
+      match desc with
+      | Module.DescFile z -> z
+      | Module.DescDir _  ->
         failwith (sprintf "internal error compile module on directory (%s). steps dag internal error"
                     (Hier.to_string h))
     in
-    let src_path = path_dirname hdesc.module_src_path in
-    let use_thread = hdesc.module_use_threads in
+    let src_path = path_dirname hdesc.Module.src_path in
+    let use_thread = hdesc.Module.use_threads in
     let dir_spec = {
       src_dir      = src_path;
       dst_dir      = currentDir;
@@ -248,7 +247,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
         } in
         let fcompile =
           (build_mode,(fun () -> runOcamlCompile r_dir_spec use_thread annot_mode build_mode comp_opt
-                          pack_opt hdesc.module_use_pp hdesc.module_oflags h)) in
+                          pack_opt hdesc.Module.use_pp hdesc.Module.oflags h)) in
         if invalid
         then (
           let (_, ys) = check invalid xs in
@@ -271,7 +270,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
   | Some reason -> (* if the module has an interface, we create one list, so everything can be run in parallel,
                       * otherwise we partition the build_mode functions in build_modes group. *)
     let fun_lists check_fun_list hdesc =
-      if is_intf || module_file_has_interface hdesc
+      if is_intf || Module.file_has_interface hdesc
       then [List.map snd check_fun_list]
       else let (l1,l2) = List.partition (fun (x,_) -> x = Compiled Native) check_fun_list in
         List.filter (fun x -> List.length x > 0) [List.map snd l1; List.map snd l2]
@@ -450,7 +449,7 @@ let compile (bstate: build_state) task_context dag =
        | _          -> raise (CompilationFailed er)
     );
     if is_done then
-      Taskdep.markDone taskdep task
+      Taskdep.mark_done taskdep task
   in
 
   let dispatch (task_index, task) =
@@ -503,8 +502,8 @@ let build_dag bstate proj_file targets_dag =
     let duplicate = Dag.merge dag cstate.compilation_dag in
     (cstate.compilation_dag, duplicate)
   in
-  while not (Taskdep.isComplete taskdep) do
-    (match Taskdep.getnext taskdep with
+  while not (Taskdep.is_complete taskdep) do
+    (match Taskdep.get_next taskdep with
      | None -> failwith "no free task in targets"
      | Some (step,ntask) ->
        verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
@@ -537,7 +536,7 @@ let build_dag bstate proj_file targets_dag =
        end;
        let roots = Dag.getRoots cur_dag in (* should be LinkTarget *)
        List.iter (fun p -> Hashtbl.add targets_deps p roots) (Dag.getParents targets_dag ntask);
-       Taskdep.markDone taskdep ntask
+       Taskdep.mark_done taskdep ntask
     )
   done;
   compile bstate task_context dag

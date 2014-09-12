@@ -257,7 +257,7 @@ let parse strict lines =
         | "path" | "srcdir"
         | "src-dir"    -> Handled { t with target_srcdir    = fp value }
         | "preprocessor"
-        | "pp"         -> Handled { t with target_pp = Some (Pp.pp_type_of_string value) }
+        | "pp"         -> Handled { t with target_pp = Some (Pp.Type.of_string value) }
         | "extra-deps" -> Handled { t with target_extradeps = t.target_extradeps @ parseExtraDep value }
         | "oflags"     -> Handled { t with target_oflags = t.target_oflags @ string_words_noempty value }
         | "stdlib"     -> Handled { t with target_stdlib = parse_stdlib value }
@@ -538,7 +538,7 @@ let write file proj =
             add (sprintf "%ssrc-dir: %s\n" iStr (fp_to_string obits.target_srcdir));
             add_string (iStr ^ "build-deps") (Utils.showList ", " (fun (l,_) -> Libname.to_string l) obits.target_builddeps);
             add_string (iStr ^ "oflags") (Utils.showList " " id obits.target_oflags);
-            add_string (iStr ^ "pp") (maybe "" (fun ppty -> Pp.pp_type_to_string ppty) obits.target_pp);
+            add_string (iStr ^ "pp") (maybe "" (fun ppty -> Pp.Type.to_string ppty) obits.target_pp);
 
             add (sprintf "%sc-dir: %s\n" iStr (fp_to_string cbits.target_cdir));
             add_string (iStr ^ "c-sources") (Utils.showList ", " fn_to_string cbits.target_csources);

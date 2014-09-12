@@ -2,15 +2,14 @@ type call = unit -> Process.t
 
 (* this is used to control the scheduler behavior
  * from the idle function *)
-type 'a schedule_op = Terminate
-                    | WaitingTask
-                    | AddProcess of ('a * Process.t)
-                    | AddTask of ('a * (call list list))
-                    | Retry
-                    | FinishTask of 'a
-                      
-let schedule_op_to_string op =
-  match op with
+type 'a t = Terminate
+          | WaitingTask
+          | AddProcess of ('a * Process.t)
+          | AddTask of ('a * (call list list))
+          | Retry
+          | FinishTask of 'a
+
+let to_string = function
   | Terminate          -> "terminate"
   | WaitingTask        -> "waiting-task"
   | AddProcess (_,_)   -> "add-process"
@@ -18,12 +17,12 @@ let schedule_op_to_string op =
   | Retry              -> "retry"
   | FinishTask _       -> "finish-task"
     
-type 'a schedule_task_group = { 
-  mutable group_completion : int; 
-  mutable group_next : ('a * call) list list;
+type 'a task_group = {
+  mutable completion : int;
+  mutable next : ('a * call) list list;
 }
 
-type schedule_stats = { 
+type stats = {
   mutable max_runqueue : int; 
   mutable nb_processes : int;
 }
@@ -33,7 +32,7 @@ type 'a state = {
   mutable waitqueue : ('a * call) list;
   mutable terminate : bool;
   mutable waiting_task : bool;
-  mutable tasks : ('a * 'a schedule_task_group) list;
+  mutable tasks : ('a * 'a task_group) list;
 }
 
 (* wait until a process finish. *)
@@ -44,16 +43,16 @@ let wait_process state =
   let finished_task =
     try
       let tg = List.assoc task_done state.tasks in
-      tg.group_completion <- tg.group_completion - 1;
-      if tg.group_completion = 0
+      tg.completion <- tg.completion - 1;
+      if tg.completion = 0
       then (
-        match tg.group_next with
+        match tg.next with
         | [] -> 
           state.tasks <- List.filter (fun (t,_) -> t <> task_done) state.tasks;
           true
         | g :: gs ->
-          tg.group_completion <- List.length g;
-          tg.group_next <- gs;
+          tg.completion <- List.length g;
+          tg.next <- gs;
           state.waitqueue <- g @ state.waitqueue;
           false
       ) else
@@ -76,8 +75,8 @@ let rec idle_loop idle_fun on_task_finish_fun state =
      | []           -> failwith "internal error: empty task added to the scheduler"
      | first::pss ->
        let tg = { 
-         group_completion = List.length first;
-         group_next       = pss
+         completion = List.length first;
+         next       = pss
        } in
        state.tasks <- (t,tg) :: state.tasks;
        state.waitqueue <- first @ state.waitqueue;
@@ -92,9 +91,9 @@ let rec idle_loop idle_fun on_task_finish_fun state =
  * the next task ourself.
  *)
 let schedule_idle taskdep dispatch_fun () =
-  if Taskdep.isComplete taskdep
+  if Taskdep.is_complete taskdep
   then Terminate
-  else match Taskdep.getnext taskdep with
+  else match Taskdep.get_next taskdep with
     | None      -> WaitingTask
     | Some task -> dispatch_fun task
     
@@ -116,7 +115,7 @@ let schedule j taskdep dispatch_fun finish_fun =
     waiting_task = false;
     tasks = [];
   } in
-  let on_task_finish task = Taskdep.markDone taskdep task in
+  let on_task_finish task = Taskdep.mark_done taskdep task in
   let stats = { max_runqueue = 0; nb_processes = 0 } in
   let pick_process (task, process) remaining_processes =
     stats.nb_processes <- stats.nb_processes + 1;

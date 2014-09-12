@@ -5,39 +5,37 @@ exception InvalidPreprocessor of string
 (*
 http://ocaml.org/tutorials/camlp4_3.10.html
 *)
-type pp_package =
-    { pp_pkg_strs    : string list
-    }
+type package = string list
 
-type pp_type = CamlP4O | CamlP4R
+module Type = struct
+  type t = CamlP4O | CamlP4R
 
-let pp_type_of_string s =
-    match String.lowercase s with
+  let of_string s = match String.lowercase s with
     | "p4o" | "camlp4o" -> CamlP4O
     | "p4r" | "camlp4r" -> CamlP4R
     | _                 -> raise (InvalidPreprocessor s)
 
-let pp_type_to_string ppty =
-    match ppty with
-    | CamlP4O -> "camlp4o"
-    | CamlP4R -> "camlp4r"
+let to_string = function
+  | CamlP4O -> "camlp4o"
+  | CamlP4R -> "camlp4r"
+end
 
-type pp_desc =
-    { pp_camlp4   : string
-    ; pp_packages : pp_package list
-    }
-type pp = { _pp : pp_desc option }
+type desc = {
+  camlp4   : string;
+  packages : package list
+}
 
-let pp_some s pkgs = { _pp = Some { pp_camlp4 = s; pp_packages = pkgs } }
-let pp_none   = { _pp = None }
+type t = desc option
 
-let pp_append pp pkgs =
-    match pp._pp with
-    | None   -> pp
-    | Some d -> { _pp = Some { d with pp_packages = d.pp_packages @ pkgs } }
+let some s pkgs = Some { camlp4 = s; packages = pkgs }
+let none = None
 
-let pp_to_params pp =
-    maybe [] (fun desc ->
-       let s = desc.pp_camlp4 ^ " " ^ String.concat " " (List.concat (List.map (fun x -> x.pp_pkg_strs) desc.pp_packages)) in
-       ["-pp"; s ]
-    ) pp._pp
+let append pp pkgs = match pp with
+  | None   -> pp
+  | Some d -> Some { d with packages = d.packages @ pkgs }
+
+let to_params pp =
+  maybe [] (fun desc ->
+      let s = desc.camlp4 ^ " " ^ String.concat " " (List.concat (List.map (fun x -> x) desc.packages)) in
+      ["-pp"; s ]
+    ) pp

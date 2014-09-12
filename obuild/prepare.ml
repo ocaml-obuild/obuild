@@ -11,50 +11,54 @@ open Helper
 open Gconf
 open Target
 open Dependencies
-open Pp
-
-exception ModuleDependsItself of Hier.t
-exception ModuleDependenciesProblem of Hier.t list
-exception ModuleDependencyNoOutput
-exception ModuleNotFound of (filepath list * Hier.t)
-
-type module_intf_desc = {
-  module_intf_mtime : float;
-  module_intf_path : filepath
-}
 
 type use_thread_flag = NoThread | WithThread
 type ocaml_file_type = GeneratedModule | SimpleModule
 
-type module_desc_file = {
-  module_use_threads  : use_thread_flag;
-  module_src_path    : filepath;
-  module_src_mtime   : float;
-  module_file_type   : ocaml_file_type;
-  module_intf_desc   : module_intf_desc option;
-  module_use_pp      : pp;
-  module_oflags      : string list;
-  dep_cwd_modules    : Hier.t list;
-  dep_other_modules  : Modname.t list;
-}
+module Module = struct
+  exception DependsItself of Hier.t
+  exception DependenciesProblem of Hier.t list
+  exception DependencyNoOutput
+  exception NotFound of (filepath list * Hier.t)
 
-type module_desc_dir = {
-  module_dir_path    : filepath;
-  module_dir_modules : Hier.t list
-}
+  type intf = {
+    mtime : float;
+    path : filepath
+  }
 
-type module_desc_ty = DescFile of module_desc_file | DescDir of module_desc_dir
+  type file = {
+    use_threads  : use_thread_flag;
+    src_path    : filepath;
+    src_mtime   : float;
+    file_type   : ocaml_file_type;
+    intf_desc   : intf option;
+    use_pp      : Pp.t;
+    oflags      : string list;
+    dep_cwd_modules    : Hier.t list;
+    dep_other_modules  : Modname.t list;
+  }
 
-type module_desc = { module_ty : module_desc_ty }
+  type dir = {
+    path    : filepath;
+    modules : Hier.t list
+  }
 
-let module_file_has_interface mdescfile =
-  maybe false (fun _ -> true) mdescfile.module_intf_desc
+  type t = DescFile of file | DescDir of dir
 
-let module_has_interface mdesc = match mdesc.module_ty with
-  | DescFile dfile -> module_file_has_interface dfile
-  | DescDir _      -> false
+  let file_has_interface mdescfile =
+    maybe false (fun _ -> true) mdescfile.intf_desc
 
-(* live for the whole duration of a building process
+  let has_interface = function
+    | DescFile dfile -> file_has_interface dfile
+    | DescDir _      -> false
+
+  let make_dir path modules = DescDir { path; modules }
+  let make_intf mtime path = { mtime; path }
+  let make_file use_threads src_path src_mtime file_type intf_desc use_pp oflags dep_cwd_modules dep_other_modules =
+    DescFile { use_threads; src_path; src_mtime; file_type; intf_desc; use_pp; oflags; dep_cwd_modules; dep_other_modules }
+end
+
+ (* live for the whole duration of a building process
  * which include compilations and linkings
 *)
 type build_state = { bstate_config : project_config }
@@ -82,10 +86,10 @@ let string_of_compile_step cs = match cs with
 
 (* represent a single compilation *)
 type compilation_state = {
-  compilation_modules  : (Hier.t, module_desc) Hashtbl.t;
+  compilation_modules  : (Hier.t, Module.t) Hashtbl.t;
   compilation_csources : filename list;
   compilation_dag      : compile_step Dag.t;
-  compilation_pp       : pp;
+  compilation_pp       : Pp.t;
   compilation_filesdag : Filetype.id Dag.t;
   compilation_builddir_c  : filepath;
   compilation_builddir_ml : Types.ocaml_compilation_option -> filepath;
@@ -109,9 +113,9 @@ let get_compilation_order cstate =
 let camlp4Libname = Libname.of_string "camlp4"
 let syntaxPredsCommon = [Meta.Predicate.Syntax;Meta.Predicate.Preprocessor]
 
-let get_p4pred preprocessor = match preprocessor with
-  | CamlP4O -> Meta.Predicate.Camlp4o
-  | CamlP4R -> Meta.Predicate.Camlp4r
+let get_p4pred = function
+  | Pp.Type.CamlP4O -> Meta.Predicate.Camlp4o
+  | Pp.Type.CamlP4R -> Meta.Predicate.Camlp4r
 
 let get_syntax_pp bstate preprocessor buildDeps =
   let conf = bstate.bstate_config in
@@ -125,7 +129,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
         then (
           (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
           let dir = Dist.get_build_exn (Dist.Target (Name.Lib lib.Project.lib_name)) in
-          Some { pp_pkg_strs = [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.lib_name) ]}
+          Some [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.lib_name) ]
         ) else None
       ) else (
         let meta = Analyze.get_pkg_meta spkg conf in
@@ -137,7 +141,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
         if Meta.Pkg.is_syntax meta spkg
         then (
           let includePath = Meta.getIncludeDir stdlib meta in
-          Some { pp_pkg_strs = ["-I"; fp_to_string includePath; Meta.Pkg.get_archive meta spkg preds] }
+          Some ["-I"; fp_to_string includePath; Meta.Pkg.get_archive meta spkg preds]
         ) else
           None
       )
@@ -152,7 +156,7 @@ let get_modules_desc bstate target toplevelModules =
   let file_search_paths hier = [target.target_obits.target_srcdir <//> Hier.to_dirpath hier; autogenDir] in
 
   let targetPP = (match target.target_obits.target_pp with
-      | None    -> pp_none
+      | None    -> Pp.none
       | Some pp ->
         let conf = bstate.bstate_config in
         let nodes = List.rev (Taskdep.linearize bstate.bstate_config.project_pkgdeps_dag Taskdep.FromParent
@@ -167,11 +171,11 @@ let get_modules_desc bstate target toplevelModules =
         let p4pred = get_p4pred pp in
         let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
         let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
-        let archive = { pp_pkg_strs = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] } in
+        let archive = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] in
 
         (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
         let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
-        pp_some preproc (archive :: camlp4Strs)
+        Pp.some preproc (archive :: camlp4Strs)
     ) in
 
   let module_lookup_method = Hier.to_filename::Hier.to_generators @ [Hier.to_directory; Hier.to_interface] in
@@ -180,7 +184,7 @@ let get_modules_desc bstate target toplevelModules =
     verbose Verbose "Analysing %s\n%!" moduleName;
     let srcPath =
       try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f hier) module_lookup_method)
-      with Utils.FilesNotFoundInPaths (paths, _) -> raise (ModuleNotFound (paths, hier))
+      with Utils.FilesNotFoundInPaths (paths, _) -> raise (Module.NotFound (paths, hier))
     in
     let srcDir = srcPath </> Modname.to_directory (Hier.leaf hier) in
 
@@ -204,10 +208,7 @@ let get_modules_desc bstate target toplevelModules =
               )
           ) srcDir
         in
-        DescDir {
-          module_dir_path    = currentDir;
-          module_dir_modules = List.map (fun m -> Hier.append hier m) modules
-        }
+        Module.make_dir currentDir (List.map (fun m -> Hier.append hier m) modules)
       ) else (
         let generators_files = List.map (fun gen_fun -> gen_fun hier srcPath) Hier.to_generators in
         let generator_file = try
@@ -235,13 +236,13 @@ let get_modules_desc bstate target toplevelModules =
 
         (* augment pp if needed with per-file dependencies *)
         let pp = match target.target_obits.target_pp with
-          | None              -> pp_none
+          | None              -> Pp.none
           | Some preprocessor ->
             (* FIXME: we should re-use the dependency DAG here, otherwise we might end up in the case
              * where the extra dependencies are depending not in the correct order
             *)
             let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) (find_extra_matching target (Hier.to_string hier))) in
-            pp_append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
+            Pp.append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
         in
 
         verbose Debug "  %s has mtime %f\n%!" moduleName modTime;
@@ -253,7 +254,7 @@ let get_modules_desc bstate target toplevelModules =
           dep_pp       = pp
         } in
         let allDeps = match runOcamldep dopt srcFile with
-          | []   -> raise ModuleDependencyNoOutput
+          | []   -> raise Module.DependencyNoOutput
           | ml::mli::_ -> list_uniq (ml @ mli)
           | x::_ -> x
         in
@@ -276,30 +277,22 @@ let get_modules_desc bstate target toplevelModules =
         in
         let cwdDeps = List.map (fun x -> maybe (Hier.make [x]) (fun z -> Hier.append z x) (Hier.parent hier)) cwdDepsInDir in
         (if List.mem hier cwdDeps then
-           raise (ModuleDependsItself hier)
+           raise (Module.DependsItself hier)
         );
         let intfDesc =
           if hasInterface
-          then Some
-              { module_intf_mtime = intfModTime
-              ; module_intf_path  = intfFile
-              }
+          then Some (Module.make_intf intfModTime intfFile)
           else None
-        in
-        DescFile
-          { module_src_mtime     = modTime
-          ; module_src_path      = srcFile
-          ; module_file_type     = if generator_file = None then SimpleModule else GeneratedModule
-          ; module_intf_desc     = intfDesc
-          ; module_use_threads   = use_thread
-          ; module_use_pp        = pp
-          ; module_oflags        = target.target_obits.target_oflags @ (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier))))
-          ; dep_cwd_modules      = cwdDeps
-          ; dep_other_modules    = otherDeps
-          }
+        in 
+        Module.make_file use_thread srcFile modTime 
+          (if generator_file = None then SimpleModule else GeneratedModule)
+          intfDesc pp
+          (target.target_obits.target_oflags @ 
+           (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier)))))
+          cwdDeps otherDeps
       )
     in
-    { module_ty            = module_desc_ty}
+    module_desc_ty
 
   in
   let rec loop modname =
@@ -310,9 +303,9 @@ let get_modules_desc bstate target toplevelModules =
       Hashtbl.add modulesDeps modname mdesc;
       (* TODO: don't query single modules at time, where ocamldep supports M modules.
          tricky with single file syntax's pragma. *)
-      match mdesc.module_ty with
-      | DescFile dfile -> List.iter loop dfile.dep_cwd_modules
-      | DescDir  ddir  -> List.iter loop ddir.module_dir_modules
+      match mdesc with
+      | Module.DescFile dfile -> List.iter loop dfile.Module.dep_cwd_modules
+      | Module.DescDir  ddir  -> List.iter loop ddir.Module.modules
     )
   in
   List.iter (fun m -> loop m) toplevelModules;
@@ -340,40 +333,40 @@ let prepare_target_ bstate buildDir target toplevelModules =
   let get_dags () =
     let filesDag = Dag.init () in
     let stepsDag = Dag.init () in
-    let h = hashtbl_map (fun dep -> match dep.module_ty with
-        | DescDir _      -> []
-        | DescFile dfile -> dfile.dep_cwd_modules
+    let h = hashtbl_map (fun dep -> match dep with
+        | Module.DescDir _      -> []
+        | Module.DescFile dfile -> dfile.Module.dep_cwd_modules
       ) modulesDeps
     in
     while Hashtbl.length h > 0 do
       let freeModules = Hashtbl.fold (fun k v acc -> if v = [] then k :: acc else acc) h [] in
       if freeModules = []
-      then raise (ModuleDependenciesProblem (hashtbl_keys h))
+      then raise (Module.DependenciesProblem (hashtbl_keys h))
       else ();
       List.iter (fun m ->
           let mdep = Hashtbl.find modulesDeps m in
-          let mStep = match mdep.module_ty with
-            | DescFile f ->
+          let mStep = match mdep with
+            | Module.DescFile f ->
               (* if it is a .mli only module ... *)
-              if not ((Filesystem.exists f.module_src_path)) && (f.module_file_type = SimpleModule) then
+              if not ((Filesystem.exists f.Module.src_path)) && (f.Module.file_type = SimpleModule) then
                 CompileInterface m
               else begin
-                if module_has_interface mdep then (
+                if Module.has_interface mdep then (
                   Dag.addEdge (CompileModule m) (CompileInterface m) stepsDag;
                 );
                 CompileModule m
               end
-            | DescDir descdir ->
+            | Module.DescDir descdir ->
               let mStep = CompileDirectory m in
               List.iter (fun dirChild ->
                   (*printf "  %s depends %s" (string_of_compilation_step mStep) ((Compi *)
                   let depChild = Hashtbl.find modulesDeps dirChild in
-                  let cStep = match depChild.module_ty with
-                    | DescFile _ -> CompileModule dirChild
-                    | DescDir _ -> CompileDirectory dirChild
+                  let cStep = match depChild with
+                    | Module.DescFile _ -> CompileModule dirChild
+                    | Module.DescDir _ -> CompileDirectory dirChild
                   in
                   Dag.addEdge mStep cStep stepsDag
-                ) descdir.module_dir_modules;
+                ) descdir.Module.modules;
               mStep
           in
           Dag.addNode mStep stepsDag;
@@ -382,14 +375,14 @@ let prepare_target_ bstate buildDir target toplevelModules =
               if k <> m then (
                 if List.mem m v then (
                   let kdep = Hashtbl.find modulesDeps k in
-                  match kdep.module_ty with
-                  | DescFile kFile ->
-                    if module_has_interface kdep
+                  match kdep with
+                  | Module.DescFile kFile ->
+                    if Module.has_interface kdep
                     then (
                       Dag.addEdgesConnected [CompileModule k; CompileInterface k; mStep] stepsDag
                     ) else
                       Dag.addEdge (CompileModule k) mStep stepsDag
-                  | DescDir kDir ->
+                  | Module.DescDir kDir ->
                     Dag.addEdge (CompileDirectory k) mStep stepsDag
                 )
               )
@@ -486,7 +479,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   { compilation_modules  = modulesDeps
   ; compilation_csources = cbits.target_csources
   ; compilation_dag      = dag
-  ; compilation_pp       = pp_none
+  ; compilation_pp       = Pp.none
   ; compilation_filesdag = fdag
   ; compilation_builddir_c  = buildDir
   ; compilation_builddir_ml = (fun m ->

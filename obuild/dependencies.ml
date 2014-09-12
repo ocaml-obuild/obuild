@@ -3,7 +3,6 @@ open Ext.Fugue
 open Ext.Filepath
 
 open Helper
-open Pp
 
 exception BuildDepAnalyzeFailed of string
 exception BuildCDepAnalyzeFailed of string
@@ -27,7 +26,7 @@ type cdependency = c_dep_name * (dep_constraint option)
 
 type dep_opt =
     { dep_includes: filepath list
-    ; dep_pp      : pp
+    ; dep_pp      : Pp.t
     }
 
 let parse_output_KsemiVs onNonKV mapFstTy mapSndTys out =
@@ -46,7 +45,7 @@ let runOcamldep dopt srcFile =
   let mlFile = fp_to_string srcFile in
   let args = [Prog.getOcamlDep ()]
              @ (Utils.to_include_path_options dopt.dep_includes)
-             @ (Pp.pp_to_params dopt.dep_pp)
+             @ (Pp.to_params dopt.dep_pp)
              @ ["-modules"; mlFile; mlFile ^ "i"] in
   match Process.run args with
   | Process.Failure er -> raise (BuildDepAnalyzeFailed er)

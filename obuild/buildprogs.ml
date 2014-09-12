@@ -10,7 +10,6 @@ open Analyze
 open Target
 open Prepare
 open Gconf
-open Pp
 
 exception LinkingFailed of string
 exception InferFailed of string
@@ -23,12 +22,11 @@ type annotation_mode = AnnotationNone | AnnotationBin | AnnotationText | Annotat
 
 type packopt = Hier.t option
 
-let annotToOpts annotMode =
-    match annotMode with
-    | AnnotationNone -> []
-    | AnnotationBin  -> ["-bin-annot"]
-    | AnnotationText -> ["-annot"]
-    | AnnotationBoth -> ["-bin-annot";"-annot"]
+let annotToOpts = function
+  | AnnotationNone -> []
+  | AnnotationBin  -> ["-bin-annot"]
+  | AnnotationText -> ["-annot"]
+  | AnnotationBoth -> ["-bin-annot";"-annot"]
 
 let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
     let dstDir = dirSpec.dst_dir in
@@ -58,14 +56,14 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
                 | WithProf  -> ["-p"])
              @ annotToOpts annotMode
              @ oflags
-             @ pp_to_params pp
+             @ Pp.to_params pp
              @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else []) packopt
              @ (if gconf.short_path then [ "-short-paths" ] else [])
 
              @ ["-o"; fp_to_string dstFile ]
              @ ["-c"; fp_to_string srcFile ]
         in
-    Process.create args
+    Process.make args
 
 let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
     let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
@@ -76,11 +74,11 @@ let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
              @ [ "-pack"; "-o"; fp_to_string (Hier.to_cmc buildMode dstDir dest); ]
              @ List.map (fun m -> fp_to_string (Hier.to_cmc buildMode srcDir m)) modules
         in
-    Process.create args
+    Process.make args
 
 let runOcamlInfer srcDir includes pp modname =
     let args = [Prog.getOcamlC (); "-i"]
-             @ pp_to_params pp
+             @ Pp.to_params pp
              @ (Utils.to_include_path_options includes)
              @ [fp_to_string (Hier.to_filename srcDir modname)]
         in
@@ -103,14 +101,14 @@ let runCCompile project dirSpec cflags file =
              @ ["-o"; fp_to_string dstFile]
              @ ["-c"; fp_to_string srcFile]
         in
-    Process.create args
+    Process.make args
 
 let runAr dest deps =
   let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
-  Process.create args
+  Process.make args
 
 let runRanlib dest =
-  Process.create [ Prog.getRanlib (); fp_to_string dest ]
+  Process.make [ Prog.getRanlib (); fp_to_string dest ]
 
 let runCLinking sharingMode depfiles dest =
   let args = if gconf.ocamlmklib then
@@ -126,7 +124,7 @@ let runCLinking sharingMode depfiles dest =
           | LinkingShared -> ["-shared"]) (* TODO: fix this for all system != linux *)
       @ ["-o"; fp_to_string dest ]
       @ List.map fp_to_string depfiles in
-  Process.create args
+  Process.make args
 
 let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
   let prog = match buildMode with
@@ -155,6 +153,6 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
                  ; x ]) cclibs))
              @ (List.map fp_to_string $ List.map (Hier.to_cmc buildMode currentDir) modules)
   in
-  Process.create args
+  Process.make args
 
 

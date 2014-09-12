@@ -66,12 +66,12 @@ let show exn =
     | Analyze.SublibraryDoesntExists dep ->
         error "dependency %s not found\n" (Libname.to_string dep); exit 4
     (* build related failure *)
-    | Prepare.ModuleDependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.to_string m); exit 5
-    | Prepare.ModuleNotFound (paths,m) ->
+    | Prepare.Module.DependsItself m  -> error "cyclic dependency module detected in module %s\n" (Hier.to_string m); exit 5
+    | Prepare.Module.NotFound (paths,m) ->
         error "module not found %s - search paths:\n" (Hier.to_string m);
         List.iter (fun path -> eprintf "\t%s\n" (fp_to_string path)) paths;
         exit 5
-    | Prepare.ModuleDependenciesProblem l ->
+    | Prepare.Module.DependenciesProblem l ->
         error "cyclic dependency detected. cannot infer dependencies between modules:\n";
         eprintf "\t%s\n" (Utils.showList ", " Hier.to_string l);
         exit 5

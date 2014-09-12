@@ -7,7 +7,6 @@ open Printf
 open Gconf
 open Target
 open Dependencies
-open Pp
 
 exception SublibraryDoesntExists of dep_name
 exception OcamlConfigMissing of string

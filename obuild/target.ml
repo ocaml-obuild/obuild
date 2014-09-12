@@ -80,7 +80,7 @@ type target_obits =
     { target_srcdir    : filepath
     ; target_builddeps : dependency list
     ; target_oflags    : string list
-    ; target_pp        : Pp.pp_type option
+    ; target_pp        : Pp.Type.t option
     ; target_extradeps : (Hier.t * Hier.t) list
     ; target_stdlib    : target_stdlib
     }
