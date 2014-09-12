@@ -126,10 +126,11 @@ let runCLinking sharingMode depfiles dest =
       @ List.map fp_to_string depfiles in
   Process.make args
 
-(* create a soft link to a freshly compiled exe, unless a file already exist with
-   the soft link name we were planning to use *)
-let createSoftLink linkingMode dest =
-  (match linkingMode with
+let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
+  (* create a soft link to a freshly compiled exe, unless a file already exist with
+     the soft link name we were planning to use *)
+  let createSoftLink linkingMode dest =
+    (match linkingMode with
      | LinkingPlugin     -> ()
      | LinkingLibrary    -> ()
      | LinkingExecutable ->
@@ -141,8 +142,7 @@ let createSoftLink linkingMode dest =
          else
            let (_: Process.t) = Process.create ["ln"; "-s"; real; basename] in
            ())
-
-let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
+  in
   let prog = match buildMode with
     | Native    -> Prog.getOcamlOpt ()
     | ByteCode  -> Prog.getOcamlC ()
