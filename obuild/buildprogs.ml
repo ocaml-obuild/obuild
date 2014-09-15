@@ -129,9 +129,13 @@ let runCLinking sharingMode depfiles dest =
   Process.create args
 
 let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
-  (* create a soft link to a freshly compiled exe, unless a file already exist with
-     the soft link name we were planning to use *)
+  (* create a soft link to a freshly compiled exe, unless a file with the same
+     name already exist *)
   let createSoftLink linkingMode dest =
+    let file_or_link_exists fn = try
+        let _stat = Unix.lstat fn in true
+      with _ -> false
+    in
     (match linkingMode with
      | LinkingPlugin     -> ()
      | LinkingLibrary    -> ()
@@ -140,10 +144,8 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
        else
          let real = fp_to_string dest in
          let basename = Filename.basename real in
-         if Sys.file_exists basename then () (* FBR: should we log that? *)
-         else
-           let (_: Process.t) = Process.create ["ln"; "-s"; real; basename] in
-           ())
+         if not (file_or_link_exists basename)
+         then Unix.symlink real basename)
   in
   let prog = match buildMode with
     | Native    -> Prog.getOcamlOpt ()
