@@ -79,6 +79,7 @@ let execute_configure_script proj_file =
 let create_dist project flags =
   verbose Verbose "configuration changed, deleting dist\n%!";
   Filesystem.removeDirContent (Dist.build_path);
+  Dist.remove_dead_links ();
   verbose Verbose "auto-generating configuration files\n%!";
   let autogenDir = Dist.create_build Dist.Autogen in
   generateMlFile project (autogenDir </> fn "path_generated.ml") flags;

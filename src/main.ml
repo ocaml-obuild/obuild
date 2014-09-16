@@ -92,9 +92,11 @@ let mainBuild argv =
   Build.build_dag bstate proj_file dag
 
 let mainClean argv =
-    if Filesystem.exists (Dist.get_path ())
-        then Filesystem.removeDir (Dist.get_path ())
-        else ()
+  if Filesystem.exists (Dist.get_path ())
+  then begin
+    Filesystem.removeDir (Dist.get_path ());
+    Dist.remove_dead_links ()
+  end
 
 let mainSdist argv =
     let isSnapshot = ref false in
