@@ -127,19 +127,14 @@ let runCLinking sharingMode depfiles dest =
   Process.make args
 
 let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
-  (* create a soft link to a freshly compiled exe, unless a file with the same
-     name already exist *)
-  let createSoftLink linkingMode dest =
-    let file_or_link_exists fn = try
-        let _stat = Unix.lstat fn in true
-      with _ -> false
+  (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
+  let link_maybe linking_mode dest =
+    let file_or_link_exists fn = try let _ = Unix.lstat fn in true with _ -> false
     in
-    (match linkingMode with
-     | LinkingPlugin     -> ()
-     | LinkingLibrary    -> ()
+    (match linking_mode with
+     | LinkingPlugin | LinkingLibrary -> ()
      | LinkingExecutable ->
-       if Gconf.get_target_option "executable-as-obj" then ()
-       else
+       if not (Gconf.get_target_option "executable-as-obj") then
          let real = fp_to_string dest in
          let basename = Filename.basename real in
          if not (file_or_link_exists basename)
@@ -172,5 +167,5 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
              @ (List.map fp_to_string $ List.map (Hier.to_cmc buildMode currentDir) modules)
   in
   let res = Process.make args in
-  let () = createSoftLink linkingMode dest in
+  let () = link_maybe linkingMode dest in
   res

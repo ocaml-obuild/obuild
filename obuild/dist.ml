@@ -70,3 +70,12 @@ let read_configure () = read_dist_file configure_path
 let write_setup setup =
     let kv (k,v) = k ^ ": " ^ v in
     Filesystem.writeFile setup_path (String.concat "\n" $ List.map kv (hashtbl_toList setup))
+
+let remove_dead_links () =
+  let files = Sys.readdir "." in
+  let build_path = fp_to_string (get_build ()) in
+  Array.iter (fun fn -> try
+                 let l = Unix.readlink fn in
+                 if (string_startswith build_path l) then
+                     Sys.remove fn
+               with _ -> ()) files
