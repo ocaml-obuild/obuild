@@ -280,11 +280,15 @@ let parseGlobalArgs () =
                             match x with
                             | "--help"    -> printHelp ()
                             | "--version" -> printVersion ()
+                            | "-v"
                             | "--verbose" -> gconf.verbosity <- Verbose; xs
                             | "--color"   -> gconf.color <- true; xs
+                            | "-vv"
                             | "--debug"   -> gconf.verbosity <- Debug; xs
-                            | "--debug+"  -> gconf.verbosity <- DebugPlus; xs
+                            | "-vvv"
+                            | "--debug+"
                             | "--debug-with-cmd" -> gconf.verbosity <- DebugPlus; xs
+                            | "-q" (* for quiet *)
                             | "--silent"  -> gconf.verbosity <- Silent; xs
                             | "--strict"  -> gconf.strict    <- true; xs
                             | "--findlib-conf" -> expect_param1 x xs (fun p -> Gconf.set_env "findlib-path" p)
