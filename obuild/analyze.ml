@@ -230,10 +230,10 @@ let prepare projFile user_flags =
         List.iter (fun (dep,constr) ->
             maybe_unit (fun c ->
                 let (_,pkg) = get_meta_cache metaTable dep in
-                if not (Expr.eval_expr pkg.Meta.Pkg.version c) then
+                if not (Expr.eval pkg.Meta.Pkg.version c) then
                   raise (Dependencies.BuildDepAnalyzeFailed
                            (Libname.to_string dep ^ " (" ^ pkg.Meta.Pkg.version ^
-                            ") doesn't match the constraint " ^ (Expr.expr_to_string c)))
+                            ") doesn't match the constraint " ^ (Expr.to_string c)))
               ) constr;
             Dag.addEdge nodeTarget (Dependency dep) depsDag;
             insertEdgeForDependency (Dependency dep) depsDag;

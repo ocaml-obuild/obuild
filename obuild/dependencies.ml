@@ -11,7 +11,7 @@ exception DependencyMissing of string
 exception DependenciesMissing of string list
 exception DependencyFailedParsing of string
 
-type dep_constraint = Expr.expr
+type dep_constraint = Expr.t
 
 type dep_main_name = string
 
