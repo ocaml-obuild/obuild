@@ -35,6 +35,21 @@ let () =
   assumeEq "!= true" true (eval version1 expr_ne);
   assumeEq "!= false" false (eval version2 expr_ne);
   assumeEq "!= true" true (eval version3 expr_ne);
+  let (name,expr_not_eq) = Expr.parse_builddep "uri !(=1.7.2)" in
+  Printf.printf "pkg %s constraint %s\n" name (expr_to_string expr_not_eq);
+  assumeEq "! = true" true (eval version1 expr_ne);
+  assumeEq "! = false" false (eval version2 expr_ne);
+  assumeEq "! = true" true (eval version3 expr_ne);
+  let (name,expr_comp) = Expr.parse_builddep "uri (<1.7.2) || (>=2.0)" in
+  Printf.printf "pkg %s constraint %s\n" name (expr_to_string expr_comp);
+  assumeEq "< | >= = true" true (eval version1 expr_comp);
+  assumeEq "< | >= = false" false (eval version2 expr_comp);
+  assumeEq "< | >= = true" true (eval version3 expr_comp);
+  let (name,expr_comp2) = Expr.parse_builddep "uri ((<1.7.2) || (>=2.0) || (=1.7.2))" in
+  Printf.printf "pkg %s constraint %s\n" name (expr_to_string expr_comp2);
+  assumeEq "< | >= = true" true (eval version1 expr_comp2);
+  assumeEq "< | >= = true" true (eval version2 expr_comp2);
+  assumeEq "< | >= = true" true (eval version3 expr_comp2);
 
   if !err > 1 then 
     exit 1

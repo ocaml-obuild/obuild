@@ -4,6 +4,8 @@ open Printf
 exception UnknownSymbol of (string * string)
 exception UnknownExpression of string
 exception ExpressionEmpty
+exception UnbalancedParenthesis
+exception MalformedExpression
 exception InvalidDependencyName of string
 exception CannotParseContraints of (string * string)
 
@@ -52,9 +54,12 @@ module Token = struct
     | "!"         -> NOT
     | _           -> raise (UnknownSymbol (symbol,s))
 
-  let process_paren = function
-    | '(' -> LPAREN
-    | ')' -> RPAREN
+  let process_one_char c next =
+    match (c,next) with
+    | '(', _ -> LPAREN
+    | ')', _ -> RPAREN
+    | '!', Some '=' -> raise Not_found (* should be parsed as a string != *)
+    | '!', _ -> NOT
     | _ -> raise Not_found
 
   (* valid char per types *)
@@ -73,7 +78,8 @@ module Token = struct
     (* Per type lexer *)
     let eat_symbol o =
       let (tok,no) =
-        try let tok = process_paren s.[o] in (tok,o+1)
+        let next = if o+1 < len then Some (s.[o+1]) else None in
+        try let tok = process_one_char s.[o] next in (tok,o+1)
         with Not_found ->
           let (p, no) = while_pred is_symbol_char o in
           let tok = of_string p s in
@@ -143,23 +149,49 @@ let rec to_string = function
 let parse_builddep s =
   (* FIXME this is not complete. need to parse properly and/or and nesting *)
   let showList sep f l = String.concat sep (List.map f l) in
-  let rec parse_expr l =
-    Printf.printf "parse_expr %s\n" (showList "," Token.to_string l);
-    match l with
-    | Token.NOT :: r -> let (e, r) = parse_expr r in ((Not e), r)
-    | Token.LPAREN :: r -> parse_expr r
-    | Token.GT :: Token.VER v :: r -> (Gt v, r)
-    | Token.GE :: Token.VER v :: r -> (Ge v, r)
-    | Token.EQ :: Token.VER v :: r -> (Eq v, r)
-    | Token.LT :: Token.VER v :: r -> (Lt v, r)
-    | Token.LE :: Token.VER v :: r -> (Le v, r)
-    | Token.NE :: Token.VER v :: r -> (Ne v, r)
-    | z              -> raise (UnknownExpression (showList "," Token.to_string z))
+  let parse_expr l =
+    let rec parse_sub_expr l =
+      match l with
+      | [] -> raise MalformedExpression
+      | Token.NOT :: r ->
+        let (e, r) = parse_sub_expr r in ((Not e), r)
+      | Token.LPAREN :: r ->
+        let (e, r) = parse_sub_expr r in
+        let rec loop e r =
+          (match r with
+           | Token.RPAREN :: r -> (Paren e, r)
+           | Token.OR :: _ | Token.AND :: _ ->
+             let (e, r) = parse_bin_expr e r in
+             loop e r
+           | _ -> raise UnbalancedParenthesis;
+          )
+        in
+        loop e r
+      | Token.GT :: Token.VER v :: r -> (Gt v, r)
+      | Token.GE :: Token.VER v :: r -> (Ge v, r)
+      | Token.EQ :: Token.VER v :: r -> (Eq v, r)
+      | Token.LT :: Token.VER v :: r -> (Lt v, r)
+      | Token.LE :: Token.VER v :: r -> (Le v, r)
+      | Token.NE :: Token.VER v :: r -> (Ne v, r)
+      | z              -> raise (UnknownExpression (showList "," Token.to_string z))
+    and parse_bin_expr expr l =
+      match l with
+      | Token.OR :: r -> let (e, r) = parse_sub_expr r in ((Or (expr,e)), r)
+      | Token.AND :: r -> let (e, r) = parse_sub_expr r in ((And (expr,e)), r)
+      | _ -> raise MalformedExpression
+    in
+    let (e, r) = parse_sub_expr l in
+    let rec loop e r =
+      if(List.length r) = 0 then e
+      else let (e,r) = parse_bin_expr e r in
+        loop e r
+    in
+    loop e r
   in
   let parse_constraints l =
     match l with
     | []   -> None
-    | expr -> let (e,_) = parse_expr expr in
+    | expr -> let e = parse_expr expr in
       Some e
   in
   match Token.lexer s with
@@ -170,6 +202,8 @@ let parse_builddep s =
       let err =
         match e with
         | UnknownExpression z -> "unknown contraints expression \"" ^ z ^ "\""
+        | UnbalancedParenthesis -> "unbalanced parenthesis"
+        | MalformedExpression -> "malformed expression"
         | _                   -> Printexc.to_string e
       in
       raise (CannotParseContraints (name,err))
