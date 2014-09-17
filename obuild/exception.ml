@@ -78,7 +78,7 @@ let show exn =
     | Build.CompilationFailed e       -> eprintf "\n%s\n%!" e; exit 6
     | Build.CCompilationFailed e      -> eprintf "\n%s\n%!" e; exit 6
     | Buildprogs.LinkingFailed e           -> eprintf "\n%s\n%!" e; exit 7
-    | Dependencies.BuildDepAnalyzeFailed e -> eprintf "\n%s" e; exit 8
+    | Dependencies.BuildDepAnalyzeFailed e -> eprintf "\n%s\n%!" e; exit 8
     | Dependencies.DependenciesMissing missing ->
         begin match List.length missing with
         | 0 -> assert false

@@ -52,10 +52,35 @@ type expr =
     | ExpGt of version
     | ExpNe of version
 
+let rec eval_expr version constr =
+  match constr with
+  | ExpAnd (e1,e2) -> (eval_expr version e1) && (eval_expr version e2)
+  | ExpOr (e1,e2) -> (eval_expr version e1) || (eval_expr version e2)
+  | ExpNot e -> not (eval_expr version e)
+  | ExpParen e -> eval_expr version e
+  | ExpEq v -> version = v
+  | ExpLe v -> version <= v
+  | ExpLt v -> version < v
+  | ExpGe v -> version >= v
+  | ExpGt v -> version > v
+  | ExpNe v -> version != v
+
+let rec expr_to_string = function
+  | ExpAnd (e1,e2) -> (expr_to_string e1) ^ " && " ^ (expr_to_string e2)
+  | ExpOr (e1,e2) -> (expr_to_string e1) ^ " || " ^ (expr_to_string e2)
+  | ExpNot e -> "! " ^ (expr_to_string e)
+  | ExpParen e -> "(" ^ (expr_to_string e) ^ ")"
+  | ExpEq v -> "=" ^ v
+  | ExpLe v -> "<=" ^ v
+  | ExpLt v -> "<" ^ v
+  | ExpGe v -> ">=" ^ v
+  | ExpGt v -> ">" ^ v
+  | ExpNe v -> "!=" ^ v
+
 let lexer s =
     let len = String.length s in
     (* valid char per types *)
-    let isSymbolChar c = try let _ = String.index "&/|!+=><" c in true with _ -> false in
+    let isSymbolChar c = try let _ = String.index "&/|!+=><()" c in true with _ -> false in
     let isIdentChar c =
         (c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
@@ -73,6 +98,11 @@ let lexer s =
 
     (* Per type lexer *)
     let eat_symbol o =
+      let c = s.[o] in
+      if c = '(' || c = ')' then
+        let tok = if c = '(' then LPAREN else RPAREN in
+        (tok,o+1)
+      else
         let (p, no) = while_pred isSymbolChar o in
         let tok =
             match p with
@@ -116,16 +146,17 @@ let lexer s =
 let parse_builddep s =
     (* FIXME this is not complete. need to parse properly and/or and nesting *)
     let showList sep f l = String.concat sep (List.map f l) in
-    let parse_expr l =
+    let rec parse_expr l =
         match l with
-        | GT :: V v :: r -> (ExpGt v, r)
-        | GE :: V v :: r -> (ExpGe v, r)
-        | EQ :: V v :: r -> (ExpEq v, r)
-        | LT :: V v :: r -> (ExpLt v, r)
-        | LE :: V v :: r -> (ExpLe v, r)
-        | NE :: V v :: r -> (ExpNe v, r)
-        | z              -> raise (UnknownExpression (showList "," string_of_token z))
-        in
+          | LPAREN :: r -> parse_expr r
+          | GT :: V v :: r -> (ExpGt v, r)
+          | GE :: V v :: r -> (ExpGe v, r)
+          | EQ :: V v :: r -> (ExpEq v, r)
+          | LT :: V v :: r -> (ExpLt v, r)
+          | LE :: V v :: r -> (ExpLe v, r)
+          | NE :: V v :: r -> (ExpNe v, r)
+          | z              -> raise (UnknownExpression (showList "," string_of_token z))
+    in
     let parse_constraints l =
         match l with
         | []   -> None

@@ -222,12 +222,19 @@ let prepare projFile user_flags =
         Dag.addNode nodeTarget depsDag;
         (* if a lib, then we insert ourself as dependency for executable or other library *)
         let insertEdgeForDependency =
-            (match target.target_name with
-            | Name.Lib l -> Dag.addNode (Dependency l) depsDag; Dag.addEdge (Dependency l)
-            | _         -> fun _ _ -> ()
-            )
-            in
+          (match target.target_name with
+           | Name.Lib l -> Dag.addNode (Dependency l) depsDag; Dag.addEdge (Dependency l)
+           | _         -> fun _ _ -> ()
+          )
+        in
         List.iter (fun (dep,constr) ->
+            maybe_unit (fun c ->
+                let (_,pkg) = get_meta_cache metaTable dep in
+                if not (Expr.eval_expr pkg.Meta.Pkg.version c) then
+                  raise (Dependencies.BuildDepAnalyzeFailed
+                           (Libname.to_string dep ^ " (" ^ pkg.Meta.Pkg.version ^
+                            ") doesn't match the constraint " ^ (Expr.expr_to_string c)))
+              ) constr;
             Dag.addEdge nodeTarget (Dependency dep) depsDag;
             insertEdgeForDependency (Dependency dep) depsDag;
             loop dep;

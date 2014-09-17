@@ -194,7 +194,7 @@ let showToken = function
  *
  * this can be improve later on-needed basis
  *)
-let parse name content =
+let parse name content pkg_name =
     let metaFailed s = raise (MetaParseError (name, s)) in 
     let simpleChar = hashtbl_fromList
             [ ('(', LPAREN)
@@ -373,11 +373,11 @@ let parse name content =
         | x :: xs ->
                 metaFailed ("unknown token '" ^ showToken x ^ "' in meta file\n" ^ (String.concat " " (List.map showToken xs)) )
         in
-    fst (parse (Pkg.make "") (lexer content))
+    fst (parse (Pkg.make pkg_name) (lexer content))
 
-let read path =
+let read path name =
     let metaContent = Filesystem.readFile path in
-    parse path metaContent
+    parse path metaContent name
 
 (* get the META file path associated to a library *)
 let findLibPath name =
@@ -407,7 +407,7 @@ let findLibPath name =
 
 let findLib name : t =
     let path = findLibPath name in
-    (path, read path)
+    (path, read path name)
 
 let getIncludeDir stdlib ((path, pkg) : t) : filepath =
     match pkg.Pkg.directory with
