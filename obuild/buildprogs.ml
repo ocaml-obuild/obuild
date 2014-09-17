@@ -169,4 +169,3 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
   let res = Process.make args in
   let () = link_maybe linkingMode dest in
   res
-
