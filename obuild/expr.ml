@@ -126,7 +126,7 @@ let rec eval version constr =
   | Lt v -> version < v
   | Ge v -> version >= v
   | Gt v -> version > v
-  | Ne v -> version != v
+  | Ne v -> version <> v
 
 let rec to_string = function
   | And (e1,e2) -> (to_string e1) ^ " && " ^ (to_string e2)
@@ -144,7 +144,9 @@ let parse_builddep s =
   (* FIXME this is not complete. need to parse properly and/or and nesting *)
   let showList sep f l = String.concat sep (List.map f l) in
   let rec parse_expr l =
+    Printf.printf "parse_expr %s\n" (showList "," Token.to_string l);
     match l with
+    | Token.NOT :: r -> let (e, r) = parse_expr r in ((Not e), r)
     | Token.LPAREN :: r -> parse_expr r
     | Token.GT :: Token.VER v :: r -> (Gt v, r)
     | Token.GE :: Token.VER v :: r -> (Ge v, r)

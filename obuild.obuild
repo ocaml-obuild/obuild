@@ -76,3 +76,8 @@ test path
   src-dir: tests
   main-is: test_path.ml
   build-deps: obuild, obuild.ext
+
+test expr
+  src-dir: tests
+  main-is: test_expr.ml
+  build-deps: obuild, obuild.ext
