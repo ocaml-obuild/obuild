@@ -166,218 +166,199 @@ type t = filepath * Pkg.t
 
 let path_warning = ref false
 
-(* mini lexer *)
-type token =
-  | I of string
-  | S of string
-  | LPAREN
-  | RPAREN
-  | MINUS
-  | DOT
-  | EQ
-  | PLUSEQ
-  | COMMA
+module Token = struct
+  (* mini lexer *)
+  type t =
+    | ID of string
+    | S of string
+    | LPAREN
+    | RPAREN
+    | MINUS
+    | DOT
+    | EQ
+    | PLUSEQ
+    | COMMA
 
-let showToken = function
-  | (I s)  -> "ID[" ^ s ^ "]"
-  | (S s)  -> "\"" ^ s ^ "\""
-  | LPAREN -> "("
-  | RPAREN -> ")"
-  | MINUS  -> "-"
-  | DOT    -> "."
-  | EQ     -> "="
-  | PLUSEQ -> "+="
-  | COMMA  -> ","
+  let to_string = function
+    | (ID s)  -> "ID[" ^ s ^ "]"
+    | (S s)  -> "\"" ^ s ^ "\""
+    | LPAREN -> "("
+    | RPAREN -> ")"
+    | MINUS  -> "-"
+    | DOT    -> "."
+    | EQ     -> "="
+    | PLUSEQ -> "+="
+    | COMMA  -> ","
+
+  let char_table = hashtbl_fromList [('(', LPAREN); (')', RPAREN); ('=', EQ); (',', COMMA); 
+                                     ('.', DOT); ('-', MINUS)]
+
+  let is_token_char c = Hashtbl.mem char_table c
+  let get_token_char c = Hashtbl.find char_table c
+  let is_ident_char c = char_is_alphanum c || c == '_'
+
+  let tokenize name s =
+    let line = ref 1 in
+    let lineoff = ref 0 in
+    let len = String.length s in
+    let eat_comment o =
+      let i = ref (o+1) in
+      while !i < len && s.[!i] <> '\n' do i := !i+1 done;
+      line := !line + 1;
+      lineoff := !i+1;
+      (!i+1)
+    in
+    let parse_ident o =
+      let i = ref (o+1) in
+      while !i < len && is_ident_char s.[!i] do i := !i+1 done;
+      (String.sub s o (!i-o),!i)
+    in
+    let parse_string o =
+      let i = ref (o+1) in
+      let buf = Buffer.create 32 in
+      let in_escape = ref false in
+      while !i < len && (!in_escape || s.[!i] <> '"') do
+        if not !in_escape && s.[!i] = '\\'
+        then in_escape := true
+        else begin
+          let c =
+            if !in_escape then match s.[!i] with
+              | '\\' -> '\\'
+              | 'n' -> '\n'
+              | 't' -> '\t'
+              | 'r' -> '\r'
+              | '"' -> '"'
+              | _   -> s.[!i]
+            else s.[!i]
+          in
+          in_escape := false;
+          Buffer.add_char buf c
+        end;
+        i := !i+1
+      done;
+      (Buffer.contents buf, !i+1)
+    in
+    let rec loop o =
+      if o >= len then []
+      else begin
+        if s.[o] == ' ' || s.[o] == '\t' then loop (o+1)
+        else if s.[o] == '\n' then (
+          line := !line + 1; lineoff := o+1; loop (o+1)
+        ) else if s.[o] == '#' then loop (eat_comment o)
+        else if s.[o] == '"' then
+          let (s, no) = parse_string o in S s :: loop no
+        else if is_token_char s.[o] then
+          get_token_char s.[o] :: loop (o+1)
+        else if s.[o] == '+' && (o+1) < len && s.[o+1] == '=' then
+          PLUSEQ :: loop (o+2)
+        else if (s.[o] >= 'a' && s.[o] <= 'z') || (s.[o] >= 'A' && s.[o] <= 'Z') then
+          let (id, no) = parse_ident o in ID id :: loop no
+        else
+          let s = sprintf "%d.%d: meta lexing error: undefined character '%c'" !line (o - !lineoff) s.[o] in
+          raise (MetaParseError (name, s))
+      end
+    in
+    loop 0
+
+  let rec parse_csv_tail = function
+    | COMMA :: ID s :: xs -> let (l, r) = parse_csv_tail xs in (s :: l, r)
+    | xs                 -> ([], xs)
+
+  let parse_predicate_list name field = function
+    | LPAREN :: RPAREN :: xs -> (Some [], xs)
+    | LPAREN :: ID s :: xs ->
+      (let (ss, xs2) = parse_csv_tail xs in match xs2 with
+        | RPAREN :: xs3 ->
+          let preds = List.map Predicate.of_string (s::ss) in
+          (Some preds, xs3)
+        | _ -> raise (MetaParseError (name, ("expecting ')' after " ^ field ^ "'s predicate")))
+      )
+    | xs -> (None, xs)
+
+  let parse_requires_eq name mpreds = function
+    | PLUSEQ :: S reqs :: xs
+    | EQ :: S reqs :: xs ->
+      let deps = List.map (fun r -> Libname.of_string r)
+                 $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
+      in
+      ((mpreds, (List.rev deps)), xs)
+    | _ -> raise (MetaParseError (name, ("expecting '+=' or '=' after requires")))
+
+  let rec parse pkg_name acc = function
+    | []           -> (acc, [])
+    | RPAREN :: xs -> (acc, xs)
+    | ID "package" :: S name :: LPAREN :: xs ->
+      (let (pkg, xs2) = parse pkg_name (Pkg.make name) xs in
+       let nacc = { acc with Pkg.subs = acc.Pkg.subs @ [pkg]} in
+       parse pkg_name nacc xs2
+      )
+    | ID "requires" :: xs -> (
+        match xs with
+        | LPAREN :: ID s :: xs2 ->
+          let (l,xs3) = parse_csv_tail xs2 in
+          (match xs3 with
+           | RPAREN :: xs4 ->
+             let preds = List.map Predicate.of_string (s::l) in
+             let (req, xs5) = parse_requires_eq pkg_name (Some preds) xs4 in
+             parse pkg_name { acc with Pkg.requires = req :: acc.Pkg.requires } xs5
+           | _ -> raise (MetaParseError (pkg_name, "expecting ) after requires's predicate"))
+          )
+        | _ ->
+          let (req, xs2) = parse_requires_eq pkg_name None xs in
+          parse pkg_name { acc with Pkg.requires = req :: acc.Pkg.requires } xs2
+      )
+    | ID "directory" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.directory = dir } xs
+    | ID "description" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.description = dir } xs
+    | ID "browse_interfaces" :: EQ :: S intf :: xs -> parse pkg_name acc xs
+    | ID "archive" :: LPAREN :: ID s :: xs ->
+      (let (ss, xs2) = parse_csv_tail xs in
+       let preds = List.map Predicate.of_string (s::ss) in
+       match xs2 with
+       | RPAREN :: PLUSEQ :: S v :: xs3
+       | RPAREN :: EQ :: S v :: xs3 ->
+         let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [(preds, v)] } in
+         parse pkg_name nacc xs3
+       | _ -> raise (MetaParseError (pkg_name, "parsing archive failed"))
+      )
+    | ID "preprocessor" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.preprocessor = v } xs
+    | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs
+    | ID "exists_if" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.exists_if = v } xs
+    | ID "error" :: LPAREN :: xs -> (
+        let rec consume toks =
+          match toks with
+          | RPAREN::zs -> zs
+          | z::zs      -> consume zs
+          | []         -> failwith "eof in error context"
+        in
+        match consume xs with
+        | EQ :: S s :: xs2 -> parse pkg_name acc xs2
+        | _                -> failwith "parsing error failed"
+      )
+    | ID "linkopts" :: xs -> (
+        let (preds, xs2) = parse_predicate_list pkg_name "linkopts" xs in
+        match xs2 with
+        | EQ :: S s :: xs3 ->
+          parse pkg_name { acc with Pkg.linkopts = (preds, s) :: acc.Pkg.linkopts } xs3
+        | _         -> failwith "parsing linkopts failed, expecting equal"
+      )
+    | ID stuff :: EQ :: S stuffVal :: xs ->
+      parse pkg_name { acc with Pkg.assignment = (stuff, stuffVal) :: acc.Pkg.assignment } xs
+    | x :: xs -> raise (MetaParseError (pkg_name, ("unknown token '" ^ to_string x ^ "' in meta file\n" ^
+                                                   (String.concat " " (List.map to_string xs)))))
+end
 
 (* meta files are supposed to be small, so don't bother with
  * a real efficient and incremental read/lex/parse routine.
  *
  * this can be improve later on-needed basis
- *)
+*)
+
 let parse name content pkg_name =
-    let metaFailed s = raise (MetaParseError (name, s)) in 
-    let simpleChar = hashtbl_fromList
-            [ ('(', LPAREN)
-            ; (')', RPAREN)
-            ; ('=', EQ)
-            ; (',', COMMA)
-            ; ('.', DOT)
-            ; ('-', MINUS)
-            ]
-        in
-    let lexer s =
-        let line = ref 1 in
-        let lineoff = ref 0 in
-        let len = String.length s in
-        let isIdentChar c = char_is_alphanum c || c == '_' in
-        let eatComment o =
-            let i = ref (o+1) in
-            while !i < len && s.[!i] <> '\n' do i := !i+1 done;
-            line := !line + 1;
-            lineoff := !i+1;
-            (!i+1)
-            in
-        let parseIdent o =
-            let i = ref (o+1) in
-            while !i < len && isIdentChar s.[!i] do i := !i+1 done;
-            (String.sub s o (!i-o),!i)
-            in
-        let parseString o =
-            let i = ref (o+1) in
-            let buf = Buffer.create 32 in
-            let inEscape = ref false in
-            while !i < len && (!inEscape || s.[!i] <> '"') do
-                if not !inEscape && s.[!i] = '\\'
-                    then inEscape := true
-                    else (
-                        let c =
-                            if !inEscape
-                                then
-                                    match s.[!i] with
-                                    | '\\' -> '\\'
-                                    | 'n' -> '\n'
-                                    | 't' -> '\t'
-                                    | 'r' -> '\r'
-                                    | '"' -> '"'
-                                    | _   -> s.[!i]
-                                else s.[!i]
-                            in
-                        inEscape := false;
-                        Buffer.add_char buf c
-                    );
-                i := !i+1
-            done;
-            (Buffer.contents buf, !i+1)
-            in
-        let rec loop o =
-            if o >= len
-                then []
-                else (
-                    if s.[o] == ' ' || s.[o] == '\t' then (
-                        loop (o+1)
-                    ) else if s.[o] == '\n' then (
-                        line := !line + 1; lineoff := o+1; loop (o+1)
-                    ) else if s.[o] == '#' then (
-                        loop (eatComment o)
-                    ) else if s.[o] == '"' then (
-                        let (s, no) = parseString o in S s :: loop no
-                    ) else if Hashtbl.mem simpleChar s.[o] then (
-                        Hashtbl.find simpleChar s.[o] :: loop (o+1)
-                    ) else if s.[o] == '+' && (o+1) < len && s.[o+1] == '=' then (
-                        PLUSEQ :: loop (o+2)
-                    ) else if (s.[o] >= 'a' && s.[o] <= 'z') ||
-                            (s.[o] >= 'A' && s.[o] <= 'Z') then (
-                        let (id, no) = parseIdent o in I id :: loop no
-                    ) else
-                        metaFailed (sprintf "%d.%d: meta lexing error: undefined character '%c'" !line (o - !lineoff) s.[o])
-                )
-            in
-        loop 0
-        in
-    let rec parseCSVtail tokens =
-        match tokens with
-        | COMMA :: I s :: xs -> let (l, r) = parseCSVtail xs in (s :: l, r)
-        | xs                 -> ([], xs)
-        in
-    let parse_predicate_list field tokens =
-        match tokens with
-        | LPAREN :: RPAREN :: xs -> (Some [], xs)
-        | LPAREN :: I s :: xs    ->
-            (let (ss, xs2) = parseCSVtail xs in
-            match xs2 with
-            | RPAREN :: xs3 ->
-                let preds = List.map Predicate.of_string (s::ss) in
-                (Some preds, xs3)
-            | _             -> metaFailed ("expecting ')' after " ^ field ^ "'s predicate")
-            )
-        | xs                     -> (None, xs)
-        in
-    let parse_requires_eq mpreds tokens =
-        match tokens with
-        | PLUSEQ :: S reqs :: xs
-        | EQ :: S reqs :: xs ->
-            let deps = List.map (fun r -> Libname.of_string r)
-                $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
-                in
-            ((mpreds, (List.rev deps)), xs)
-        | _ ->
-            metaFailed ("expecting '+=' or '=' after requires")
-        in
-    let rec parse acc tokens =
-        match tokens with
-        | []           -> (acc, [])
-        | RPAREN :: xs -> (acc, xs)
-        | I "package" :: S name :: LPAREN :: xs ->
-            (let (pkg, xs2) = parse (Pkg.make name) xs in
-            let nacc = { acc with Pkg.subs = acc.Pkg.subs @ [pkg]} in
-            parse nacc xs2
-            )
-        | I "requires" :: xs -> (
-            match xs with
-            | LPAREN :: I s :: xs2 ->
-                let (l,xs3) = parseCSVtail xs2 in
-                (match xs3 with
-                | RPAREN :: xs4 ->
-                    let preds = List.map Predicate.of_string (s::l) in
-                    let (req, xs5) = parse_requires_eq (Some preds) xs4 in
-                    parse { acc with Pkg.requires = req :: acc.Pkg.requires } xs5
-                | _ -> metaFailed "expecting ) after requires's predicate"
-                )
-            | _ ->
-                let (req, xs2) = parse_requires_eq None xs in
-                parse { acc with Pkg.requires = req :: acc.Pkg.requires } xs2
-            )
-        | I "directory" :: EQ :: S dir :: xs ->
-            parse { acc with Pkg.directory = dir } xs
-        | I "description" :: EQ :: S dir :: xs ->
-            parse { acc with Pkg.description = dir } xs
-        | I "browse_interfaces" :: EQ :: S intf :: xs ->
-            parse acc xs
-        | I "archive" :: LPAREN :: I s :: xs ->
-            (let (ss, xs2) = parseCSVtail xs in
-            let preds = List.map Predicate.of_string (s::ss) in
-            match xs2 with
-            | RPAREN :: PLUSEQ :: S v :: xs3
-            | RPAREN :: EQ :: S v :: xs3 ->
-                let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [(preds, v)] } in
-                parse nacc xs3
-            | _ ->
-                metaFailed "parsing archive failed"
-            )
-        | I "preprocessor" :: EQ :: S v :: xs ->
-            parse { acc with Pkg.preprocessor = v } xs
-        | I "version" :: EQ :: S v :: xs ->
-            parse { acc with Pkg.version = v } xs
-        | I "exists_if" :: EQ :: S v :: xs ->
-            parse { acc with Pkg.exists_if = v } xs
-        | I "error" :: LPAREN :: xs -> (
-            let rec consume toks =
-                match toks with
-                | RPAREN::zs -> zs
-                | z::zs      -> consume zs
-                | []         -> failwith "eof in error context"
-                in
-            match consume xs with
-            | EQ :: S s :: xs2 -> parse acc xs2
-            | _                -> failwith "parsing error failed"
-            )
-        | I "linkopts" :: xs -> (
-            let (preds, xs2) = parse_predicate_list "linkopts" xs in
-            match xs2 with
-            | EQ :: S s :: xs3 ->
-                    parse { acc with Pkg.linkopts = (preds, s) :: acc.Pkg.linkopts } xs3
-            | _         -> failwith "parsing linkopts failed, expecting equal"
-            )
-        | I stuff :: EQ :: S stuffVal :: xs ->
-            parse { acc with Pkg.assignment = (stuff, stuffVal) :: acc.Pkg.assignment } xs
-        | x :: xs ->
-                metaFailed ("unknown token '" ^ showToken x ^ "' in meta file\n" ^ (String.concat " " (List.map showToken xs)) )
-        in
-    fst (parse (Pkg.make pkg_name) (lexer content))
+  fst (Token.parse name (Pkg.make pkg_name) (Token.tokenize name content))
 
 let read path name =
-    let metaContent = Filesystem.readFile path in
-    parse path metaContent name
+  let meta_content = Filesystem.readFile path in
+  parse path meta_content name
 
 (* get the META file path associated to a library *)
 let findLibPath name =
