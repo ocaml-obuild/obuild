@@ -51,24 +51,24 @@ let opam_install_file proj_file flags =
 
 let lib_to_meta proj_file lib =
   let requires_of_lib lib =
-    let deps = lib.lib_target.target_obits.target_builddeps in
+    let deps = lib.Library.target.target_obits.target_builddeps in
     [ (None, List.map (fun d -> fst d) deps) ]
   in
   let set_meta_field_from_lib pkg lib = {
     pkg with Meta.Pkg.requires    = requires_of_lib lib;
-             Meta.Pkg.description = if lib.lib_description <> "" then lib.lib_description else proj_file.description;
+             Meta.Pkg.description = if lib.Library.description <> "" then lib.Library.description else proj_file.description;
              Meta.Pkg.archives    = [
-               ([Meta.Predicate.Byte]  , fn_to_string (Libname.to_cmca ByteCode Normal lib.lib_name));
-               ([Meta.Predicate.Byte; Meta.Predicate.Plugin]  , fn_to_string (Libname.to_cmca ByteCode Normal lib.lib_name));
-               ([Meta.Predicate.Native], fn_to_string (Libname.to_cmca Native Normal lib.lib_name))
+               ([Meta.Predicate.Byte]  , fn_to_string (Libname.to_cmca ByteCode Normal lib.Library.name));
+               ([Meta.Predicate.Byte; Meta.Predicate.Plugin]  , fn_to_string (Libname.to_cmca ByteCode Normal lib.Library.name));
+               ([Meta.Predicate.Native], fn_to_string (Libname.to_cmca Native Normal lib.Library.name))
              ] @ (if (Gconf.get_target_option "library-plugin") then
-                    [([Meta.Predicate.Native; Meta.Predicate.Plugin], fn_to_string (Libname.to_cmxs Normal lib.lib_name))]
+                    [([Meta.Predicate.Native; Meta.Predicate.Plugin], fn_to_string (Libname.to_cmxs Normal lib.Library.name))]
                   else [])
   } in
   let subPkgs = List.map (fun sub ->
-      let npkg = Meta.Pkg.make (list_last (Libname.to_string_nodes sub.lib_name)) in
+      let npkg = Meta.Pkg.make (list_last (Libname.to_string_nodes sub.Library.name)) in
       set_meta_field_from_lib npkg sub
-    ) lib.lib_subs
+    ) lib.Library.subs
   in
   let pkg = set_meta_field_from_lib (Meta.Pkg.make "") lib in {
     pkg with Meta.Pkg.version          = proj_file.version;
@@ -76,7 +76,7 @@ let lib_to_meta proj_file lib =
   }
 
 let write_lib_meta projFile lib =
-    let dir = Dist.get_build_exn (Dist.Target lib.lib_target.target_name) in
+    let dir = Dist.get_build_exn (Dist.Target lib.Library.target.target_name) in
     let metadir_path = dir </> fn "META" in
     let pkg = lib_to_meta projFile lib in
     Meta.Pkg.write metadir_path pkg
@@ -94,9 +94,9 @@ let install_lib proj_file lib dest_dir =
       let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
       Build.sanity_check build_dir target;
       list_lib_files target build_dir
-    ) (Project.lib_to_targets lib) in
-  let dir_name = fn (Libname.to_string lib.Project.lib_name) in
-  verbose Report "installing library %s\n" (Libname.to_string lib.Project.lib_name);
+    ) (Project.Library.to_targets lib) in
+  let dir_name = fn (Libname.to_string lib.Project.Library.name) in
+  verbose Report "installing library %s\n" (Libname.to_string lib.Project.Library.name);
   verbose Debug "installing files: %s\n" (Utils.showList ","
                                             fn_to_string (List.concat (List.map snd all_files)));
   copy_files all_files dest_dir dir_name

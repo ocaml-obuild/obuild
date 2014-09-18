@@ -23,142 +23,418 @@ exception UnknownStdlib of string
 exception UnknownExtraDepFormat of string
 exception UnknownFlag of string
 
-type obuild_lib =
-    { lib_name        : Libname.t
-    ; lib_description : string
-    ; lib_target      : target
-    ; lib_modules     : Hier.t list
-    ; lib_pack        : bool
-    ; lib_syntax      : bool
-    ; lib_subs        : obuild_lib list
-    }
+exception LibraryNotFound of Libname.t
+exception ExecutableNotFound of string
+exception BenchNotFound of string
+exception TestNotFound of string
+exception ExampleNotFound of string
 
-type obuild_exe =
-    { exe_name      : string
-    ; exe_main      : filename
-    ; exe_target    : target
-    }
+type 'a optionHandling = Handled of 'a | NotHandled
 
-type test_type = TestType_ExitCode
+let raise_if_strict strict s =
+  if strict then raise (InvalidConfFile s)
+  else Printf.eprintf "config warning: %s\n" s
 
-type obuild_test =
-    { test_name     : string
-    ; test_main     : filename
-    ; test_target   : target
-    ; test_rundir   : filepath option
-    ; test_runopt   : string list
-    ; test_type     : test_type
-    }
+let get_context_name ctx_name = function
+  | [name] -> name
+  | []     -> failwith (ctx_name ^ " need a name")
+  | _      -> failwith (ctx_name ^ " has too many arguments, expecting just a name")
 
-type obuild_bench =
-    { bench_name     : string
-    ; bench_main     : filename
-    ; bench_target   : target
+let rec get_block (lvl: int) (lines: (int * string) list): ((int * string) list * (int * string) list) =
+  match lines with
+  | []              -> ([], [])
+  | (clvl, line)::ls ->
+    if lvl < clvl then
+      let (b1, b2) = get_block lvl ls in
+      ((clvl, line) :: b1, b2)
+    else ([], lines)
+
+let rec process_chunk f acc (lines: (int*string) list) =
+  match lines with
+  | [] -> acc
+  | (lvl, line)::ls ->
+    let (cont,rem) = get_block lvl ls in
+    let nacc = f acc line cont in
+    process_chunk f nacc rem
+
+let do_block ty mempty parseM accu args cont =
+  let name = get_context_name ty args in
+  accu (process_chunk parseM (mempty name) cont)
+
+let do_block2 ty mempty parseM accu args cont =
+  accu (process_chunk parseM (mempty args) cont)
+
+let parse_deps key_parse value =
+  let parse_dependency w =
+    let (d,c) = Expr.parse_builddep w in
+    (key_parse d, c)
+  in
+  List.map parse_dependency (Utils.parseCSV value)
+
+let parse_extra_dep value =
+  let vs = Utils.parseCSV value in
+  List.map (fun v ->
+      match string_words v with
+      | [h1; "then"; h2] | [h1; "before"; h2] | [h1; "->"; h2] | [h1; h2] ->
+        (Hier.of_string h1, Hier.of_string h2)
+      | _              -> raise (UnknownExtraDepFormat v)
+    ) vs
+
+let parse_filenames value = List.map fn (Utils.parseCSV value)
+
+let parse_stdlib value =
+  match String.lowercase value with
+  | "none" | "no" -> Stdlib_None
+  | "standard"    -> Stdlib_Standard
+  | "core"        -> Stdlib_Core
+  | _             -> raise (UnknownStdlib value)
+
+let parse_runtime_bool ctx = function
+  | "true" | "True"   -> BoolConst true
+  | "false" | "False" -> BoolConst false
+  | flag -> if string_startswith "$" flag then BoolVariable (string_drop 1 flag) else BoolVariable flag
+
+let parse_module_name value =
+  let wrap_module_nice s = Hier.make [(Modname.wrap (String.capitalize s))] in
+  List.map wrap_module_nice (Utils.parseCSV value)
+
+let parse_per strict (acc: target_extra) line cont =
+  match Utils.toKV line with
+  | (k, None) ->
+    raise_if_strict strict ("no block in per"); acc
+  | (k, Some v) ->
+    let (value: string) = String.concat "\n" (v :: List.map snd cont) in
+    match String.lowercase k with
+    | "builddepends" | "builddeps"
+    | "build-deps" -> { acc with target_extra_builddeps = parse_deps Libname.of_string value @ acc.target_extra_builddeps }
+    | "oflags"     -> { acc with target_extra_oflags = acc.target_extra_oflags @ string_words_noempty value }
+    | _            -> raise_if_strict strict ("unexpected item in : " ^ k); acc
+
+let parse_otarget t k value =
+  match k with
+  | "builddepends" | "builddeps"
+  | "build-deps" -> Handled { t with target_builddeps = parse_deps Libname.of_string value @ t.target_builddeps }
+  | "path" | "srcdir"
+  | "src-dir"    -> Handled { t with target_srcdir    = fp value }
+  | "preprocessor"
+  | "pp"         -> Handled { t with target_pp = Some (Pp.Type.of_string value) }
+  | "extra-deps" -> Handled { t with target_extradeps = t.target_extradeps @ parse_extra_dep value }
+  | "oflags"     -> Handled { t with target_oflags = t.target_oflags @ string_words_noempty value }
+  | "stdlib"     -> Handled { t with target_stdlib = parse_stdlib value }
+  | _            -> NotHandled
+
+let parse_ctarget t k value =
+  match k with
+  | "cdir"
+  | "c-dir"      -> Handled { t with target_cdir      = fp value }
+  | "csources"
+  | "c-sources"  -> Handled { t with target_csources  = t.target_csources  @ parse_filenames value }
+  | "cflags" | "c-flags" | "ccopts" | "ccopt"
+  | "c-opts"     -> Handled { t with target_cflags    = t.target_cflags    @ string_words_noempty value }
+  | "c-libpaths" -> Handled { t with target_clibpaths = t.target_clibpaths @ List.map fp (string_words_noempty value) }
+  | "c-libs"     -> Handled { t with target_clibs     = t.target_clibs     @ string_words_noempty value }
+  | "c-pkgs"     -> Handled { t with target_cpkgs     = t.target_cpkgs     @ parse_deps id value }
+  | _            -> NotHandled
+
+let parse_target strict t k value =
+  match k with
+  | "buildable"   -> { t with target_buildable = parse_runtime_bool "buildable" value }
+  | "installable" -> { t with target_installable = parse_runtime_bool "installable" value }
+  | k             ->
+    match parse_otarget t.target_obits k value with
+    | Handled nobits -> { t with target_obits = nobits }
+    | NotHandled ->
+      match parse_ctarget t.target_cbits k value with
+      | Handled ncbits -> { t with target_cbits = ncbits }
+      | NotHandled     ->
+        raise_if_strict strict ("unexpected item in : " ^ k); t
+
+module Library = struct
+  type t = {
+    name        : Libname.t;
+    description : string;
+    target      : target;
+    modules     : Hier.t list;
+    pack        : bool;
+    syntax      : bool;
+    subs        : t list;
+  }
+
+  let make name = {
+    name;
+    description = "";
+    modules     = [];
+    pack        = false;
+    syntax      = false;
+    target      = newTarget (Name.Lib name) Lib true true;
+    subs        = []
+  }
+
+  let make_prefix libname subname = make (Libname.append libname subname)
+  let make_from_string libname = make (Libname.of_string libname)
+
+  let to_target obj = obj.target
+
+  let rec to_targets lib =
+    lib.target :: List.concat (List.map to_targets lib.subs)
+
+  let rec flatten lib : t list =
+    lib :: List.concat (List.map flatten lib.subs)
+
+  let find libs name =
+    try List.find (fun l -> l.name = name) (List.concat (List.map flatten libs))
+    with Not_found -> raise (LibraryNotFound name)
+
+  let check_modules_not_empty lib =
+    if lib.modules = [] then raise (ModuleListEmpty (lib.name))
+
+  let rec show add show_target section lib =
+    add "\n";
+    add (sprintf "%slibrary %s\n" section (Libname.to_string lib.name));
+    let iStr = section ^ "  " in
+    add (sprintf "%smodules: %s\n" iStr (Utils.showList "," Hier.to_string lib.modules));
+    if lib.pack then add (sprintf "%spack: %b\n" iStr lib.pack);
+    if lib.syntax then add (sprintf "%ssyntax: %b\n" iStr lib.syntax);
+    if lib.pack then add (sprintf "%spack: %b\n" iStr lib.pack);
+    show_target iStr lib.target;
+    List.iter (fun sub -> show add show_target iStr sub) lib.subs
+
+  let rec parse strict acc line cont =
+    match Utils.toKV line with
+    | (k, None)   ->
+      (match string_words_noempty k with
+       | []                -> raise_if_strict strict ("unknown empty block in library"); acc
+       | blockName :: args ->
+         match String.lowercase blockName with
+         | "sub" | "sublib" | "library" -> (
+             let doSub = do_block "library" (make_prefix acc.name) (parse strict)
+                 (fun obj -> { acc with subs = obj :: acc.subs})
+             in
+             doSub args cont
+           )
+         | "per" -> (
+             let t = acc.target in
+             let doPer = do_block2 "per" newTargetExtra (parse_per strict)
+                 (fun obj -> { acc with target = { t with target_extras = obj :: t.target_extras } }) in
+             doPer args cont
+           )
+         | _ -> raise_if_strict strict ("unexpected block name in library: " ^ blockName); acc
+      )
+    | (k, Some v) ->
+      let (value: string) = String.concat "\n" (v :: List.map snd cont) in
+      (match String.lowercase k with
+       | "modules"     -> { acc with modules = parse_module_name value @ acc.modules }
+       | "pack"        -> { acc with pack    = user_bool_of_string "pack" value }
+       | "syntax"      -> { acc with syntax  = user_bool_of_string "syntax" value }
+       | "description" -> { acc with description = value }
+       | "sub" | "sublib" | "library" -> raise (BlockSectionAsValue k)
+       | k             -> { acc with target  = parse_target strict acc.target k value }
+      )
+end
+
+module Executable = struct
+  type t = {
+    name      : string;
+    main      : filename;
+    target    : target;
+  }
+
+  let make name = {
+    name;
+    main   = emptyFn;
+    target = newTarget (Name.Exe name) Exe true false
+  }
+
+  let to_target obj = obj.target
+
+  let parse_common strict sectionName setMain setTarget myTarget other acc line cont =
+    match Utils.toKV line with
+    | (k, None) ->
+      (match string_words_noempty k with
+       | [] -> raise_if_strict strict ("unknown empty block in " ^ sectionName ^ " " ^ k); acc
+       | blockName :: args -> (
+           match String.lowercase blockName with
+           | "per" -> (
+               let t = myTarget in
+               let doPer = do_block2 "per" (newTargetExtra) (parse_per strict)
+                   (fun obj -> setTarget acc { t with target_extras = obj :: t.target_extras }) in
+               doPer args cont
+             )
+           | _                            -> raise_if_strict strict ("unexpected block name in library: " ^ blockName); acc
+         )
+      )
+    | (k, Some v) ->
+      let (value: string) = String.concat "\n" (v :: List.map snd cont) in
+      (match String.lowercase k with
+       | "main" | "mainis"
+       | "main-is"    -> setMain acc (fn value)
+       | k            ->
+         try let f = List.assoc k other in f acc value
+         with Not_found -> setTarget acc (parse_target strict myTarget k value)
+      )
+
+  let parse strict obj =
+    parse_common strict "executable" (fun acc main -> { acc with main = main })
+      (fun acc target -> { acc with target = target })
+      obj.target
+      []
+      obj
+
+  let find exes name = try List.find (fun e -> e.name = name) exes
+    with Not_found -> raise (ExecutableNotFound name)
+
+end
+
+module Test = struct
+  type test_type = ExitCode
+
+  type t = {
+    name     : string;
+    main     : filename;
+    target   : target;
+    rundir   : filepath option;
+    runopt   : string list;
+    type_     : test_type;
+  }
+
+
+  let make name = {
+    name;
+    main   = emptyFn;
+    target = newTarget (Name.Test name) Test (Gconf.get_target_option "build-tests") false;
+    rundir = None;
+    runopt = [];
+    type_   = ExitCode;
+  }
+
+  let to_target obj = obj.target
+
+  let parse strict obj =
+    Executable.parse_common strict "test" (fun acc main -> { acc with main = main })
+      (fun acc target -> { acc with target = target })
+      obj.target
+      [ ("rundir", (fun acc v -> { acc with rundir = Some (fp v) }))
+      ; ("runopt", (fun acc v -> { acc with runopt = acc.runopt @ string_words v }))
+      ]
+      obj
+
+  let find tests name = try List.find (fun b -> b.name = name) tests
+    with Not_found -> raise (TestNotFound name)
+end
+
+module Bench = struct
+  type t = {
+    name     : string;
+    main     : filename;
+    target   : target;
     (* TODO add bench type *)
-    }
+  }
+
+  let to_target obj = obj.target
+
+  let find benchs name = try List.find (fun b -> b.name = name) benchs
+    with Not_found -> raise (BenchNotFound name)
+end
 
 (* an example is an executable that doesn't get installed.
  * or maybe install in a documentation directory
  *)
-type obuild_example =
-    { example_name     : string
-    ; example_main     : filename
-    ; example_target   : target
-    }
+module Example = struct
+  type t = {
+    name     : string;
+    main     : filename;
+    target   : target;
+  }
 
-let lib_to_target obj = obj.lib_target
-let exe_to_target obj = obj.exe_target
-let test_to_target obj = obj.test_target
-let bench_to_target obj = obj.bench_target
-let example_to_target obj = obj.example_target
+  let to_target obj = obj.target
 
-let rec lib_to_targets lib =
-    lib.lib_target :: List.concat (List.map lib_to_targets lib.lib_subs)
+  let make name = {
+    name   = name;
+    main   = emptyFn;
+    target = newTarget (Name.Example name) Test (Gconf.get_target_option "build-examples") false;
+  }
 
-let rec lib_flatten lib : obuild_lib list =
-    lib :: List.concat (List.map lib_flatten lib.lib_subs)
+  let parse strict obj =
+    Executable.parse_common strict "example" (fun acc main -> { acc with main = main })
+      (fun acc target -> { acc with target = target })
+      obj.target
+      []
+      obj
 
-type obuild_flag =
-    { flag_name        : string
-    ; flag_description : string
-    ; flag_default     : bool option
-    }
+  let find examples name = try List.find (fun b -> b.name = name) examples
+    with Not_found -> raise (ExampleNotFound name)
 
-type obuild =
-    { name        : string
-    ; version     : string
-    ; synopsis    : string
-    ; description : string
-    ; license     : string
-    ; license_file: filepath option
-    ; authors     : string list
-    ; obuild_ver  : int
-    ; homepage    : string
-    ; flags       : obuild_flag list
-    ; libs        : obuild_lib list
-    ; exes        : obuild_exe list
-    ; tests       : obuild_test list
-    ; benchs      : obuild_bench list
-    ; examples    : obuild_example list
-    ; extra_srcs  : filepath list
-    ; extra_tools : filename list
-    ; configure_script : filepath option
-    }
+end
 
-let emptyObuild =
-    { name        = ""
-    ; version     = ""
-    ; synopsis    = ""
-    ; description = ""
-    ; license     = ""
-    ; license_file= None
-    ; authors     = []
-    ; obuild_ver  = 0
-    ; homepage    = ""
-    ; extra_tools = []
-    ; flags       = []
-    ; libs        = []
-    ; exes        = []
-    ; tests       = []
-    ; benchs      = []
-    ; examples    = []
-    ; extra_srcs  = []
-    ; configure_script = None
-    }
+module Flag = struct
+  type t = {
+    name        : string;
+    description : string;
+    default     : bool option;
+  }
 
-let emptyLibLname lname : obuild_lib =
-    { lib_name        = lname
-    ; lib_description = ""
-    ; lib_modules     = []
-    ; lib_pack        = false
-    ; lib_syntax      = false
-    ; lib_target      = newTarget (Name.Lib lname) Lib true true
-    ; lib_subs        = []
-    }
+  let make args = {
+    name = get_context_name "flag" args;
+    description = "";
+    default = None;
+  }
 
-let emptyLibPrefix libname subname = emptyLibLname (Libname.append libname subname)
-let emptyLib libname = emptyLibLname (Libname.of_string libname)
+  let parse strict acc line cont =
+    match Utils.toKV line with
+    | (k, None)   -> raise_if_strict strict ("unexpected item in flag " ^ k); acc
+    | (k, Some v) ->
+      let (value: string) = String.concat "\n" (v :: List.map snd cont) in
+      (match String.lowercase k with
+       | "description" -> { acc with description = value }
+       | "default"     -> { acc with default = Some (user_bool_of_string "flag default" value) }
+       | k             -> (raise_if_strict strict ("unexpected item in flag : " ^ k); acc)
+      )
 
-let emptyExe (name : string) : obuild_exe =
-    { exe_name   = name
-    ; exe_main   = emptyFn
-    ; exe_target = newTarget (Name.Exe name) Exe true false
-    }
+  let find flags name = try Some (List.find (fun fl -> fl.name = name) flags)
+    with Not_found -> None
+end
 
-let emptyTest (name : string) : obuild_test =
-    { test_name   = name
-    ; test_main   = emptyFn
-    ; test_target = newTarget (Name.Test name) Test (Gconf.get_target_option "build-tests") false
-    ; test_rundir = None
-    ; test_runopt = []
-    ; test_type   = TestType_ExitCode
-    }
+type t = {
+  name        : string;
+  version     : string;
+  synopsis    : string;
+  description : string;
+  license     : string;
+  license_file: filepath option;
+  authors     : string list;
+  obuild_ver  : int;
+  homepage    : string;
+  flags       : Flag.t list;
+  libs        : Library.t list;
+  exes        : Executable.t list;
+  tests       : Test.t list;
+  benchs      : Bench.t list;
+  examples    : Example.t list;
+  extra_srcs  : filepath list;
+  extra_tools : filename list;
+  configure_script : filepath option;
+}
 
-let emptyExample (name : string) : obuild_example =
-    { example_name   = name
-    ; example_main   = emptyFn
-    ; example_target = newTarget (Name.Example name) Test (Gconf.get_target_option "build-examples") false
-    }
+let make = {
+  name        = "";
+  version     = "";
+  synopsis    = "";
+  description = "";
+  license     = "";
+  license_file= None;
+  authors     = [];
+  obuild_ver  = 0;
+  homepage    = "";
+  extra_tools = [];
+  flags       = [];
+  libs        = [];
+  exes        = [];
+  tests       = [];
+  benchs      = [];
+  examples    = [];
+  extra_srcs  = [];
+  configure_script = None;
+}
 
 let findPath () =
     let ents = Array.to_list (Sys.readdir ".") in
@@ -171,289 +447,63 @@ let digest () =
     let path = findPath () in
     Digest.to_hex (Digest.file (fp_to_string path))
 
-type 'a optionHandling = Handled of 'a | NotHandled
-
 let parse strict lines =
-    let raise_if_strict s =
-        if strict then raise (InvalidConfFile s)
-                  else Printf.eprintf "config warning: %s\n" s
-        in
-    let rec getBlock (lvl: int) (lines: (int * string) list): ((int * string) list * (int * string) list) =
-        match lines with
-        | []              -> ([], [])
-        | (clvl, line)::ls ->
-                if lvl < clvl
-                    then let (b1, b2) = getBlock lvl ls in
-                         ((clvl, line) :: b1, b2)
-                    else ([], lines)
-        in
-    let getContextName ctxName args =
-        match args with
-        | [name] -> name
-        | []     -> failwith (ctxName ^ " need a name")
-        | _      -> failwith (ctxName ^ " has too many arguments, expecting just a name")
-        in
-
-    let rec processChunk f acc (lines: (int*string) list) =
-        match lines with
-        | [] -> acc
-        | (lvl, line)::ls ->
-            let (cont,rem) = getBlock lvl ls in
-            let nacc = f acc line cont in
-            processChunk f nacc rem
-        in
-    let parseFlag (acc: obuild_flag) line cont : obuild_flag =
-        match Utils.toKV line with
-        | (k, None)   -> raise_if_strict ("unexpected item in flag " ^ k); acc
-        | (k, Some v) ->
-                let (value: string) = String.concat "\n" (v :: List.map snd cont) in
-                (match String.lowercase k with
-                | "description" -> { acc with flag_description = value }
-                | "default"     -> { acc with flag_default = Some (user_bool_of_string "flag default" value) }
-                | k             -> (raise_if_strict ("unexpected item in flag : " ^ k); acc)
-                )
-        in
-    let doFlag acc args cont =
-        let emptyFlag = { flag_name = getContextName "flag" args
-                        ; flag_description = ""
-                        ; flag_default = None
-                        } in
-        let flag = processChunk parseFlag emptyFlag cont in
-        { acc with flags = flag :: acc.flags }
-        in
-    let parseDeps keyParse value =
-        let parseDependency w =
-            let (d,c) = Expr.parse_builddep w in
-            (keyParse d, c)
-            in
-        List.map parseDependency (Utils.parseCSV value)
-        in
-    let parseModuleName value =
-        let wrap_module_nice s = Hier.make [(Modname.wrap (String.capitalize s))] in
-        List.map wrap_module_nice (Utils.parseCSV value)
-        in
-    let parseFilenames value = List.map fn (Utils.parseCSV value) in
-    let parseExtraDep value =
-        let vs = Utils.parseCSV value in
-        List.map (fun v ->
-            match string_words v with
-            | [h1; "then"; h2] | [h1; "before"; h2] | [h1; "->"; h2] | [h1; h2] ->
-                (Hier.of_string h1, Hier.of_string h2)
-            | _              -> raise (UnknownExtraDepFormat v)
-        ) vs
-        in
-    let parse_stdlib value =
-        match String.lowercase value with
-        | "none" | "no" -> Stdlib_None
-        | "standard"    -> Stdlib_Standard
-        | "core"        -> Stdlib_Core
-        | _             -> raise (UnknownStdlib value)
-        in
-
-    let parseTargetObits t k value =
-        match k with
-        | "builddepends" | "builddeps"
-        | "build-deps" -> Handled { t with target_builddeps = parseDeps Libname.of_string value @ t.target_builddeps }
-        | "path" | "srcdir"
-        | "src-dir"    -> Handled { t with target_srcdir    = fp value }
-        | "preprocessor"
-        | "pp"         -> Handled { t with target_pp = Some (Pp.Type.of_string value) }
-        | "extra-deps" -> Handled { t with target_extradeps = t.target_extradeps @ parseExtraDep value }
-        | "oflags"     -> Handled { t with target_oflags = t.target_oflags @ string_words_noempty value }
-        | "stdlib"     -> Handled { t with target_stdlib = parse_stdlib value }
-        | _            -> NotHandled
-        in
-
-    let parseTargetCbits t k value =
-        match k with
-        | "cdir"
-        | "c-dir"      -> Handled { t with target_cdir      = fp value }
-        | "csources"
-        | "c-sources"  -> Handled { t with target_csources  = t.target_csources  @ parseFilenames value }
-        | "cflags" | "c-flags" | "ccopts" | "ccopt"
-        | "c-opts"     -> Handled { t with target_cflags    = t.target_cflags    @ string_words_noempty value }
-        | "c-libpaths" -> Handled { t with target_clibpaths = t.target_clibpaths @ List.map fp (string_words_noempty value) }
-        | "c-libs"     -> Handled { t with target_clibs     = t.target_clibs     @ string_words_noempty value }
-        | "c-pkgs"     -> Handled { t with target_cpkgs     = t.target_cpkgs     @ parseDeps id value }
-        | _            -> NotHandled
-        in
-
-    let parse_runtime_bool ctx value =
-        match value with
-        | "true" | "True"   -> BoolConst true
-        | "false" | "False" -> BoolConst false
-        | flag              -> if string_startswith "$" flag then BoolVariable (string_drop 1 flag) else BoolVariable flag
-        in
-    let parseTarget t k value =
-        match k with
-        | "buildable"   -> { t with target_buildable = parse_runtime_bool "buildable" value }
-        | "installable" -> { t with target_installable = parse_runtime_bool "installable" value }
-        | k             ->
-            match parseTargetObits t.target_obits k value with
-            | Handled nobits -> { t with target_obits = nobits }
-            | NotHandled ->
-                match parseTargetCbits t.target_cbits k value with
-                | Handled ncbits -> { t with target_cbits = ncbits }
-                | NotHandled     ->
-                    raise_if_strict ("unexpected item in : " ^ k); t
-        in
-    let doBlock ty mempty parseM accu args cont =
-        let name = getContextName ty args in
-        accu (processChunk parseM (mempty name) cont)
-        in
-    let doBlock2 ty mempty parseM accu args cont =
-        accu (processChunk parseM (mempty args) cont)
-        in
-
-    let parsePer (acc: target_extra) line cont =
-        match Utils.toKV line with
-        | (k, None) ->
-           raise_if_strict ("no block in per"); acc
-        | (k, Some v) ->
-            let (value: string) = String.concat "\n" (v :: List.map snd cont) in
-            match String.lowercase k with
-            | "builddepends" | "builddeps"
-            | "build-deps" -> { acc with target_extra_builddeps = parseDeps Libname.of_string value @ acc.target_extra_builddeps }
-            | "oflags"     -> { acc with target_extra_oflags = acc.target_extra_oflags @ string_words_noempty value }
-            | _            -> raise_if_strict ("unexpected item in : " ^ k); acc
-        in
-
-    (*************    library parsing     ***************************)
-    let rec parseLibrary (acc: obuild_lib) line cont =
-        match Utils.toKV line with
-        | (k, None)   ->
-            (match string_words_noempty k with
-            | []                -> raise_if_strict ("unknown empty block in library"); acc
-            | blockName :: args ->
-                match String.lowercase blockName with
-                | "sub" | "sublib" | "library" -> (
-                    let doSub = doBlock "library" (emptyLibPrefix acc.lib_name) parseLibrary
-                                      (fun obj -> { acc with lib_subs = obj :: acc.lib_subs})
-                        in
-                    doSub args cont
-                    )
-                | "per" -> (
-                    let t = acc.lib_target in
-                    let doPer = doBlock2 "per" newTargetExtra parsePer
-                                (fun obj -> { acc with lib_target = { t with target_extras = obj :: t.target_extras } }) in
-                    doPer args cont
-                )
-                | _                            -> raise_if_strict ("unexpected block name in library: " ^ blockName); acc
-            )
-        | (k, Some v) ->
-            let (value: string) = String.concat "\n" (v :: List.map snd cont) in
-            (match String.lowercase k with
-            | "modules"     -> { acc with lib_modules = parseModuleName value @ acc.lib_modules }
-            | "pack"        -> { acc with lib_pack    = user_bool_of_string "pack" value }
-            | "syntax"      -> { acc with lib_syntax  = user_bool_of_string "syntax" value }
-            | "description" -> { acc with lib_description = value }
-            | "sub" | "sublib" | "library" -> raise (BlockSectionAsValue k)
-            | k             -> { acc with lib_target  = parseTarget acc.lib_target k value }
-            )
-        in
-    let doLibrary acc = doBlock "library" emptyLib parseLibrary
-                               (fun obj -> { acc with libs = obj :: acc.libs })
-        in
-    (*************    executable parsing    *************************)
-    let parseExecutabloid sectionName setMain setTarget myTarget other acc line cont =
-        match Utils.toKV line with
-        | (k, None) ->
-            (match string_words_noempty k with
-            | []                -> raise_if_strict ("unknown empty block in " ^ sectionName ^ " " ^ k); acc
-            | blockName :: args -> (
-                match String.lowercase blockName with
-                | "per" -> (
-                    let t = myTarget in
-                    let doPer = doBlock2 "per" (newTargetExtra) parsePer
-                                (fun obj -> setTarget acc { t with target_extras = obj :: t.target_extras }) in
-                    doPer args cont
-                    )
-                | _                            -> raise_if_strict ("unexpected block name in library: " ^ blockName); acc
-                )
-            )
-        | (k, Some v) ->
-            let (value: string) = String.concat "\n" (v :: List.map snd cont) in
-            (match String.lowercase k with
-            | "main" | "mainis"
-            | "main-is"    -> setMain acc (fn value)
-            | k            ->
-                try let f = List.assoc k other in f acc value
-                with Not_found -> setTarget acc (parseTarget myTarget k value)
-            )
-        in
-
-    let parseExecutable obj =
-        parseExecutabloid "executable" (fun acc main -> { acc with exe_main = main })
-                                       (fun acc target -> { acc with exe_target = target })
-                                       obj.exe_target
-                                       []
-                                       obj
-        in
-    let parseTest obj =
-        parseExecutabloid "test" (fun acc main -> { acc with test_main = main })
-                                 (fun acc target -> { acc with test_target = target })
-                                 obj.test_target
-                                 [ ("rundir", (fun acc v -> { acc with test_rundir = Some (fp v) }))
-                                 ; ("runopt", (fun acc v -> { acc with test_runopt = acc.test_runopt @ string_words v }))
-                                 ]
-                                 obj
-        in
-    let parseExample obj =
-        parseExecutabloid "example" (fun acc main -> { acc with example_main = main })
-                                    (fun acc target -> { acc with example_target = target })
-                                    obj.example_target
-                                    []
-                                    obj
-        in
-    let doExample acc = doBlock "example" emptyExample parseExample
-                               (fun obj -> { acc with examples = obj :: acc.examples })
-        in
-    let doTest acc = doBlock "test" emptyTest parseTest
-                             (fun obj -> { acc with tests = obj :: acc.tests })
-        in
-    let doExecutable acc = doBlock "executable" emptyExe parseExecutable
-                                   (fun obj -> { acc with exes = obj :: acc.exes })
-        in
+  let parse_library acc = do_block "library" Library.make_from_string (Library.parse strict)
+      (fun obj -> { acc with libs = obj :: acc.libs })
+  in
+  let parse_executable acc = do_block "executable" Executable.make (Executable.parse strict)
+      (fun obj -> { acc with exes = obj :: acc.exes })
+  in
+  let parse_test acc = do_block "test" Test.make (Test.parse strict)
+      (fun obj -> { acc with tests = obj :: acc.tests })
+  in
+  let parse_example acc = do_block "example" Example.make (Example.parse strict)
+      (fun obj -> { acc with examples = obj :: acc.examples })
+  in
+  let parse_flag acc args cont =
+    let flag = process_chunk (Flag.parse strict) (Flag.make args) cont in
+    { acc with flags = flag :: acc.flags }
+  in
     (*************    root parsing    *******************************)
-    let parseRoot (acc: obuild) (line: string) (cont: (int*string) list) =
-        match Utils.toKV line with
-        | (k, None) ->
-            (match string_words_noempty k with
-            | []                   -> raise_if_strict ("unknown empty block"); acc
-            | blockName :: args    ->
-                match String.lowercase blockName with
-                | "executable" -> doExecutable acc args cont
-                | "library"    -> doLibrary acc args cont
-                | "flag"       -> doFlag acc args cont
-                | "test"       -> doTest acc args cont
-                | "bench"      -> raise_if_strict ("unimplemented section: " ^ blockName); acc
-                | "example"    -> doExample acc args cont
-                | _            -> raise_if_strict ("unknown block name: " ^ blockName); acc
-            )
-        | (k, Some v) -> (
-            let (value: string) = String.concat "\n" (v :: List.map snd cont) in
-            match String.lowercase k with
-            | "name"        -> { acc with name = value }
-            | "version"     -> { acc with version = value }
-            | "synopsis"    -> { acc with synopsis = value }
-            | "description" -> { acc with description = value }
-            | "license"
-            | "licence"     -> { acc with license = value }
-            | "license-file"
-            | "licence-file" -> { acc with license_file = Some (fp value) }
-            | "homepage"    -> { acc with homepage = value }
-            | "tools"       -> { acc with extra_tools = List.map fn (string_words_noempty value) @ acc.extra_tools }
-            | "authors"     -> { acc with authors = Utils.parseCSV value }
-            | "author"      -> { acc with authors = [value] }
-            | "extra-srcs"  -> { acc with extra_srcs = List.map fp (Utils.parseCSV value) @ acc.extra_srcs }
-            | "obuild-ver"  -> { acc with obuild_ver = user_int_of_string "obuild-ver" value }
-            | "configure-script" -> { acc with configure_script = Some (fp value) }
-            (* for better error reporting *)
-            | "executable" | "library" | "test" | "bench" | "example" -> raise (BlockSectionAsValue k)
-            | k             -> raise_if_strict ("unknown key: " ^ k); acc
-        )
-        in
-    processChunk parseRoot emptyObuild lines
+  let parse_root acc (line: string) (cont: (int*string) list) =
+    match Utils.toKV line with
+    | (k, None) ->
+      (match string_words_noempty k with
+       | []                   -> raise_if_strict strict ("unknown empty block"); acc
+       | blockName :: args    ->
+         match String.lowercase blockName with
+         | "executable" -> parse_executable acc args cont
+         | "library"    -> parse_library acc args cont
+         | "flag"       -> parse_flag acc args cont
+         | "test"       -> parse_test acc args cont
+         | "bench"      -> raise_if_strict strict ("unimplemented section: " ^ blockName); acc
+         | "example"    -> parse_example acc args cont
+         | _            -> raise_if_strict strict ("unknown block name: " ^ blockName); acc
+      )
+    | (k, Some v) -> (
+        let (value: string) = String.concat "\n" (v :: List.map snd cont) in
+        match String.lowercase k with
+        | "name"        -> { acc with name = value }
+        | "version"     -> { acc with version = value }
+        | "synopsis"    -> { acc with synopsis = value }
+        | "description" -> { acc with description = value }
+        | "license"
+        | "licence"     -> { acc with license = value }
+        | "license-file"
+        | "licence-file" -> { acc with license_file = Some (fp value) }
+        | "homepage"    -> { acc with homepage = value }
+        | "tools"       -> { acc with extra_tools = List.map fn (string_words_noempty value) @ acc.extra_tools }
+        | "authors"     -> { acc with authors = Utils.parseCSV value }
+        | "author"      -> { acc with authors = [value] }
+        | "extra-srcs"  -> { acc with extra_srcs = List.map fp (Utils.parseCSV value) @ acc.extra_srcs }
+        | "obuild-ver"  -> { acc with obuild_ver = user_int_of_string "obuild-ver" value }
+        | "configure-script" -> { acc with configure_script = Some (fp value) }
+        (* for better error reporting *)
+        | "executable" | "library" | "test" | "bench" | "example" -> raise (BlockSectionAsValue k)
+        | k             -> raise_if_strict strict ("unknown key: " ^ k); acc
+      )
+  in
+  process_chunk parse_root make lines
 
 let check proj =
     (if proj.name = "" then raise (MissingField "name"));
@@ -478,26 +528,21 @@ let check proj =
         ) modules
         in
 
-    let check_modules_not_empty lib =
-        if lib.lib_modules = []
-            then raise (ModuleListEmpty (lib.lib_name))
-        in
-
     maybe_unit (fun x -> if not (Filesystem.exists x) then raise (LicenseFileDoesntExist x)) proj.license_file;
 
     (* check sublibs in libs *)
     List.iter (fun rootlib ->
-        check_modules_not_empty rootlib;
-        let sublibs = lib_flatten rootlib in
+        Library.check_modules_not_empty rootlib;
+        let sublibs = Library.flatten rootlib in
         List.iter (fun lib ->
-            check_modules_not_empty lib;
-            check_modules_exists lib.lib_target lib.lib_modules) sublibs
+            Library.check_modules_not_empty lib;
+            check_modules_exists lib.Library.target lib.Library.modules) sublibs
     ) proj.libs;
 
     List.iter (fun exe ->
-        if fn_to_string exe.exe_main = ""
-            then raise (ExecutableWithNoMain exe.exe_name);
-        check_files_exists exe.exe_target [exe.exe_main]
+        if fn_to_string exe.Executable.main = ""
+            then raise (ExecutableWithNoMain exe.Executable.name);
+        check_files_exists exe.Executable.target [exe.Executable.main]
     ) proj.exes;
     ()
 
@@ -547,37 +592,22 @@ let write file proj =
             add_string (iStr ^ "c-libpaths") (Utils.showList "," fp_to_string cbits.target_clibpaths);
             add_string (iStr ^ "c-pkgs") (Utils.showList ", " (fun (l,_) -> l) cbits.target_cpkgs);
             in
-        let rec show_lib iStrSection lib = 
-            add "\n";
-            add (sprintf "%slibrary %s\n" iStrSection (Libname.to_string lib.lib_name));
-            let iStr = iStrSection ^ "  " in
-            add (sprintf "%smodules: %s\n" iStr (Utils.showList "," Hier.to_string lib.lib_modules));
-            if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);
-            if lib.lib_syntax then add (sprintf "%ssyntax: %b\n" iStr lib.lib_syntax);
-            if lib.lib_pack then add (sprintf "%spack: %b\n" iStr lib.lib_pack);
-            show_target iStr lib.lib_target;
-            List.iter (fun sub -> show_lib iStr sub) lib.lib_subs
-            in
-        List.iter (show_lib "") proj.libs;
+        List.iter (Library.show add show_target "") proj.libs;
         List.iter (fun exe ->
             add "\n";
-            add (sprintf "executable %s\n" exe.exe_name);
-            add (sprintf "  main: %s\n" (fn_to_string exe.exe_main));
-            show_target "  " exe.exe_target;
+            add (sprintf "executable %s\n" exe.Executable.name);
+            add (sprintf "  main: %s\n" (fn_to_string exe.Executable.main));
+            show_target "  " exe.Executable.target;
             ()
         ) proj.exes;
     )
 
 let get_all_targets projFile =
-      List.concat (List.map lib_to_targets projFile.libs)
-    @ List.map exe_to_target projFile.exes
-    @ List.map test_to_target projFile.tests
-    @ List.map bench_to_target projFile.benchs
-    @ List.map example_to_target projFile.examples
-
-let find_flag name projFile =
-    try Some (List.find (fun fl -> fl.flag_name = name) projFile.flags)
-    with Not_found -> None
+      List.concat (List.map Library.to_targets projFile.libs)
+    @ List.map Executable.to_target projFile.exes
+    @ List.map Test.to_target projFile.tests
+    @ List.map Bench.to_target projFile.benchs
+    @ List.map Example.to_target projFile.examples
 
 let get_all_buildable_targets proj_file user_flags =
   List.filter (fun target -> match target.target_buildable with
@@ -587,28 +617,10 @@ let get_all_buildable_targets proj_file user_flags =
         with Not_found -> raise (UnknownFlag v)
     ) (get_all_targets proj_file)
 
-exception LibraryNotFound of Libname.t
-exception ExecutableNotFound of string
-exception BenchNotFound of string
-exception TestNotFound of string
-exception ExampleNotFound of string
+let find_lib proj_file name = Library.find proj_file.libs name
+let find_exe proj_file name = Executable.find proj_file.exes name
+let find_test proj_file name = Test.find proj_file.tests name
+let find_bench proj_file name = Bench.find proj_file.benchs name
+let find_example proj_file name = Example.find proj_file.examples name
+let find_flag name proj_file = Flag.find proj_file.flags name
 
-let find_lib projFile name =
-    try List.find (fun l -> l.lib_name = name) (List.concat (List.map lib_flatten projFile.libs))
-    with Not_found -> raise (LibraryNotFound name)
-
-let find_exe projFile name =
-    try List.find (fun e -> e.exe_name = name) projFile.exes
-    with Not_found -> raise (ExecutableNotFound name)
-
-let find_bench projFile name =
-    try List.find (fun b -> b.bench_name = name) projFile.benchs
-    with Not_found -> raise (BenchNotFound name)
-
-let find_test projFile name =
-    try List.find (fun b -> b.test_name = name) projFile.tests
-    with Not_found -> raise (TestNotFound name)
-
-let find_example projFile name =
-    try List.find (fun b -> b.example_name = name) projFile.examples
-    with Not_found -> raise (ExampleNotFound name)

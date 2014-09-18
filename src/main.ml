@@ -176,12 +176,12 @@ let mainTest argv =
         eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
         exit 1
     );
-    let testTargets = List.map Project.test_to_target proj_file.Project.tests in
+    let testTargets = List.map Project.Test.to_target proj_file.Project.tests in
     if testTargets <> []
         then (
             let results =
                 List.map (fun test ->
-                    let testTarget = Project.test_to_target test in
+                    let testTarget = Project.Test.to_target test in
                     let outputName = Utils.to_exe_name Normal Native (Target.get_target_dest_name testTarget) in
                     let dir = Dist.get_build_exn (Dist.Target testTarget.Target.target_name) in
                     let exePath = dir </> outputName in
@@ -192,10 +192,10 @@ let mainTest argv =
                     (match Process.run [ fp_to_string exePath ] with
                     | Process.Success (out,_,_) ->
                         if !showTest then print_warnings out;
-                        (test.Project.test_name, true)
+                        (test.Project.Test.name, true)
                     | Process.Failure err ->
                         print_warnings err;
-                        (test.Project.test_name, false)
+                        (test.Project.Test.name, false)
                     )
                 ) proj_file.Project.tests
                 in

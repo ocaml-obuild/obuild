@@ -45,9 +45,9 @@ let run projFile isSnapshot =
         copy_cbits target.target_cbits;
         ()
         in
-    let copy_lib lib = List.iter copy_target (Project.lib_to_targets lib) in
+    let copy_lib lib = List.iter copy_target (Project.Library.to_targets lib) in
     List.iter copy_lib projFile.Project.libs;
-    List.iter (fun exe -> copy_target (Project.exe_to_target exe)) projFile.Project.exes;
+    List.iter (fun exe -> copy_target (Project.Executable.to_target exe)) projFile.Project.exes;
     List.iter (fun extra -> Filesystem.copy_to_dir extra dest) projFile.Project.extra_srcs;
 
     finally (fun () ->

@@ -92,8 +92,8 @@ let get_assoc name assoc =
   with Not_found -> None
 
 let get_flags_value proj_file setup_flags user_flags = List.map (fun flag ->
-    let name = flag.Project.flag_name in
-    let def  = flag.Project.flag_default in
+    let name = flag.Project.Flag.name in
+    let def  = flag.Project.Flag.default in
     let override = ref (get_assoc name setup_flags) in
     List.iter (fun tw -> match tw with
         | ClearFlag s -> if s = name then override := Some false

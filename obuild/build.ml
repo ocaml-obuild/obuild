@@ -468,8 +468,8 @@ let compile (bstate: build_state) task_context dag =
   ()
 
 let build_exe bstate exe =
-  let target = Project.exe_to_target exe in
-  let modules = [Hier.of_filename exe.Project.exe_main] in
+  let target = Project.Executable.to_target exe in
+  let modules = [Hier.of_filename exe.Project.Executable.main] in
   let task_context = Hashtbl.create 64 in
   let build_dir = Dist.create_build (Dist.Target target.target_name) in
   let cstate = prepare_target bstate build_dir target modules in
@@ -510,19 +510,19 @@ let build_dag bstate proj_file targets_dag =
        let (cur_dag,dups) = (match ntask with
         | Name.Exe name   ->
           let exe = Project.find_exe proj_file name in
-          prepare_state (Project.exe_to_target exe) [Hier.of_filename exe.Project.exe_main]
+          prepare_state (Project.Executable.to_target exe) [Hier.of_filename exe.Project.Executable.main]
         | Name.Lib name   ->
           let lib = Project.find_lib proj_file name in
-          prepare_state (Project.lib_to_target lib) lib.Project.lib_modules
+          prepare_state (Project.Library.to_target lib) lib.Project.Library.modules
         | Name.Bench name ->
           let bench = Project.find_bench proj_file name in
-          prepare_state (Project.bench_to_target bench) [Hier.of_filename bench.Project.bench_main]
+          prepare_state (Project.Bench.to_target bench) [Hier.of_filename bench.Project.Bench.main]
         | Name.Test name  ->
           let test = Project.find_test proj_file name in
-          prepare_state (Project.test_to_target test) [Hier.of_filename test.Project.test_main]
+          prepare_state (Project.Test.to_target test) [Hier.of_filename test.Project.Test.main]
         | Name.Example name ->
           let example = Project.find_example proj_file name in
-          prepare_state (Project.example_to_target example) [Hier.of_filename example.Project.example_main]
+          prepare_state (Project.Example.to_target example) [Hier.of_filename example.Project.Example.main]
        ) in
        if (Hashtbl.mem targets_deps ntask) then begin
          let children = Dag.getLeaves cur_dag in

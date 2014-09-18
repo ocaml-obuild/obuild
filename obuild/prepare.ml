@@ -125,11 +125,11 @@ let get_syntax_pp bstate preprocessor buildDeps =
       if Analyze.is_pkg_internal conf spkg
       then (
         let lib = Project.find_lib bstate.bstate_config.project_file spkg in
-        if lib.Project.lib_syntax
+        if lib.Project.Library.syntax
         then (
           (* TODO need to make sure that the bytecode option has been enabled for the syntax library *)
-          let dir = Dist.get_build_exn (Dist.Target (Name.Lib lib.Project.lib_name)) in
-          Some [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.lib_name) ]
+          let dir = Dist.get_build_exn (Dist.Target (Name.Lib lib.Project.Library.name)) in
+          Some [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.Library.name) ]
         ) else None
       ) else (
         let meta = Analyze.get_pkg_meta spkg conf in

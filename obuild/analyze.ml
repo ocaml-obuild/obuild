@@ -29,7 +29,7 @@ type project_config =
     ; project_pkgdeps_dag : dependency_tag Dag.t
     ; project_targets_dag : Name.t Dag.t
     ; project_all_deps    : dependency list
-    ; project_file        : Project.obuild
+    ; project_file        : Project.t
     ; project_ocamlcfg    : (string, string) Hashtbl.t
     ; project_ocamlmkcfg  : (string, string) Hashtbl.t
     ; project_cpkgs       : (c_dep_name, cpkg_config) Hashtbl.t
@@ -154,7 +154,7 @@ let prepare projFile user_flags =
 
     let allTargets = Project.get_all_buildable_targets projFile user_flags in
 
-    let internalLibs = List.map (fun lib -> lib.Project.lib_name.Libname.main_name) projFile.Project.libs in
+    let internalLibs = List.map (fun lib -> lib.Project.Library.name.Libname.main_name) projFile.Project.libs in
     let isInternal lib = List.mem lib.Libname.main_name internalLibs in
 
     (* establish inter-dependencies in the project.
@@ -180,13 +180,13 @@ let prepare projFile user_flags =
         let dataDep () =
             if isInternal dep then (
                 let iLib = Project.find_lib projFile dep in
-                let iLibDep = Dependency iLib.Project.lib_name in
+                let iLibDep = Dependency iLib.Project.Library.name in
                 Dag.addNode iLibDep depsDag;
                 List.iter (fun (reqDep,_) ->
-                    verbose Debug "  library %s depends on %s\n" (Libname.to_string iLib.Project.lib_name) (Libname.to_string reqDep);
+                    verbose Debug "  library %s depends on %s\n" (Libname.to_string iLib.Project.Library.name) (Libname.to_string reqDep);
                     Dag.addEdge iLibDep (Dependency reqDep) depsDag;
                     loop reqDep
-                ) iLib.Project.lib_target.target_obits.target_builddeps;
+                ) iLib.Project.Library.target.target_obits.target_builddeps;
                 Internal
             ) else (
                 try begin

@@ -87,17 +87,17 @@ let main () =
         }
         in
     let exe =
-        { exe_name   = name
-        ; exe_main   = fn main
-        ; exe_target = target
+        { Executable.name   = name
+        ; Executable.main   = fn main
+        ; Executable.target = target
         }
         in
     let project_config =
-        { emptyObuild with
-              name       = name
-            ; version    = "0.0.0"
-            ; obuild_ver = 1
-            ; exes       = [exe]
+        { Project.make with
+              Project.name       = name
+            ; Project.version    = "0.0.0"
+            ; Project.obuild_ver = 1
+            ; Project.exes       = [exe]
         }
         in
 
@@ -108,12 +108,12 @@ let main () =
         finally (fun () ->
             Dist.create_maybe ();
             let _ = Dist.create_build (Dist.Autogen) in
-            let buildDir = Dist.create_build (Dist.Target exe.exe_target.target_name) in
+            let buildDir = Dist.create_build (Dist.Target exe.Executable.target.target_name) in
             FindlibConf.load ();
             let project = Analyze.prepare project_config [] in
             let bstate = Prepare.init project in
             Build.build_exe bstate exe;
-            let files = Build.get_destination_files exe.exe_target in
+            let files = Build.get_destination_files exe.Executable.target in
             List.iter (fun file ->
                 printf "copying %s to %s\n" (fp_to_string (buildDir </> file)) (fp_to_string $ in_current_dir file);
                 Filesystem.copy_file (buildDir </> file) (in_current_dir file)

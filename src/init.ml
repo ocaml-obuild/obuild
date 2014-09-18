@@ -65,7 +65,7 @@ let run () =
     let name = ask valid_name "What is the name of your project ?" in
    
     let obuild =
-        { Project.emptyObuild with
+        { Project.make with
               Project.name     = name
             ; Project.version  = "0.0.0"
             ; Project.synopsis = "my new project"
@@ -87,22 +87,22 @@ let run () =
         match ty with
         | "1" ->
             let main = ask valid_fn "What is the name of your main ?" in
-            let nexe = emptyExe name in
-            let itarget = nexe.exe_target in
+            let nexe = Executable.make name in
+            let itarget = nexe.Executable.target in
             let target = { itarget with target_obits = question_obits itarget.target_obits
                                       ; target_cbits = question_cbits itarget.target_cbits } in
             { obuild with
-                exes = [ { nexe with exe_main = fn main; exe_target = target } ]
+                exes = [ { nexe with Executable.main = fn main; Executable.target = target } ]
             }
         | "2" ->
             let modules = List.map (fun m -> String.capitalize $ strip_ext ~ext:".ml" m)
                 (ask_many valid_modname "Add a module ? (enter to terminate)") in
-            let nlib = emptyLib name in
-            let itarget = nlib.lib_target in
+            let nlib = Library.make_from_string name in
+            let itarget = nlib.Library.target in
             let target = { itarget with target_obits = question_obits itarget.target_obits
                                       ; target_cbits = question_cbits itarget.target_cbits } in
             { obuild with
-                libs = [ { nlib with lib_modules = List.map (compose Hier.of_modname Modname.wrap) modules; lib_target = target } ]
+                libs = [ { nlib with Library.modules = List.map (compose Hier.of_modname Modname.wrap) modules; Library.target = target } ]
             }
         | _ -> assert false
         in
