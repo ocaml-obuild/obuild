@@ -415,6 +415,7 @@ type t = {
   extra_srcs  : filepath list;
   extra_tools : filename list;
   configure_script : filepath option;
+  ocaml_extra_args : string list option;
 }
 
 let make = {
@@ -437,6 +438,7 @@ let make = {
   examples    = [];
   extra_srcs  = [];
   configure_script = None;
+  ocaml_extra_args = None;
 }
 
 let findPath () =
@@ -503,6 +505,10 @@ let parse strict lines =
         | "ocamlversion"
         | "ocaml-version" -> { acc with ocaml_ver = Expr.parse "ocaml-version" value }
         | "configure-script" -> { acc with configure_script = Some (fp value) }
+        | "ocaml-extra-args" | "ocamlextraargs" ->
+          let v = string_words_noempty value in
+          Gconf.gconf.Gconf.ocaml_extra_args <- v;
+          { acc with ocaml_extra_args = Some v }
         (* for better error reporting *)
         | "executable" | "library" | "test" | "bench" | "example" -> raise (BlockSectionAsValue k)
         | k             -> raise_if_strict strict ("unknown key: " ^ k); acc
@@ -584,6 +590,7 @@ let write file proj =
         add_string "authors" (Utils.showList ", " id proj.authors);
         add (sprintf "obuild-ver: %d\n" proj.obuild_ver);
         maybe () (fun x -> add_string "ocaml-version" (Expr.to_string x)) proj.ocaml_ver;
+        maybe () (fun x -> add_string "ocaml-extra-args" (String.concat " " x)) proj.ocaml_extra_args;
 
         let show_target iStr target =
             let obits = target.target_obits in

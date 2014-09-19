@@ -56,6 +56,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
                 | WithProf  -> ["-p"])
              @ annotToOpts annotMode
              @ oflags
+             @ gconf.ocaml_extra_args
              @ Pp.to_params pp
              @ maybe [] (fun x -> if buildMode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else []) packopt
              @ (if gconf.short_path then [ "-short-paths" ] else [])

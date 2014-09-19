@@ -11,6 +11,7 @@ type t = {
   mutable bin_annot : bool;
   mutable short_path : bool;
   mutable ocamlmklib : bool;
+  mutable ocaml_extra_args : string list;
 }
 
 exception UnknownOption of string
@@ -79,6 +80,7 @@ let defaults = {
   bin_annot     = true;
   short_path    = false;
   ocamlmklib    = true;
+  ocaml_extra_args = [];
 }
 
 let gconf = defaults
