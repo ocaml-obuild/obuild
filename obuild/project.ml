@@ -535,7 +535,6 @@ let check proj =
 
     maybe_unit (fun x -> if not (Filesystem.exists x) then raise (LicenseFileDoesntExist x)) proj.license_file;
     maybe_unit (fun x -> let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in
-                 Printf.printf "version %s\n" ocaml_ver;
                  if not (Expr.eval ocaml_ver x) then raise (BadOcamlVersion (ocaml_ver,x))) proj.ocaml_ver;
 
     (* check sublibs in libs *)
