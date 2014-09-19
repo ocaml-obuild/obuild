@@ -179,7 +179,8 @@ let check proj_file reconf setup =
       comparekvs "digest" setup digestKV;
       false
     with e -> if reconf then true else raise e in
-  let ver = string_split '.' (Hashtbl.find ocamlCfg "version") in
+  let ocaml_ver = Hashtbl.find ocamlCfg "version" in
+  let ver = string_split '.' ocaml_ver in
   (match ver with
    | major::minor::_-> (
        if int_of_string major < 4 then gconf.bin_annot <- false;

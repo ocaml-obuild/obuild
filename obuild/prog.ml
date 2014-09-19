@@ -48,29 +48,30 @@ let getPkgConfig() = get_cache "pkg-config" ["pkg-config"]
 let getOcaml () = get_cache "ocaml" ["ocaml"]
 let getOcamlMktop () = get_cache "ocamlmktop" ["ocamlmktop"]
 
-let getOcamlVersion () =
-    match Process.run [ getOcamlOpt (); "-vnum" ] with
-    | Process.Success (s,_,_) -> (match string_split ~limit:3 '.' s with
-                   | [major;minor;other] ->
-                           (user_int_of_string "ocaml version major" major
-                           ,user_int_of_string "ocaml version minor" minor
-                           ,other
-                           )
-                   | _ -> raise (OCamlProgramError ("ocaml return an unknown version " ^ s))
-                   )
-    | Process.Failure err -> raise (OCamlProgramError err)
+
+let get_ocaml_version cfg =
+  let ver = Hashtbl.find cfg "version" in
+  match string_split ~limit:3 '.' ver with
+  | [major;minor;other] -> (major,minor,other)
+  | _ -> raise (OCamlProgramError ("ocaml return an unknown version " ^ ver))
+
+let ocaml_config = ref None
 
 let getOcamlConfig () =
-    match Process.run [ getOcamlOpt (); "-config" ] with
-    | Process.Success (s,_,_) ->
-        let lines = string_lines_noempty s in
-        let h = Hashtbl.create 32 in
-        List.iter (fun l ->
-            let (k,v) = Utils.toKV l in
-            Hashtbl.add h k (default "" v)
-        ) lines;
-        h
-    | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err))
+  match !ocaml_config with
+  | None ->
+    (match Process.run [ getOcamlOpt (); "-config" ] with
+     | Process.Success (s,_,_) ->
+       let lines = string_lines_noempty s in
+       let h = Hashtbl.create 32 in
+       List.iter (fun l ->
+           let (k,v) = Utils.toKV l in
+           Hashtbl.add h k (default "" v)
+         ) lines;
+       ocaml_config := Some h;
+       h
+     | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err)))
+  | Some h -> h
 
 let getCamlp4Config () =
     match Process.run [ getCamlp4 (); "-where" ] with

@@ -22,6 +22,7 @@ exception ExecutableWithNoMain of string
 exception UnknownStdlib of string
 exception UnknownExtraDepFormat of string
 exception UnknownFlag of string
+exception BadOcamlVersion of (string * Expr.t)
 
 exception LibraryNotFound of Libname.t
 exception ExecutableNotFound of string
@@ -403,6 +404,7 @@ type t = {
   license_file: filepath option;
   authors     : string list;
   obuild_ver  : int;
+  ocaml_ver   : Expr.t option;
   homepage    : string;
   flags       : Flag.t list;
   libs        : Library.t list;
@@ -424,6 +426,7 @@ let make = {
   license_file= None;
   authors     = [];
   obuild_ver  = 0;
+  ocaml_ver   = None;
   homepage    = "";
   extra_tools = [];
   flags       = [];
@@ -497,6 +500,8 @@ let parse strict lines =
         | "author"      -> { acc with authors = [value] }
         | "extra-srcs"  -> { acc with extra_srcs = List.map fp (Utils.parseCSV value) @ acc.extra_srcs }
         | "obuild-ver"  -> { acc with obuild_ver = user_int_of_string "obuild-ver" value }
+        | "ocamlversion"
+        | "ocaml-version" -> { acc with ocaml_ver = Expr.parse "ocaml-version" value }
         | "configure-script" -> { acc with configure_script = Some (fp value) }
         (* for better error reporting *)
         | "executable" | "library" | "test" | "bench" | "example" -> raise (BlockSectionAsValue k)
@@ -529,6 +534,9 @@ let check proj =
         in
 
     maybe_unit (fun x -> if not (Filesystem.exists x) then raise (LicenseFileDoesntExist x)) proj.license_file;
+    maybe_unit (fun x -> let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in
+                 Printf.printf "version %s\n" ocaml_ver;
+                 if not (Expr.eval ocaml_ver x) then raise (BadOcamlVersion (ocaml_ver,x))) proj.ocaml_ver;
 
     (* check sublibs in libs *)
     List.iter (fun rootlib ->
@@ -576,6 +584,7 @@ let write file proj =
         maybe () (fun x -> add_string "license-file" (fp_to_string x)) proj.license_file;
         add_string "authors" (Utils.showList ", " id proj.authors);
         add (sprintf "obuild-ver: %d\n" proj.obuild_ver);
+        maybe () (fun x -> add_string "ocaml-version" (Expr.to_string x)) proj.ocaml_ver;
 
         let show_target iStr target =
             let obits = target.target_obits in

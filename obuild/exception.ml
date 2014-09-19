@@ -30,6 +30,9 @@ let show exn =
         error "trying to define a section %s using parameter syntax:\n" s;
         eprintf "  spurious colon between section definition and section name\n";
         exit 3
+    | Project.BadOcamlVersion (ver,c) ->
+      error "wrong ocaml version: actual %s expected %s\n" ver (Expr.to_string c);
+      exit 3
     | Expr.CannotParseContraints (builddep, s) ->
         error "cannot parse contraints for build dependency '%s': %s\n" builddep s;
         exit 3

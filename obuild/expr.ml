@@ -28,8 +28,8 @@ module Token = struct
     | LE
 
   let to_string = function
-    | VER v    -> "V(" ^ v ^ ")"
-    | ID s    -> s
+    | VER v  -> v
+    | ID s   -> s
     | LPAREN -> "("
     | RPAREN -> ")"
     | AND    -> "&"
@@ -146,67 +146,70 @@ let rec to_string = function
   | Gt v -> ">" ^ v
   | Ne v -> "!=" ^ v
 
-let parse_builddep s =
-  (* FIXME this is not complete. need to parse properly and/or and nesting *)
-  let showList sep f l = String.concat sep (List.map f l) in
-  let parse_expr l =
-    let rec parse_sub_expr l =
-      match l with
-      | [] -> raise MalformedExpression
-      | Token.NOT :: r ->
-        let (e, r) = parse_sub_expr r in ((Not e), r)
-      | Token.LPAREN :: r ->
-        let (e, r) = parse_sub_expr r in
-        let rec loop e r =
-          (match r with
-           | Token.RPAREN :: r -> (Paren e, r)
-           | Token.OR :: _ | Token.AND :: _ ->
-             let (e, r) = parse_bin_expr e r in
-             loop e r
-           | _ -> raise UnbalancedParenthesis;
-          )
-        in
-        loop e r
-      | Token.GT :: Token.VER v :: r -> (Gt v, r)
-      | Token.GE :: Token.VER v :: r -> (Ge v, r)
-      | Token.EQ :: Token.VER v :: r -> (Eq v, r)
-      | Token.LT :: Token.VER v :: r -> (Lt v, r)
-      | Token.LE :: Token.VER v :: r -> (Le v, r)
-      | Token.NE :: Token.VER v :: r -> (Ne v, r)
-      | z              -> raise (UnknownExpression (showList "," Token.to_string z))
-    and parse_bin_expr expr l =
-      match l with
-      | Token.OR :: r -> let (e, r) = parse_sub_expr r in ((Or (expr,e)), r)
-      | Token.AND :: r -> let (e, r) = parse_sub_expr r in ((And (expr,e)), r)
-      | _ -> raise MalformedExpression
-    in
-    let (e, r) = parse_sub_expr l in
-    let rec loop e r =
-      if(List.length r) = 0 then e
-      else let (e,r) = parse_bin_expr e r in
-        loop e r
-    in
-    loop e r
-  in
-  let parse_constraints l =
+let showList sep f l = String.concat sep (List.map f l)
+
+let parse_expr l =
+  let rec parse_sub_expr l =
     match l with
+    | [] -> raise MalformedExpression
+    | Token.NOT :: r ->
+      let (e, r) = parse_sub_expr r in ((Not e), r)
+    | Token.LPAREN :: r ->
+      let (e, r) = parse_sub_expr r in
+      let rec loop e r =
+        (match r with
+         | Token.RPAREN :: r -> (Paren e, r)
+         | Token.OR :: _ | Token.AND :: _ ->
+           let (e, r) = parse_bin_expr e r in
+           loop e r
+         | _ -> raise UnbalancedParenthesis;
+        )
+      in
+      loop e r
+    | Token.GT :: Token.VER v :: r -> (Gt v, r)
+    | Token.GE :: Token.VER v :: r -> (Ge v, r)
+    | Token.EQ :: Token.VER v :: r -> (Eq v, r)
+    | Token.LT :: Token.VER v :: r -> (Lt v, r)
+    | Token.LE :: Token.VER v :: r -> (Le v, r)
+    | Token.NE :: Token.VER v :: r -> (Ne v, r)
+    | z              -> raise (UnknownExpression (showList "," Token.to_string z))
+  and parse_bin_expr expr l =
+    match l with
+    | Token.OR :: r -> let (e, r) = parse_sub_expr r in ((Or (expr,e)), r)
+    | Token.AND :: r -> let (e, r) = parse_sub_expr r in ((And (expr,e)), r)
+    | _ -> raise MalformedExpression
+  in
+  let (e, r) = parse_sub_expr l in
+  let rec loop e r =
+    if(List.length r) = 0 then e
+    else let (e,r) = parse_bin_expr e r in
+      loop e r
+  in
+  loop e r
+
+let parse_constraints name cs =
+  try
+    match cs with
     | []   -> None
     | expr -> let e = parse_expr expr in
       Some e
-  in
+  with e ->
+    let err =
+      match e with
+      | UnknownExpression z -> "unknown contraints expression \"" ^ z ^ "\""
+      | UnbalancedParenthesis -> "unbalanced parenthesis"
+      | MalformedExpression -> "malformed expression"
+      | _                   -> Printexc.to_string e
+    in
+    raise (CannotParseContraints (name,err))
+
+let parse name s =
+  match Token.lexer s with
+  | [] -> raise ExpressionEmpty
+  | constraints -> parse_constraints name constraints
+
+let parse_builddep s =
   match Token.lexer s with
   | []                    -> raise ExpressionEmpty
-  | Token.ID name :: constraints -> let constraints =
-    try parse_constraints constraints
-    with e ->
-      let err =
-        match e with
-        | UnknownExpression z -> "unknown contraints expression \"" ^ z ^ "\""
-        | UnbalancedParenthesis -> "unbalanced parenthesis"
-        | MalformedExpression -> "malformed expression"
-        | _                   -> Printexc.to_string e
-      in
-      raise (CannotParseContraints (name,err))
-    in
-    (name, constraints)
+  | Token.ID name :: constraints -> (name, (parse_constraints name constraints))
   | x      :: _           -> raise (InvalidDependencyName (Token.to_string x))

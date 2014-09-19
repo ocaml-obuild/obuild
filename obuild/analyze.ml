@@ -85,7 +85,7 @@ let get_internal_library_deps project target =
  * to detect difference of opinions of where the stdlib is, between ocamlfind and ocamlc.
  *)
 let initializeSystemStdlib ocamlCfg metaTable =
-    let (majorVer, minorVer, otherVer) = Prog.getOcamlVersion () in
+    let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in
     let stdlibPath = fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg) in
     let stdlibLibs =
         Filesystem.list_dir_pred_map (fun n ->
@@ -109,7 +109,7 @@ let initializeSystemStdlib ocamlCfg metaTable =
             let meta = { (Meta.Pkg.make lib) with
                               Meta.Pkg.directory = fp_to_string stdlibPath
                             ; Meta.Pkg.requires  = [] (* AFAIK this is always empty for stdlibs *)
-                            ; Meta.Pkg.version   = sprintf "%d.%d.%s" majorVer minorVer otherVer
+                            ; Meta.Pkg.version   = ocaml_ver
                             ; Meta.Pkg.archives  = archives
                        } in
             Hashtbl.add metaTable lib (stdlibPath </> fn ("META-" ^ lib), meta)
