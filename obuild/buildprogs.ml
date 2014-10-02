@@ -2,12 +2,7 @@ open Types
 open Ext
 open Ext.Filepath
 open Ext.Fugue
-open Helper
 open Process
-open Printf
-open Filetype
-open Analyze
-open Target
 open Prepare
 open Gconf
 
@@ -85,7 +80,7 @@ let runOcamlInfer srcDir includes pp modname =
         in
     match run args with
     | Success (mli, _, _) -> mli
-    | Failure er       -> raise (InferFailed er)
+    | Process.Failure er       -> raise (InferFailed er)
 
 let o_from_cfile file = file <.> "o"
 

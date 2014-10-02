@@ -9,7 +9,6 @@ open Target
 open Prepare
 open Gconf
 open Buildprogs
-open Dependencies
 
 exception CCompilationFailed of string
 exception CompilationFailed of string
@@ -18,7 +17,7 @@ exception Internal_Inconsistancy of string * string
 (* check that destination is valid (mtime wise) against a list of srcs and
  * if not valid gives the filepath that has changed.
  * *)
-let check_destination_valid_with srcs cstate (filety, dest) =
+let check_destination_valid_with srcs (_, dest) =
   if Filesystem.exists dest
   then (
     let dest_time = Filesystem.getModificationTime dest in
@@ -39,7 +38,7 @@ let check_destination_valid cstate (filety, dest) =
     with Dag.DagNode_Not_found ->
       raise (Internal_Inconsistancy ((Filetype.to_string filety), ("missing destination: " ^ fp_to_string dest)))
   in
-  check_destination_valid_with (List.map Filetype.get_id children) cstate (filety,dest)
+  check_destination_valid_with (List.map Filetype.get_id children) (filety,dest)
 
 (* get a nice reason of why a destination is not deemed valid against
  * the source filepath that triggered the unvalid check.
@@ -158,7 +157,7 @@ let compile_directory task_index task h task_context dag =
                  (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) m)) modules in
              let dir = cstate.compilation_builddir_ml comp_opt in
              let fcompile = (fun () -> runOcamlPack dir dir annot_mode build_mode pack_opt h modules) in
-             match check_destination_valid_with mdeps cstate dest with
+             match check_destination_valid_with mdeps dest with
              | None            -> None
              | Some src_changed -> Some (reason_from_paths dest src_changed, fcompile)
            ) pair_list
@@ -169,7 +168,7 @@ let compile_directory task_index task h task_context dag =
     let l : (string * Scheduler.call) list list = List.map maybes_to_list tasks_ops in
     match List.filter (fun x -> x <> []) l with
     | []                -> ("", [])
-    | [] :: ys          -> assert false
+    | [] :: _          -> assert false
     | ((r,x)::xs) :: ys -> (r, (x :: List.map snd xs) :: List.map (List.map snd) ys)
   in
   if ops <> [] then (
@@ -182,18 +181,18 @@ let compile_directory task_index task h task_context dag =
 let dep_descs is_intf hdesc bstate cstate target h =
   let self_deps = Analyze.get_internal_library_deps bstate.bstate_config target in
   let internal_libs_paths_all_modes = internal_libs_paths self_deps in
-  let module_deps = hdesc.Module.dep_cwd_modules in
+  let module_deps = hdesc.Module.File.dep_cwd_modules in
   let compile_opts = Target.get_compilation_opts target in
   let all_modes = get_all_modes target in
   if is_intf then (
     let intf_desc =
-      match hdesc.Module.intf_desc with
+      match hdesc.Module.File.intf_desc with
       | None      -> failwith "assertion error, task interface and no module_intf"
       | Some intf -> intf
     in
     List.map (fun comp_opt ->
         let dest = (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
-        let src  = [ (Filetype.FileMLI, intf_desc.Module.path) ] in
+        let src  = [ (Filetype.FileMLI, intf_desc.Module.Intf.path) ] in
         let m_deps = List.map (fun module_dep ->
             (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
         let internal_deps = List.assoc (comp_opt,ByteCode) internal_libs_paths_all_modes in
@@ -203,9 +202,9 @@ let dep_descs is_intf hdesc bstate cstate target h =
     List.map (fun (compiled_ty, comp_opt) ->
         let file_compile_ty = buildmode_to_filety compiled_ty in
         let dest = (file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) h) in
-        let src = (match hdesc.Module.intf_desc with
+        let src = (match hdesc.Module.File.intf_desc with
               None -> []
-            | Some intf -> [Filetype.FileMLI,intf.Module.path]) @ [(Filetype.FileML, hdesc.Module.src_path)] in
+            | Some intf -> [Filetype.FileMLI,intf.Module.Intf.path]) @ [(Filetype.FileML, hdesc.Module.File.path)] in
         let m_deps = List.concat (List.map (fun module_dep ->
             [(file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
              (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)]
@@ -228,8 +227,8 @@ let compile_module task_index task is_intf h bstate task_context dag =
         failwith (sprintf "internal error compile module on directory (%s). steps dag internal error"
                     (Hier.to_string h))
     in
-    let src_path = path_dirname hdesc.Module.src_path in
-    let use_thread = hdesc.Module.use_threads in
+    let src_path = path_dirname hdesc.Module.File.path in
+    let use_thread = hdesc.Module.File.use_threads in
     let dir_spec = {
       src_dir      = src_path;
       dst_dir      = currentDir;
@@ -247,13 +246,13 @@ let compile_module task_index task is_intf h bstate task_context dag =
         } in
         let fcompile =
           (build_mode,(fun () -> runOcamlCompile r_dir_spec use_thread annot_mode build_mode comp_opt
-                          pack_opt hdesc.Module.use_pp hdesc.Module.oflags h)) in
+                          pack_opt hdesc.Module.File.use_pp hdesc.Module.File.oflags h)) in
         if invalid
         then (
           let (_, ys) = check invalid xs in
           (Some "", fcompile :: ys)
         ) else (
-          match check_destination_valid_with srcs cstate dest with
+          match check_destination_valid_with srcs dest with
           | None            -> check false xs
           | Some src_changed ->
             let reason = reason_from_paths dest src_changed in
@@ -264,7 +263,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
     (check false dep_descs, hdesc)
   in
   let all = List.map (fun (c,t) -> process_one_target c t) all in
-  let ((compilation_reason, check_fun_list), hdesc) = List.hd all in
+  let ((compilation_reason, _), _) = List.hd all in
   match compilation_reason with
   | None        -> Scheduler.FinishTask task
   | Some reason -> (* if the module has an interface, we create one list, so everything can be run in parallel,
@@ -310,8 +309,8 @@ let link_c cstate clib_name =
      [(fun () -> runRanlib a_file)]]
   )
 
-let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
-  let buildDeps =  if is_target_lib target then []
+let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
+  let buildDeps =  if is_lib target then []
     else list_filter_map (fun dep ->
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
         | Internal -> Some (in_current_dir (Libname.to_cmca compiledType compileOpt dep))
@@ -352,9 +351,9 @@ let link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib
   if depsTime <> None then (
     let (nb_step,nb_step_len) = get_nb_step dag in
     let link_type = if plugin then LinkingPlugin else
-      if is_target_lib target then LinkingLibrary else LinkingExecutable in
+      if is_lib target then LinkingLibrary else LinkingExecutable in
     verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
-      (if is_target_lib target then "library" else "executable") (fp_to_string dest);
+      (if is_lib target then "library" else "executable") (fp_to_string dest);
     [(fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
          link_type compileOpt useThreadLib cclibs buildDeps compiled dest)]
   ) else []
@@ -389,10 +388,10 @@ let link task_index task bstate task_context dag =
     else [] in
   let all_modes = get_all_modes target in
   let funlist = List.fold_left (fun flist (compiledType,compileOpt) ->
-      let normal = (link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
+      let normal = (link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
           compiledType compileOpt false) in
-      let res = if (is_target_lib target) && compiledType = Native && (Gconf.get_target_option "library-plugin") then
-          (link_ task task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
+      let res = if (is_lib target) && compiledType = Native && (Gconf.get_target_option "library-plugin") then
+          (link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
              compiledType compileOpt true) @ normal
         else normal in
       res @ flist
@@ -407,7 +406,7 @@ let get_destination_files target =
   match target.Target.target_name with
   | Name.Lib libname ->
     List.map (fun (typ,opt) -> Libname.to_cmca typ opt libname) all_modes
-  | Name.Exe e | Name.Test e | Name.Bench e | Name.Example e ->
+  | Name.Exe _ | Name.Test _ | Name.Bench _ | Name.Example _ ->
     List.map (fun (ty,opt) ->
         Utils.to_exe_name opt ty (Target.get_target_dest_name target)
       ) all_modes
@@ -425,7 +424,7 @@ let sanity_check build_dir target =
   ()
 
 let check task_index task task_context dag =
-  let (cstate,target) = Hashtbl.find task_context task in
+  let (_,target) = Hashtbl.find task_context task in
   let buildDir = Dist.get_build_path (Dist.Target target.target_name) in
   let (nb_step,nb_step_len) = get_nb_step dag in
   verbose Report "[%*d of %d] Checking %s\n%!" nb_step_len task_index nb_step (fp_to_string buildDir);
@@ -458,8 +457,8 @@ let compile (bstate: build_state) task_context dag =
     | (CompileInterface m) -> compile_module task_index task true m bstate task_context dag
     | (CompileModule m)    -> compile_module task_index task false m bstate task_context dag
     | (CompileDirectory m) -> compile_directory task_index task m task_context dag
-    | (LinkTarget t)       -> link task_index task bstate task_context dag
-    | (CheckTarget t)      -> check task_index task task_context dag
+    | (LinkTarget _)       -> link task_index task bstate task_context dag
+    | (CheckTarget _)      -> check task_index task task_context dag
   in
 
   let stat = Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish in
@@ -505,7 +504,7 @@ let build_dag bstate proj_file targets_dag =
   while not (Taskdep.is_complete taskdep) do
     (match Taskdep.get_next taskdep with
      | None -> failwith "no free task in targets"
-     | Some (step,ntask) ->
+     | Some (_,ntask) ->
        verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
        let (cur_dag,dups) = (match ntask with
         | Name.Exe name   ->

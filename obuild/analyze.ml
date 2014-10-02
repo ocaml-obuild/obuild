@@ -2,7 +2,6 @@ open Ext.Fugue
 open Ext.Filepath
 open Ext
 open Helper
-open Types
 open Printf
 open Gconf
 open Target

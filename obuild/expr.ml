@@ -1,6 +1,3 @@
-open Ext.Fugue
-open Printf
-
 exception UnknownSymbol of (string * string)
 exception UnknownExpression of string
 exception ExpressionEmpty
@@ -103,7 +100,7 @@ module Token = struct
         ) else if is_version_char s.[o] then (
           let (ver, no) = eat_version o in VER ver :: loop no
         ) else
-          failwith (sprintf "unknown character in expression '%c'" s.[o])
+          failwith (Printf.sprintf "unknown character in expression '%c'" s.[o])
       end
     in
     loop 0
@@ -212,4 +209,4 @@ let parse_builddep s =
   match Token.lexer s with
   | []                    -> raise ExpressionEmpty
   | Token.ID name :: constraints -> (name, (parse_constraints name constraints))
-  | x      :: _           -> raise (InvalidDependencyName (Token.to_string x))
+  | x :: _           -> raise (InvalidDependencyName (Token.to_string x))

@@ -56,7 +56,7 @@ let run () =
         | true -> None | false -> Some ("invalid " ^ x) in
 
     let valid_name n = invalid ~x:"name" (string_all char_is_alphanum n) in
-    let valid_fp n = None in (* FIXME *)
+    let valid_fp _ = None in (* FIXME *)
     let valid_fn n = invalid ~x:"filename" (Filepath.valid_fn n) in
     let valid_modname n = invalid ~x:"module name" 
         (string_all Modname.char_is_valid_modchar (strip_ext n ~ext:".ml"))

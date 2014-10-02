@@ -1,5 +1,4 @@
 open Ext.Fugue
-open Obuild.Gconf
 open Obuild
 
 exception DocumentationBuildingFailed of string

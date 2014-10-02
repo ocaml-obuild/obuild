@@ -118,14 +118,14 @@ let list_singleton = fun x -> [x]
 let rec list_init l =
     match l with
     | []    -> failwith "init empty list"
-    | [x]   -> []
+    | [_]   -> []
     | x::xs -> x :: list_init xs
 
 let rec list_last l =
     match l with
     | []    -> failwith "last is empty"
     | [x]   -> x 
-    | x::xs -> list_last xs
+    | _::xs -> list_last xs
 
 let list_remove e list = List.filter (fun x -> x <> e) list
 

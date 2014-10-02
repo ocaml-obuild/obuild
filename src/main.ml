@@ -91,7 +91,7 @@ let mainBuild argv =
   in
   Build.build_dag bstate proj_file dag
 
-let mainClean argv =
+let mainClean _ =
   if Filesystem.exists (Dist.get_path ())
   then begin
     Filesystem.removeDir (Dist.get_path ());
@@ -230,7 +230,7 @@ let mainGet argv =
                  )
     | _       -> eprintf "usage: obuild get <field>\n"; exit 1
 
-let mainInit argv =
+let mainInit _ =
     let project = Init.run () in
     let name = fn (project.Project.name) <.> "obuild" in
     Project.write (in_current_dir name) project

@@ -1,7 +1,6 @@
 open Ext.Fugue
 open Ext.Filepath
 open Ext
-open Gconf
 
 exception OCamlProgramError of string
 exception TarError of string

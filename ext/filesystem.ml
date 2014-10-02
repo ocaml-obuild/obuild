@@ -137,7 +137,7 @@ let writeFile path s =
 
 let readFile path =
     let buf = Buffer.create 1024 in
-    let b = String.create 1024 in
+    let b = String.make 1024 ' ' in
     withfile path [Unix.O_RDONLY] 0o644 (fun fd ->
         let isDone = ref false in
         while not !isDone do
@@ -151,7 +151,7 @@ let readFile path =
 
 let copy_file src dst =
     mkdirSafeRecursive (path_dirname dst) 0o755;
-    let s = String.create 4096 in
+    let s = String.make 4096 ' ' in
     let srcStat = Unix.stat (fp_to_string src) in
     let operm = srcStat.Unix.st_perm in
     withfile dst [Unix.O_WRONLY; Unix.O_CREAT] operm (fun fdDst ->
@@ -171,7 +171,7 @@ let copy_to_dir src dst = copy_file src (dst <//> src)
 let copy_many_files srcs dst = List.iter (fun src -> copy_to_dir src dst) srcs
 
 let rec mktemp_dir_in prefix =
-    let s = String.create 4 in
+    let s = String.make 4 ' ' in
     let fd = Unix.openfile "/dev/urandom" [Unix.O_RDONLY] 0o640 in
     let r = ref 0 in
     while !r < 4 do

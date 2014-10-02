@@ -1,8 +1,5 @@
-open Types
 open Ext.Fugue
 open Ext.Filepath
-
-open Helper
 
 exception BuildDepAnalyzeFailed of string
 exception BuildCDepAnalyzeFailed of string

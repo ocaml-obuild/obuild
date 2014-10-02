@@ -47,11 +47,11 @@ let add_prefix prefix_path hier =
         match hier_list with
         | [] -> path <//> to_fp
         | x :: xs ->
-          if (path_basename path) = fn (Modname.to_dir (List.hd hier_list)) then
+          if (path_basename path) = fn (Modname.to_dir x) then
             if (path_length prefix_path) = 1 then
               to_fp (* prefix_path is fully included in hier *)
             else
-              loop (path_dirname path) (List.tl hier_list)
+              loop (path_dirname path) xs
           else
             path <//> to_fp
       in

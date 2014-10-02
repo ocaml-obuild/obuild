@@ -1,4 +1,3 @@
-open Types
 open Printf
 open Gconf
 

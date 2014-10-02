@@ -13,8 +13,8 @@ let fp_to_string x =
     match x.filepath, x.absolute with
     | ([], true)  -> "/"
     | ([], false) -> "./"
-    | (l,  true)  -> "/" ^ String.concat Filename.dir_sep x.filepath
-    | (l,  false) -> String.concat Filename.dir_sep x.filepath
+    | (l,  true)  -> "/" ^ String.concat Filename.dir_sep l
+    | (l,  false) -> String.concat Filename.dir_sep l
 
 let fn_to_string x = x.filename
 
@@ -62,12 +62,11 @@ let with_optpath mdir (filename : filename) =
         in
     path </> filename
 
-let with_path dir filename = dir </> filename
-
 let path_length path   = List.length path.filepath
+
 let path_dirname path  = { path with filepath = list_init path.filepath }
+
 let path_basename path = fn (list_last path.filepath)
-let path_append path x = fp (fp_to_string path ^ x)
 
 let path_parent path = path_dirname (path_dirname path)
 

@@ -1,4 +1,3 @@
-open Types
 open Helper
 open Gconf
 

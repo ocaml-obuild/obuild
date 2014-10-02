@@ -1,5 +1,4 @@
 open Ext.Filepath
-open Types
 
 type t = string
 

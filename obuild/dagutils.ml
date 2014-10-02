@@ -1,4 +1,3 @@
-
 let iter f dag =
     let tdep = Taskdep.init dag in
     while not (Taskdep.is_complete tdep) do
@@ -23,7 +22,7 @@ let linearize dag =
             else (
                 match Taskdep.get_next tdep with
                 | None            -> failwith "taskdep dag next didn't work"
-                | Some (idx,task) -> Taskdep.mark_done tdep task; task :: loop ()
+                | Some (_,task) -> Taskdep.mark_done tdep task; task :: loop ()
             )
         in
     loop ()

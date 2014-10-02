@@ -1,11 +1,8 @@
 open Ext.Fugue
 open Ext.Filepath
 open Ext
-open Types
 open Printf
 open Target
-open Dependencies
-open Gconf
 
 exception NoConfFile
 exception MultipleConfFiles
@@ -62,7 +59,7 @@ let do_block ty mempty parseM accu args cont =
   let name = get_context_name ty args in
   accu (process_chunk parseM (mempty name) cont)
 
-let do_block2 ty mempty parseM accu args cont =
+let do_block2 _ mempty parseM accu args cont =
   accu (process_chunk parseM (mempty args) cont)
 
 let parse_deps key_parse value =
@@ -90,7 +87,7 @@ let parse_stdlib value =
   | "core"        -> Stdlib_Core
   | _             -> raise (UnknownStdlib value)
 
-let parse_runtime_bool ctx = function
+let parse_runtime_bool _ = function
   | "true" | "True"   -> BoolConst true
   | "false" | "False" -> BoolConst false
   | flag -> if string_startswith "$" flag then BoolVariable (string_drop 1 flag) else BoolVariable flag
@@ -101,7 +98,7 @@ let parse_module_name value =
 
 let parse_per strict (acc: target_extra) line cont =
   match Utils.toKV line with
-  | (k, None) ->
+  | (_, None) ->
     raise_if_strict strict ("no block in per"); acc
   | (k, Some v) ->
     let (value: string) = String.concat "\n" (v :: List.map snd cont) in
@@ -167,7 +164,7 @@ module Library = struct
     modules     = [];
     pack        = false;
     syntax      = false;
-    target      = newTarget (Name.Lib name) Lib true true;
+    target      = newTarget (Name.Lib name) Typ.Lib true true;
     subs        = []
   }
 
@@ -243,7 +240,7 @@ module Executable = struct
   let make name = {
     name;
     main   = emptyFn;
-    target = newTarget (Name.Exe name) Exe true false
+    target = newTarget (Name.Exe name) Typ.Exe true false
   }
 
   let to_target obj = obj.target
@@ -302,7 +299,7 @@ module Test = struct
   let make name = {
     name;
     main   = emptyFn;
-    target = newTarget (Name.Test name) Test (Gconf.get_target_option "build-tests") false;
+    target = newTarget (Name.Test name) Typ.Test (Gconf.get_target_option "build-tests") false;
     rundir = None;
     runopt = [];
     type_   = ExitCode;
@@ -352,7 +349,7 @@ module Example = struct
   let make name = {
     name   = name;
     main   = emptyFn;
-    target = newTarget (Name.Example name) Test (Gconf.get_target_option "build-examples") false;
+    target = newTarget (Name.Example name) Typ.Test (Gconf.get_target_option "build-examples") false;
   }
 
   let parse strict obj =

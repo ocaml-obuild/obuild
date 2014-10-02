@@ -1,7 +1,6 @@
 open Printf
 open Helper
 open Ext.Filepath
-open Types
 
 (* TODO normalize exit code *)
 

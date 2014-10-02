@@ -2,7 +2,6 @@ open Ext.Fugue
 open Ext.Filepath
 open Ext
 open Helper
-open Types
 open Printf
 open Gconf
 
@@ -43,7 +42,7 @@ let makeSetup digestKV project flags = hashtbl_fromList (
     @ List.map (fun (flagname,flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) flags
   )
 
-let sanityCheck setup =
+let sanityCheck () =
     let (_: string) = Prog.getOcamlOpt () in
     let (_: string) = Prog.getOcamlC () in
     let (_: string) = Prog.getOcamlDep () in
@@ -132,8 +131,22 @@ let set_opts hashtable = (* load the environment *)
   let opts = Gconf.get_target_options_keys () in
   List.iter (fun k -> Gconf.set_target_options k (bool_of_opt hashtable k)) opts
 
+let check_ocaml () =
+  let ocamlCfg = Prog.getOcamlConfig () in
+  let ocaml_ver = Hashtbl.find ocamlCfg "version" in
+  let ver = string_split '.' ocaml_ver in
+  (match ver with
+   | major::minor::_-> (
+       if int_of_string major < 4 then gconf.bin_annot <- false;
+       if int_of_string major > 4 && int_of_string minor > 1 then gconf.short_path <- true
+     )
+   | _ -> gconf.bin_annot <- false
+  );
+  ocamlCfg
+
 let run proj_file user_flags user_opts =
   Dist.create_maybe ();
+  let _ = check_ocaml () in
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
   let configure = try Some (Dist.read_configure ()) with _ -> None in
@@ -141,7 +154,7 @@ let run proj_file user_flags user_opts =
     | None -> []
     | Some h ->
       (* set opts and return the flags *)
-      Hashtbl.iter (fun k v ->
+      Hashtbl.iter (fun k _ ->
           if not (string_startswith "flag-" k) then
             Gconf.set_target_options k (bool_of_opt h k)
         ) h;
@@ -170,7 +183,7 @@ let run proj_file user_flags user_opts =
   )
 
 let check proj_file reconf setup =
-  let ocamlCfg = Prog.getOcamlConfig () in
+  let ocamlCfg = check_ocaml () in
   let digestKV = getDigestKV () in
   (* check if the environment changed. *)
   comparekvs_hashtbl "ocaml config" setup ocamlCfg;
@@ -179,15 +192,6 @@ let check proj_file reconf setup =
       comparekvs "digest" setup digestKV;
       false
     with e -> if reconf then true else raise e in
-  let ocaml_ver = Hashtbl.find ocamlCfg "version" in
-  let ver = string_split '.' ocaml_ver in
-  (match ver with
-   | major::minor::_-> (
-       if int_of_string major < 4 then gconf.bin_annot <- false;
-       if int_of_string major > 4 && int_of_string minor > 1 then gconf.short_path <- true
-     )
-   | _ -> gconf.bin_annot <- false
-  );
   (* user_flags are also restored from setup file *)
   let setup_flags = get_flags setup in
   let flags = get_flags_value proj_file setup_flags [] in

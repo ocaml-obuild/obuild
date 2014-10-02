@@ -1,8 +1,6 @@
-open Printf
 open Ext.Fugue
 open Ext.Filepath
 open Ext
-open Obuild.Types
 open Obuild.Helper
 open Obuild.Target
 open Obuild.Gconf

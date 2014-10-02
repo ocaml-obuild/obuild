@@ -1,10 +1,13 @@
 open Ext.Filepath
 open Ext.Fugue
 open Types
-open Gconf
 open Dependencies
 
-type target_type = Lib | Exe | Test | Bench
+module Typ = struct
+  type t = Lib | Exe | Test | Bench
+
+  let is_lib t = t = Lib
+end
 
 exception TargetNameNoType of string
 exception TargetUnknownType of string * string
@@ -94,7 +97,7 @@ type target_extra =
 
 type target =
     { target_name        : Name.t
-    ; target_type        : target_type
+    ; target_type        : Typ.t
     ; target_cbits       : target_cbits
     ; target_obits       : target_obits
     ; target_extras      : target_extra list
@@ -137,22 +140,22 @@ let newTargetExtra objs =
     ; target_extra_cflags    = []
     }
 
-let is_target_lib target = target.target_type = Lib
-
 let get_target_name target = Name.to_string target.target_name
 let get_target_dest_name target = Name.get_dest_name target.target_name
 let get_target_clibname target = Name.get_clibname target.target_name
 
+let is_lib target = Typ.is_lib (target.target_type)
+
 let get_ocaml_compiled_types target =
     let (nat,byte) =
-        if is_target_lib target
+        if is_lib target
             then (Gconf.get_target_option "library-native", Gconf.get_target_option "library-bytecode")
             else (Gconf.get_target_option "executable-native", Gconf.get_target_option "executable-bytecode")
         in
     (if nat then [Native] else []) @ (if byte then [ByteCode] else [])
 
 let get_debug_profile target =
-    if is_target_lib target
+    if is_lib target
         then (Gconf.get_target_option "library-debugging", Gconf.get_target_option "library-profiling")
         else (Gconf.get_target_option "executable-debugging", Gconf.get_target_option "executable-profiling")
 

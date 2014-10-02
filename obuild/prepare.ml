@@ -21,41 +21,51 @@ module Module = struct
   exception DependencyNoOutput
   exception NotFound of (filepath list * Hier.t)
 
-  type intf = {
-    mtime : float;
-    path : filepath
-  }
+  module Intf = struct
+    type t = {
+      mtime : float;
+      path : filepath
+    }
+    let make mtime path = { mtime; path }
+  end
 
-  type file = {
-    use_threads  : use_thread_flag;
-    src_path    : filepath;
-    src_mtime   : float;
-    file_type   : ocaml_file_type;
-    intf_desc   : intf option;
-    use_pp      : Pp.t;
-    oflags      : string list;
-    dep_cwd_modules    : Hier.t list;
-    dep_other_modules  : Modname.t list;
-  }
+  module File = struct
+    type t = {
+      use_threads  : use_thread_flag;
+      path    : filepath;
+      mtime   : float;
+      type_   : ocaml_file_type;
+      intf_desc   : Intf.t option;
+      use_pp      : Pp.t;
+      oflags      : string list;
+      dep_cwd_modules    : Hier.t list;
+      dep_other_modules  : Modname.t list;
+    }
+    let make use_threads path mtime type_ intf_desc use_pp oflags dep_cwd_modules dep_other_modules =
+      { use_threads; path; mtime; type_; intf_desc; use_pp; oflags; dep_cwd_modules; dep_other_modules }
+  end
 
-  type dir = {
-    path    : filepath;
-    modules : Hier.t list
-  }
+  module Dir = struct
+    type t = {
+      path    : filepath;
+      modules : Hier.t list
+    }
+    let make path modules = {path; modules}
+  end
 
-  type t = DescFile of file | DescDir of dir
+  type t = DescFile of File.t | DescDir of Dir.t
 
   let file_has_interface mdescfile =
-    maybe false (fun _ -> true) mdescfile.intf_desc
+    maybe false (fun _ -> true) mdescfile.File.intf_desc
 
   let has_interface = function
     | DescFile dfile -> file_has_interface dfile
     | DescDir _      -> false
 
-  let make_dir path modules = DescDir { path; modules }
-  let make_intf mtime path = { mtime; path }
-  let make_file use_threads src_path src_mtime file_type intf_desc use_pp oflags dep_cwd_modules dep_other_modules =
-    DescFile { use_threads; src_path; src_mtime; file_type; intf_desc; use_pp; oflags; dep_cwd_modules; dep_other_modules }
+  let make_dir path modules = DescDir (Dir.make path modules)
+  let make_file use_threads path mtime type_ intf_desc use_pp oflags dep_cwd_modules dep_other_modules =
+    DescFile 
+      (File.make use_threads path mtime type_ intf_desc use_pp oflags dep_cwd_modules dep_other_modules)
 end
 
  (* live for the whole duration of a building process
@@ -161,7 +171,7 @@ let get_modules_desc bstate target toplevelModules =
         let conf = bstate.bstate_config in
         let nodes = List.rev (Taskdep.linearize bstate.bstate_config.project_pkgdeps_dag Taskdep.FromParent
                                 [Analyze.Target target.target_name]) in
-        let syntaxPkgs = list_filter_map (fun (node) ->
+        let syntaxPkgs = list_filter_map (fun node ->
             match node with
             | Dependency dep -> Some dep
             | _              -> None
@@ -281,7 +291,7 @@ let get_modules_desc bstate target toplevelModules =
         );
         let intfDesc =
           if hasInterface
-          then Some (Module.make_intf intfModTime intfFile)
+          then Some (Module.Intf.make intfModTime intfFile)
           else None
         in 
         Module.make_file use_thread srcFile modTime 
@@ -304,8 +314,8 @@ let get_modules_desc bstate target toplevelModules =
       (* TODO: don't query single modules at time, where ocamldep supports M modules.
          tricky with single file syntax's pragma. *)
       match mdesc with
-      | Module.DescFile dfile -> List.iter loop dfile.Module.dep_cwd_modules
-      | Module.DescDir  ddir  -> List.iter loop ddir.Module.modules
+      | Module.DescFile dfile -> List.iter loop dfile.Module.File.dep_cwd_modules
+      | Module.DescDir  ddir  -> List.iter loop ddir.Module.Dir.modules
     )
   in
   List.iter (fun m -> loop m) toplevelModules;
@@ -335,7 +345,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
     let stepsDag = Dag.init () in
     let h = hashtbl_map (fun dep -> match dep with
         | Module.DescDir _      -> []
-        | Module.DescFile dfile -> dfile.Module.dep_cwd_modules
+        | Module.DescFile dfile -> dfile.Module.File.dep_cwd_modules
       ) modulesDeps
     in
     while Hashtbl.length h > 0 do
@@ -348,7 +358,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
           let mStep = match mdep with
             | Module.DescFile f ->
               (* if it is a .mli only module ... *)
-              if not ((Filesystem.exists f.Module.src_path)) && (f.Module.file_type = SimpleModule) then
+              if not ((Filesystem.exists f.Module.File.path)) && (f.Module.File.type_ = SimpleModule) then
                 CompileInterface m
               else begin
                 if Module.has_interface mdep then (
@@ -366,7 +376,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
                     | Module.DescDir _ -> CompileDirectory dirChild
                   in
                   Dag.addEdge mStep cStep stepsDag
-                ) descdir.Module.modules;
+                ) descdir.Module.Dir.modules;
               mStep
           in
           Dag.addNode mStep stepsDag;
@@ -376,13 +386,13 @@ let prepare_target_ bstate buildDir target toplevelModules =
                 if List.mem m v then (
                   let kdep = Hashtbl.find modulesDeps k in
                   match kdep with
-                  | Module.DescFile kFile ->
+                  | Module.DescFile _ ->
                     if Module.has_interface kdep
                     then (
                       Dag.addEdgesConnected [CompileModule k; CompileInterface k; mStep] stepsDag
                     ) else
                       Dag.addEdge (CompileModule k) mStep stepsDag
-                  | Module.DescDir kDir ->
+                  | Module.DescDir _ ->
                     Dag.addEdge (CompileDirectory k) mStep stepsDag
                 )
               )

@@ -43,7 +43,7 @@ let get_program_config () = match Process.run [ "ocamlfind"; "printconf"; "conf"
 let get_paths () = try [fp (Sys.getenv "OCAMLFIND_CONF")]
   with Not_found ->
     try get_program_config ()
-    with exn -> [
+    with _ -> [
         fp "/etc/findlib.conf";
         fp "/etc/ocamlfind.conf"
       ]

@@ -1,8 +1,6 @@
 open Ext.Fugue
 open Ext.Filepath
 open Ext
-open Types
-open Gconf
 
 type t = Autogen | Dot | Target of Target.Name.t
 

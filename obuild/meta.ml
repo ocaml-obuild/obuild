@@ -1,9 +1,7 @@
 open Ext.Fugue
 open Ext.Filepath
 open Ext
-open Types
 open Printf
-open FindlibConf
 open Dependencies
 
 module Predicate = struct
@@ -111,9 +109,9 @@ module Pkg = struct
 
   let is_syntax_ pkg = List.length (get_syntaxes pkg) > 0
 
-  let is_syntax (path, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
+  let is_syntax (_, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
 
-  let get_archive_with_filter (path, root) dep pred =
+  let get_archive_with_filter (_, root) dep pred =
     let pkg = find dep.Libname.subnames root in
     List.find_all (fun (preds,_) -> List.mem pred preds && (not (List.mem Predicate.Toploop preds))) pkg.archives
 
@@ -309,7 +307,7 @@ module Token = struct
       )
     | ID "directory" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.directory = dir } xs
     | ID "description" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.description = dir } xs
-    | ID "browse_interfaces" :: EQ :: S intf :: xs -> parse pkg_name acc xs
+    | ID "browse_interfaces" :: EQ :: S _ :: xs -> parse pkg_name acc xs
     | ID "archive" :: LPAREN :: ID s :: xs ->
       (let (ss, xs2) = parse_csv_tail xs in
        let preds = List.map Predicate.of_string (s::ss) in
@@ -324,14 +322,13 @@ module Token = struct
     | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs
     | ID "exists_if" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.exists_if = v } xs
     | ID "error" :: LPAREN :: xs -> (
-        let rec consume toks =
-          match toks with
+        let rec consume = function
           | RPAREN::zs -> zs
-          | z::zs      -> consume zs
+          | _::zs      -> consume zs
           | []         -> failwith "eof in error context"
         in
         match consume xs with
-        | EQ :: S s :: xs2 -> parse pkg_name acc xs2
+        | EQ :: S _ :: xs2 -> parse pkg_name acc xs2
         | _                -> failwith "parsing error failed"
       )
     | ID "linkopts" :: xs -> (

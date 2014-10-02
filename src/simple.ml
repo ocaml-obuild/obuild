@@ -5,7 +5,6 @@ open Ext.Filepath
 open Ext
 open Obuild.Project
 open Obuild.Target
-open Obuild.Types
 open Obuild.Gconf
 open Obuild
 
@@ -64,7 +63,7 @@ let main () =
     let name = Filename.chop_extension main in
     let target =
         { target_name = Name.Exe name
-        ; target_type = Exe
+        ; target_type = Typ.Exe
         ; target_cbits =
             { target_cdir      = !cDir
             ; target_csources  = List.rev !cfiles
@@ -110,6 +109,7 @@ let main () =
             let _ = Dist.create_build (Dist.Autogen) in
             let buildDir = Dist.create_build (Dist.Target exe.Executable.target.target_name) in
             FindlibConf.load ();
+            ignore(Configure.check_ocaml ());
             let project = Analyze.prepare project_config [] in
             let bstate = Prepare.init project in
             Build.build_exe bstate exe;
