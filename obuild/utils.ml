@@ -32,7 +32,13 @@ let toKVeq line =
 let parseCSV value = List.map string_stripSpaces (string_split ',' value)
 
 let to_include_path_options paths =
-    List.concat $ list_filter_map (fun p -> if fp_to_string p = "" then None else Some [ "-I"; fp_to_string p ]) paths
+  let ss = ref StringSet.empty in
+  List.concat $ list_filter_map (fun p -> let ps = fp_to_string p in
+                                  if (ps = "") || (StringSet.mem ps !ss) then None
+                                  else (
+                                    ss := StringSet.add ps !ss;
+                                    Some ["-I"; ps]
+                                  )) paths
 
 let showList sep f l = String.concat sep (List.map f l)
 
