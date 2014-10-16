@@ -188,7 +188,7 @@ module Token = struct
     | PLUSEQ -> "+="
     | COMMA  -> ","
 
-  let char_table = hashtbl_fromList [('(', LPAREN); (')', RPAREN); ('=', EQ); (',', COMMA); 
+  let char_table = hashtbl_fromList [('(', LPAREN); (')', RPAREN); ('=', EQ); (',', COMMA);
                                      ('.', DOT); ('-', MINUS)]
 
   let is_token_char c = Hashtbl.mem char_table c
@@ -388,10 +388,10 @@ let findLib name : t =
     (path, read path name)
 
 let getIncludeDir stdlib ((path, pkg) : t) : filepath =
-    match pkg.Pkg.directory with
-    | ""  -> path_dirname path
-    | "^" -> path_dirname (path_dirname path)
-    | o   -> match o.[0]  with
-             | '^' -> path_dirname (path_dirname path) <//> fp (string_drop 1 o)
-             | '+' -> stdlib <//> fp (string_drop 1 o)
-             | _   -> fp o
+  match pkg.Pkg.directory with
+  | "" | "." -> path_dirname path
+  | "^" -> path_dirname (path_dirname path)
+  | o   -> match o.[0]  with
+    | '^' -> path_dirname (path_dirname path) <//> fp (string_drop 1 o)
+    | '+' -> stdlib <//> fp (string_drop 1 o)
+    | _   -> fp o
