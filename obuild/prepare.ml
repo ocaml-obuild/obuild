@@ -157,6 +157,28 @@ let get_syntax_pp bstate preprocessor buildDeps =
       )
     ) buildDeps
 
+let get_target_pp bstate target = function
+  | None    -> Pp.none
+  | Some pp ->
+    let conf = bstate.bstate_config in
+    let nodes = List.rev (Taskdep.linearize conf.project_pkgdeps_dag Taskdep.FromParent
+                            [Analyze.Target target.target_name]) in
+    let syntaxPkgs = list_filter_map (fun node ->
+        match node with
+        | Dependency dep -> Some dep
+        | _              -> None
+      ) nodes
+    in
+    verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
+    let p4pred = get_p4pred pp in
+    let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
+    let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
+    let archive = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] in
+    (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
+    let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
+    Pp.some preproc (archive :: camlp4Strs)
+
+
 (* get every module description
  * and their relationship with each other
 *)
@@ -165,28 +187,7 @@ let get_modules_desc bstate target toplevelModules =
   let modulesDeps = Hashtbl.create 64 in
   let file_search_paths hier = [target.target_obits.target_srcdir <//> Hier.to_dirpath hier; autogenDir] in
 
-  let targetPP = (match target.target_obits.target_pp with
-      | None    -> Pp.none
-      | Some pp ->
-        let conf = bstate.bstate_config in
-        let nodes = List.rev (Taskdep.linearize bstate.bstate_config.project_pkgdeps_dag Taskdep.FromParent
-                                [Analyze.Target target.target_name]) in
-        let syntaxPkgs = list_filter_map (fun node ->
-            match node with
-            | Dependency dep -> Some dep
-            | _              -> None
-          ) nodes
-        in
-        verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
-        let p4pred = get_p4pred pp in
-        let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
-        let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
-        let archive = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] in
-
-        (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
-        let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
-        Pp.some preproc (archive :: camlp4Strs)
-    ) in
+  let targetPP = get_target_pp bstate target target.target_obits.target_pp in
 
   let module_lookup_method = Hier.to_filename::Hier.to_generators @ [Hier.to_directory; Hier.to_interface] in
   let get_one hier =
@@ -245,13 +246,25 @@ let get_modules_desc bstate target toplevelModules =
         let intfModTime = Filesystem.getModificationTime intfFile in
 
         (* augment pp if needed with per-file dependencies *)
-        let pp = match target.target_obits.target_pp with
-          | None              -> Pp.none
-          | Some preprocessor ->
+        let per_settings = find_extra_matching target (Hier.to_string hier) in
+        let per_pp =
+          let l = List.filter (fun x -> x.target_extra_pp <> None) per_settings in
+          if(List.length l) > 0 then
+            (List.hd l).target_extra_pp
+          else
+            None
+        in
+        let pp = match target.target_obits.target_pp,per_pp with
+          | None,None              -> Pp.none
+          | None,Some preprocessor | Some _, Some preprocessor ->
+            let perPP = get_target_pp bstate target per_pp in
+            let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) per_settings) in
+            Pp.append perPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
+          | Some preprocessor,None ->
             (* FIXME: we should re-use the dependency DAG here, otherwise we might end up in the case
              * where the extra dependencies are depending not in the correct order
             *)
-            let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) (find_extra_matching target (Hier.to_string hier))) in
+            let extraDeps = List.concat (List.map (fun x -> x.target_extra_builddeps) per_settings) in
             Pp.append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
         in
 

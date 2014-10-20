@@ -106,6 +106,7 @@ let parse_per strict (acc: target_extra) line cont =
     | "builddepends" | "builddeps"
     | "build-deps" -> { acc with target_extra_builddeps = parse_deps Libname.of_string value @ acc.target_extra_builddeps }
     | "oflags"     -> { acc with target_extra_oflags = acc.target_extra_oflags @ string_words_noempty value }
+    | "pp"         -> { acc with target_extra_pp = Some (Pp.Type.of_string value) }
     | _            -> raise_if_strict strict ("unexpected item in : " ^ k); acc
 
 let parse_otarget t k value =

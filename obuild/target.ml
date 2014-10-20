@@ -93,6 +93,7 @@ type target_extra =
     ; target_extra_builddeps : dependency list
     ; target_extra_oflags    : string list
     ; target_extra_cflags    : string list
+    ; target_extra_pp        : Pp.Type.t option
     }
 
 type target =
@@ -138,6 +139,7 @@ let newTargetExtra objs =
     ; target_extra_builddeps = []
     ; target_extra_oflags    = []
     ; target_extra_cflags    = []
+    ; target_extra_pp        = None
     }
 
 let get_target_name target = Name.to_string target.target_name
