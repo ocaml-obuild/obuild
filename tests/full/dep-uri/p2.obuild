@@ -2,7 +2,6 @@ name: p2
 version: 1.0
 obuild-ver: 1
 ocaml-version: >=3.12.1
-ocaml-extra-args: -w +27 -warn-error +8 -safe-string -strict-sequence -strict-formats
 executable p2
   main-is: p2.ml
   build-deps: uri
