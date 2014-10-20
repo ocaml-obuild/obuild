@@ -241,7 +241,7 @@ module Executable = struct
   let make name = {
     name;
     main   = emptyFn;
-    target = newTarget (Name.Exe name) Typ.Exe true false
+    target = newTarget (Name.Exe name) Typ.Exe true true
   }
 
   let to_target obj = obj.target
@@ -622,13 +622,25 @@ let get_all_targets projFile =
     @ List.map Bench.to_target projFile.benchs
     @ List.map Example.to_target projFile.examples
 
+let get_all_targets_filter projFile f =
+  List.filter (fun target -> f target) (get_all_targets projFile)
+
+let get_val_const_or_var user_flags = function
+  | BoolConst t    -> t
+  | BoolVariable v ->
+    try List.assoc v user_flags
+    with Not_found -> raise (UnknownFlag v)
+
 let get_all_buildable_targets proj_file user_flags =
-  List.filter (fun target -> match target.target_buildable with
-      | BoolConst t    -> t
-      | BoolVariable v ->
-        try List.assoc v user_flags
-        with Not_found -> raise (UnknownFlag v)
-    ) (get_all_targets proj_file)
+  get_all_targets_filter proj_file (fun target -> get_val_const_or_var user_flags target.target_buildable)
+
+let get_all_installable_targets proj_file user_flags =
+  get_all_targets_filter proj_file (fun target ->
+      let install = get_val_const_or_var user_flags target.target_installable in
+      let build = get_val_const_or_var user_flags target.target_buildable in
+      Printf.printf "target %s install %b build %b\n" (Target.Name.to_string target.target_name) install build;
+      install)
+
 
 let find_lib proj_file name = Library.find proj_file.libs name
 let find_exe proj_file name = Executable.find proj_file.exes name

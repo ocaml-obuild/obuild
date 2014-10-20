@@ -66,6 +66,7 @@ executable obuild-from-oasis
   main-is: assimilate_oasis.ml
   src-dir: tools
   build-deps: obuild, obuild.ext
+  installable: false
 
 test dag
   src-dir: tests
