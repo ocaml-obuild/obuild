@@ -91,5 +91,8 @@ let show exn =
     | Unix.Unix_error (err, fname, params) ->
         error "unexpected unix error: \"%s\" during %s(%s)\n" (Unix.error_message err) fname params;
         exit 20
+    | Ext.Filepath.InvalidFilename f ->
+        error "the filename \"%s\" is not valid, it contains a directory separator\n" f;
+        exit 30
     | Exit              -> ()
     | e                 -> eprintf "uncaught exception\n"; raise e
