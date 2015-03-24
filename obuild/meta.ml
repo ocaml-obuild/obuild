@@ -20,9 +20,10 @@ module Predicate = struct
     | Preprocessor
     | Camlp4o
     | Camlp4r
+    | Neg of t
     | Unknown of string
 
-  let to_string = function
+  let rec to_string = function
     | Byte -> "byte"
     | Native -> "native"
     | Toploop -> "toploop"
@@ -37,24 +38,29 @@ module Predicate = struct
     | Preprocessor -> "preprocessor"
     | Camlp4o -> "camlp4o"
     | Camlp4r -> "camlp4r"
+    | Neg t -> "-" ^ (to_string t)
     | Unknown s -> s
 
-  let of_string = function
-    | "byte"           -> Byte
-    | "native"         -> Native
-    | "toploop"        -> Toploop
-    | "create_toploop" -> CreateToploop
-    | "plugin"         -> Plugin
-    | "mt"             -> Mt
-    | "mt_vm"          -> Mt_vm
-    | "mt_posix"       -> Mt_posix
-    | "gprof"          -> Gprof
-    | "autolink"       -> Autolink
-    | "syntax"         -> Syntax
-    | "preprocessor"   -> Preprocessor
-    | "camlp4o"        -> Camlp4o
-    | "camlp4r"        -> Camlp4r
-    | _ as s           -> Unknown s
+  let rec of_string s =
+    if s.[0] = '-' then
+      Neg (of_string (String.sub s 1 ((String.length s) - 1)))
+    else
+      match s with
+      | "byte"           -> Byte
+      | "native"         -> Native
+      | "toploop"        -> Toploop
+      | "create_toploop" -> CreateToploop
+      | "plugin"         -> Plugin
+      | "mt"             -> Mt
+      | "mt_vm"          -> Mt_vm
+      | "mt_posix"       -> Mt_posix
+      | "gprof"          -> Gprof
+      | "autolink"       -> Autolink
+      | "syntax"         -> Syntax
+      | "preprocessor"   -> Preprocessor
+      | "camlp4o"        -> Camlp4o
+      | "camlp4r"        -> Camlp4r
+      | _ as s           -> Unknown s
 end
 
 exception LibraryNotFound of string
@@ -111,9 +117,22 @@ module Pkg = struct
 
   let is_syntax (_, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
 
-  let get_archive_with_filter (_, root) dep pred =
+  let get_archive_with_filter (_, root) dep preds =
     let pkg = find dep.Libname.subnames root in
-    List.find_all (fun (preds,_) -> List.mem pred preds && (not (List.mem Predicate.Toploop preds))) pkg.archives
+    let fulfills archive_preds =
+      List.for_all (fun p -> match p with Predicate.Neg n -> not (List.mem n preds)
+                                        | _ -> List.mem p preds) archive_preds
+    in
+    let rec best_archive best_n best_value archives =
+      match archives with
+      | [] -> if best_n >= 0 then Some best_value else None
+      | ((archive_preds,_) as archive) :: rest ->
+        if (fulfills archive_preds) && ((List.length archive_preds) > best_n) then   
+          best_archive (List.length archive_preds) archive rest
+        else
+          best_archive best_n best_value rest
+    in
+    best_archive (-1) (List.hd pkg.archives) pkg.archives
 
   let get_archive (path, root) dep csv =
     let pkg = find dep.Libname.subnames root in
@@ -193,7 +212,7 @@ module Token = struct
 
   let is_token_char c = Hashtbl.mem char_table c
   let get_token_char c = Hashtbl.find char_table c
-  let is_ident_char c = char_is_alphanum c || c == '_'
+  let is_ident_char c = char_is_alphanum c || c == '_' || c == '-'
 
   let tokenize name s =
     let line = ref 1 in
@@ -249,7 +268,7 @@ module Token = struct
           get_token_char s.[o] :: loop (o+1)
         else if s.[o] == '+' && (o+1) < len && s.[o+1] == '=' then
           PLUSEQ :: loop (o+2)
-        else if (s.[o] >= 'a' && s.[o] <= 'z') || (s.[o] >= 'A' && s.[o] <= 'Z') then
+        else if (s.[o] >= 'a' && s.[o] <= 'z') || (s.[o] >= 'A' && s.[o] <= 'Z') || s.[o] == '-' then
           let (id, no) = parse_ident o in ID id :: loop no
         else
           let s = sprintf "%d.%d: meta lexing error: undefined character '%c'" !line (o - !lineoff) s.[o] in
@@ -262,16 +281,27 @@ module Token = struct
     | COMMA :: ID s :: xs -> let (l, r) = parse_csv_tail xs in (s :: l, r)
     | xs                 -> ([], xs)
 
+  let rec parse_predicate = function
+    | COMMA :: ID s :: xs -> let (l, r) = parse_predicate xs in ((Predicate.of_string s) :: l, r)
+    | COMMA :: MINUS :: ID s :: xs ->
+      let (l, r) = parse_predicate xs in ((Predicate.Neg (Predicate.of_string s)) :: l, r)
+    | xs                 -> ([], xs)
+
   let parse_predicate_list name field = function
-    | LPAREN :: RPAREN :: xs -> (Some [], xs)
+    | LPAREN :: RPAREN :: xs -> ([], xs)
     | LPAREN :: ID s :: xs ->
-      (let (ss, xs2) = parse_csv_tail xs in match xs2 with
+      (let (preds, xs2) = parse_predicate xs in match xs2 with
         | RPAREN :: xs3 ->
-          let preds = List.map Predicate.of_string (s::ss) in
-          (Some preds, xs3)
+          ((Predicate.of_string s) :: preds, xs3)
         | _ -> raise (MetaParseError (name, ("expecting ')' after " ^ field ^ "'s predicate")))
       )
-    | xs -> (None, xs)
+    | LPAREN :: MINUS :: ID s :: xs ->
+      (let (preds, xs2) = parse_predicate xs in match xs2 with
+        | RPAREN :: xs3 ->
+          ((Predicate.Neg (Predicate.of_string s)) :: preds, xs3)
+        | _ -> raise (MetaParseError (name, ("expecting ')' after " ^ field ^ "'s predicate")))
+      )
+    | xs -> ([], xs)
 
   let parse_requires_eq name mpreds = function
     | PLUSEQ :: S reqs :: xs
@@ -308,15 +338,14 @@ module Token = struct
     | ID "directory" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.directory = dir } xs
     | ID "description" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.description = dir } xs
     | ID "browse_interfaces" :: EQ :: S _ :: xs -> parse pkg_name acc xs
-    | ID "archive" :: LPAREN :: ID s :: xs ->
-      (let (ss, xs2) = parse_csv_tail xs in
-       let preds = List.map Predicate.of_string (s::ss) in
-       match xs2 with
-       | RPAREN :: PLUSEQ :: S v :: xs3
-       | RPAREN :: EQ :: S v :: xs3 ->
-         let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [(preds, v)] } in
-         parse pkg_name nacc xs3
-       | _ -> raise (MetaParseError (pkg_name, "parsing archive failed"))
+    | ID "archive" :: xs -> (
+        let (preds, xs2) = parse_predicate_list pkg_name "archive" xs in
+        match xs2 with
+        | PLUSEQ :: S v :: xs3
+        | EQ :: S v :: xs3 ->
+          let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [(preds, v)] } in
+          parse pkg_name nacc xs3
+        | _ -> raise (MetaParseError (pkg_name, "parsing archive failed"))
       )
     | ID "preprocessor" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.preprocessor = v } xs
     | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs
@@ -335,7 +364,7 @@ module Token = struct
         let (preds, xs2) = parse_predicate_list pkg_name "linkopts" xs in
         match xs2 with
         | EQ :: S s :: xs3 ->
-          parse pkg_name { acc with Pkg.linkopts = (preds, s) :: acc.Pkg.linkopts } xs3
+          parse pkg_name { acc with Pkg.linkopts = ((if preds = [] then None else Some preds), s) :: acc.Pkg.linkopts } xs3
         | _         -> failwith "parsing linkopts failed, expecting equal"
       )
     | ID stuff :: EQ :: S stuffVal :: xs ->

@@ -320,10 +320,18 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
             | Native    -> Meta.Predicate.Native
             | ByteCode  -> Meta.Predicate.Byte
           in
-          let archives = Meta.Pkg.get_archive_with_filter meta dep pred in
+          let preds = match useThreadLib with
+            | WithThread -> [ pred; Meta.Predicate.Mt]
+            | NoThread -> [ pred ]
+          in
+          let preds = match compileOpt with
+            | WithProf -> Meta.Predicate.Gprof :: preds
+            | _ -> preds
+          in
+          let archives = Meta.Pkg.get_archive_with_filter meta dep preds in
           match archives with
-          | []              -> None
-          | archiveFile::_  -> Some (in_current_dir $ fn (snd archiveFile))
+          | None              -> None
+          | Some archiveFile  -> Some (in_current_dir $ fn (snd archiveFile))
       ) pkgDeps
   in
   let dest = match target.target_name with

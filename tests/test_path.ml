@@ -21,7 +21,7 @@ let () =
   let b_abc_b_abc_foo = Hier.add_prefix b_abc b_abc_foo in
 
   assumeEq "src/b/abc + B.Abc.Foo" "src/b/abc" (Filepath.fp_to_string b_abc_b_abc_foo);
-  if !err > 1 then 
+  if !err > 0 then 
     exit 1
   else 
     exit 0

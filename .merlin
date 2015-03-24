@@ -1,5 +1,5 @@
 PRJ obuild
-PKG unix
+PKG unix obuild ext
 S ext
 S src
 S obuild
