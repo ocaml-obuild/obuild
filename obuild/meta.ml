@@ -143,7 +143,10 @@ module Pkg = struct
         else
           all_append_archives rest
     in
-    let res = best_archive (-1) (List.hd pkg.archives) pkg.archives in
+    let res = if pkg.archives = [] then
+        []
+      else
+        best_archive (-1) (List.hd pkg.archives) pkg.archives in
     res @ (all_append_archives pkg.append_archives)
 
   let get_archive (path, root) dep csv =
