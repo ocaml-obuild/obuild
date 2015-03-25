@@ -311,9 +311,9 @@ let link_c cstate clib_name =
 
 let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
   let buildDeps =  if is_lib target then []
-    else list_filter_map (fun dep ->
+    else List.flatten (List.map (fun dep ->
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-        | Internal -> Some (in_current_dir (Libname.to_cmca compiledType compileOpt dep))
+        | Internal -> [(in_current_dir (Libname.to_cmca compiledType compileOpt dep))]
         | System   ->
           let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
           let pred = match compiledType with
@@ -329,10 +329,11 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
             | _ -> preds
           in
           let archives = Meta.Pkg.get_archive_with_filter meta dep preds in
-          match archives with
-          | None              -> None
-          | Some archiveFile  -> Some (in_current_dir $ fn (snd archiveFile))
-      ) pkgDeps
+          List.fold_left (fun acc (_,a) ->
+              let files = string_split ' ' a in
+              acc @ (List.map (fun f -> in_current_dir $ fn f) files)
+            ) [] archives
+      ) pkgDeps)
   in
   let dest = match target.target_name with
     | Name.Lib libname ->

@@ -80,6 +80,7 @@ module Pkg = struct
     browse_interface : string;
     type_of_threads : string;
     archives    : (Predicate.t list * string) list;
+    append_archives    : (Predicate.t list * string) list;
     version     : string;
     assignment  : (string * string) list;
     linkopts    : (Predicate.t list option * string) list;
@@ -96,6 +97,7 @@ module Pkg = struct
     type_of_threads  = "";
     exists_if        = "";
     archives         = [];
+    append_archives  = [];
     version          = "";
     assignment       = [];
     subs             = [];
@@ -125,14 +127,24 @@ module Pkg = struct
     in
     let rec best_archive best_n best_value archives =
       match archives with
-      | [] -> if best_n >= 0 then Some best_value else None
+      | [] -> if best_n >= 0 then [best_value] else []
       | ((archive_preds,_) as archive) :: rest ->
         if (fulfills archive_preds) && ((List.length archive_preds) > best_n) then   
           best_archive (List.length archive_preds) archive rest
         else
           best_archive best_n best_value rest
     in
-    best_archive (-1) (List.hd pkg.archives) pkg.archives
+    let rec all_append_archives archives =
+      match archives with
+      | [] -> []
+      | ((archive_preds,_) as archive) :: rest ->
+        if (fulfills archive_preds) then
+          archive :: (all_append_archives rest)
+        else
+          all_append_archives rest
+    in
+    let res = best_archive (-1) (List.hd pkg.archives) pkg.archives in
+    res @ (all_append_archives pkg.append_archives)
 
   let get_archive (path, root) dep csv =
     let pkg = find dep.Libname.subnames root in
@@ -168,6 +180,12 @@ module Pkg = struct
           let k = String.concat "," (List.map Predicate.to_string csv) in
           append (sprintf "%sarchive(%s) = \"%s\"\n" indent_str k v)
         ) pkg.archives;
+
+      List.iter (fun (csv,v) ->
+          let k = String.concat "," (List.map Predicate.to_string csv) in
+          append (sprintf "%sarchive(%s) += \"%s\"\n" indent_str k v)
+        ) pkg.append_archives;
+      
       List.iter (fun spkg ->
           append (sprintf "%spackage \"%s\" (\n" indent_str spkg.name);
           write_one (indent+2) spkg;
@@ -341,7 +359,9 @@ module Token = struct
     | ID "archive" :: xs -> (
         let (preds, xs2) = parse_predicate_list pkg_name "archive" xs in
         match xs2 with
-        | PLUSEQ :: S v :: xs3
+        | PLUSEQ :: S v :: xs3 ->
+          let nacc = { acc with Pkg.append_archives = acc.Pkg.append_archives @ [(preds, v)] } in
+          parse pkg_name nacc xs3
         | EQ :: S v :: xs3 ->
           let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [(preds, v)] } in
           parse pkg_name nacc xs3
