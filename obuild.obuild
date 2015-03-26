@@ -1,5 +1,5 @@
 name: obuild
-version: 0.1.1
+version: 0.1.2
 synopsis: Simple declarative build system for OCaml.
 description:
   o'build o'build ye source
