@@ -72,7 +72,7 @@ module Pkg = struct
 (* preliminaries structures, adjust as needed by meta. *)
   type t = {
     name        : string;
-    requires    : (Predicate.t list option * dep_name list) list;
+    requires    : (Predicate.t list * dep_name list) list;
     directory   : string;
     description : string;
     exists_if   : string;
@@ -159,6 +159,12 @@ module Pkg = struct
   let write path package =
     let out = Buffer.create 1024 in
     let append = Buffer.add_string out in
+    let preds_to_string preds =
+      if preds = [] then
+        ""
+      else
+        "(" ^ (String.concat "," (List.map Predicate.to_string preds)) ^ ")"
+    in
     let rec write_one indent pkg =
       let indent_str = String.make indent ' ' in
       let output_field field name =
@@ -170,23 +176,17 @@ module Pkg = struct
       output_field pkg.browse_interface "browse_interface";
       output_field pkg.exists_if "exists_if";
 
-      List.iter (fun (mpred,deps) ->
-          let pred_str = match mpred with
-            | None -> ""
-            | Some l -> "(" ^ String.concat "," (List.map Predicate.to_string l) ^ ")"
-          in
+      List.iter (fun (preds,deps) ->
           let dep_str = String.concat "," (List.map (fun dep -> Libname.to_string dep) deps) in
-          append (sprintf "%srequires%s = \"%s\"\n" indent_str pred_str dep_str);
+          append (sprintf "%srequires%s = \"%s\"\n" indent_str (preds_to_string preds) dep_str);
         ) pkg.requires;
 
-      List.iter (fun (csv,v) ->
-          let k = String.concat "," (List.map Predicate.to_string csv) in
-          append (sprintf "%sarchive(%s) = \"%s\"\n" indent_str k v)
+      List.iter (fun (preds,v) ->
+          append (sprintf "%sarchive%s = \"%s\"\n" indent_str (preds_to_string preds) v)
         ) pkg.archives;
 
-      List.iter (fun (csv,v) ->
-          let k = String.concat "," (List.map Predicate.to_string csv) in
-          append (sprintf "%sarchive(%s) += \"%s\"\n" indent_str k v)
+      List.iter (fun (preds,v) ->
+          append (sprintf "%sarchive%s += \"%s\"\n" indent_str (preds_to_string preds) v)
         ) pkg.append_archives;
       
       List.iter (fun spkg ->
@@ -298,10 +298,6 @@ module Token = struct
     in
     loop 0
 
-  let rec parse_csv_tail = function
-    | COMMA :: ID s :: xs -> let (l, r) = parse_csv_tail xs in (s :: l, r)
-    | xs                 -> ([], xs)
-
   let rec parse_predicate = function
     | COMMA :: ID s :: xs -> let (l, r) = parse_predicate xs in ((Predicate.of_string s) :: l, r)
     | COMMA :: MINUS :: ID s :: xs ->
@@ -324,15 +320,6 @@ module Token = struct
       )
     | xs -> ([], xs)
 
-  let parse_requires_eq name mpreds = function
-    | PLUSEQ :: S reqs :: xs
-    | EQ :: S reqs :: xs ->
-      let deps = List.map (fun r -> Libname.of_string r)
-                 $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
-      in
-      ((mpreds, (List.rev deps)), xs)
-    | _ -> raise (MetaParseError (name, ("expecting '+=' or '=' after requires")))
-
   let rec parse pkg_name acc = function
     | []           -> (acc, [])
     | RPAREN :: xs -> (acc, xs)
@@ -342,19 +329,15 @@ module Token = struct
        parse pkg_name nacc xs2
       )
     | ID "requires" :: xs -> (
-        match xs with
-        | LPAREN :: ID s :: xs2 ->
-          let (l,xs3) = parse_csv_tail xs2 in
-          (match xs3 with
-           | RPAREN :: xs4 ->
-             let preds = List.map Predicate.of_string (s::l) in
-             let (req, xs5) = parse_requires_eq pkg_name (Some preds) xs4 in
-             parse pkg_name { acc with Pkg.requires = req :: acc.Pkg.requires } xs5
-           | _ -> raise (MetaParseError (pkg_name, "expecting ) after requires's predicate"))
-          )
-        | _ ->
-          let (req, xs2) = parse_requires_eq pkg_name None xs in
-          parse pkg_name { acc with Pkg.requires = req :: acc.Pkg.requires } xs2
+        let (preds, xs2) = parse_predicate_list pkg_name "requires" xs in
+        match xs2 with
+        | PLUSEQ :: S reqs :: xs3
+        | EQ :: S reqs :: xs3 ->
+          let deps = List.map (fun r -> Libname.of_string r)
+                     $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
+          in
+          parse pkg_name { acc with Pkg.requires = (preds, (List.rev deps)) :: acc.Pkg.requires } xs3
+        | _ -> raise (MetaParseError (pkg_name, "parsing requires failed"))
       )
     | ID "directory" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.directory = dir } xs
     | ID "description" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.description = dir } xs

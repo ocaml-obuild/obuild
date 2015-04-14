@@ -310,6 +310,7 @@ let link_c cstate clib_name =
   )
 
 let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
+  let systhread = Analyze.getOcamlConfigKey "systhread_supported" in
   let buildDeps =  if is_lib target then []
     else List.flatten (List.map (fun dep ->
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
@@ -321,8 +322,11 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
             | ByteCode  -> Meta.Predicate.Byte
           in
           let preds = match useThreadLib with
-            | WithThread -> [ pred; Meta.Predicate.Mt]
-            | NoThread -> [ pred ]
+            | PosixThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_posix]
+            | VMThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_vm]
+            | DefaultThread ->
+              (if systhread = "true" then Meta.Predicate.Mt_posix else Meta.Predicate.Mt_vm) :: [ pred; Meta.Predicate.Mt]
+            | NoThreads -> [ pred ]
           in
           let preds = match compileOpt with
             | WithProf -> Meta.Predicate.Gprof :: preds
@@ -364,7 +368,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
     verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
       (if is_lib target then "library" else "executable") (fp_to_string dest);
     [(fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
-         link_type compileOpt useThreadLib cclibs buildDeps compiled dest)]
+         link_type compileOpt useThreadLib systhread cclibs buildDeps compiled dest)]
   ) else []
 
 let link task_index task bstate task_context dag =
@@ -388,9 +392,10 @@ let link task_index task bstate task_context dag =
   let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
   verbose Verbose "package deps: [%s]\n" (Utils.showList "," Libname.to_string pkgDeps);
   let useThreadLib =
-    if List.mem (Libname.of_string "threads") pkgDeps || List.mem (Libname.of_string "threads.posix") pkgDeps
-    then WithThread
-    else NoThread
+    if List.mem (Libname.of_string "threads") pkgDeps then DefaultThread
+    else if List.mem (Libname.of_string "threads.posix") pkgDeps then PosixThread
+    else if List.mem (Libname.of_string "threads.vm") pkgDeps then VMThread
+    else NoThreads
   in
   let cfunlist = if cstate.compilation_csources <> [] then
       link_c cstate (Target.get_target_clibname target)

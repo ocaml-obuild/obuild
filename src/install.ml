@@ -52,7 +52,7 @@ let opam_install_file proj_file flags =
 let lib_to_meta proj_file lib =
   let requires_of_lib lib =
     let deps = lib.Library.target.target_obits.target_builddeps in
-    [ (None, List.map (fun d -> fst d) deps) ]
+    [ ([], List.map (fun d -> fst d) deps) ]
   in
   let set_meta_field_from_lib pkg lib = {
     pkg with Meta.Pkg.requires    = requires_of_lib lib;

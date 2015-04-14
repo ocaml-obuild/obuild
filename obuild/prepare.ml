@@ -13,6 +13,7 @@ open Target
 open Dependencies
 
 type use_thread_flag = NoThread | WithThread
+type thread_type = VMThread | PosixThread | DefaultThread | NoThreads
 type ocaml_file_type = GeneratedModule | SimpleModule
 
 module Module = struct

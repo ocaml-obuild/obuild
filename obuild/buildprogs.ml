@@ -122,7 +122,7 @@ let runCLinking sharingMode depfiles dest =
       @ List.map fp_to_string depfiles in
   Process.make args
 
-let runOcamlLinking includeDirs buildMode linkingMode compileType useThread cclibs libs modules dest =
+let runOcamlLinking includeDirs buildMode linkingMode compileType useThread systhread cclibs libs modules dest =
   (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
   let link_maybe linking_mode dest =
     let file_or_link_exists fn = try let _ = Unix.lstat fn in true with _ -> false
@@ -142,8 +142,11 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread ccli
   in
   let args = [ prog ]
              @ (match useThread with
-                 | NoThread   -> []
-                 | WithThread -> ["-thread"])
+                 | NoThreads   -> []
+                 | PosixThread -> ["-thread"]
+                 | VMThread -> ["-vmthread"]
+                 | DefaultThread ->
+                   (if systhread = "true" then ["-thread"] else ["-vmthread"]))
              @ (match linkingMode with
                  | LinkingPlugin    -> ["-shared"]
                  | LinkingLibrary    -> ["-a"]

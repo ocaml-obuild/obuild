@@ -51,6 +51,9 @@ let get_ocaml_config_key_hashtbl key h =
     try Hashtbl.find h key
     with Not_found -> raise (OcamlConfigMissing key)
 
+let getOcamlConfigKey key =
+  get_ocaml_config_key_hashtbl key (Prog.getOcamlConfig ())
+
 let get_ocaml_config_key key project = get_ocaml_config_key_hashtbl key project.project_ocamlcfg
 
 let get_pkg_deps target project =
@@ -198,7 +201,7 @@ let prepare projFile user_flags =
                       in
                   List.iter (fun (preds, reqDeps) ->
                       match preds with
-                      | Some [Meta.Predicate.Toploop] -> ()
+                      | [Meta.Predicate.Toploop] -> ()
                       | _ ->
                           List.iter (fun reqDep ->
                               verbose Debug "  library %s depends on %s\n" (Libname.to_string dep) (Libname.to_string reqDep);
