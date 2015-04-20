@@ -22,12 +22,13 @@ let run projFile isSnapshot =
 
     (* copy all libs modules *)
     let copy_obits obits =
-        Filesystem.iterate (fun ent -> 
-           let fpath = obits.target_srcdir </> ent in
-           match Filetype.of_filepath fpath with
-           | Filetype.FileML | Filetype.FileMLI -> Filesystem.copy_to_dir fpath dest
-           | _                -> ()
-        ) obits.target_srcdir
+      List.iter (fun dir ->
+          Filesystem.iterate (fun ent -> 
+              let fpath = dir </> ent in
+              match Filetype.of_filepath fpath with
+              | Filetype.FileML | Filetype.FileMLI -> Filesystem.copy_to_dir fpath dest
+              | _                -> ()
+            ) dir) obits.target_srcdir
         in
     let copy_cbits cbits =
         Filesystem.iterate (fun ent -> 

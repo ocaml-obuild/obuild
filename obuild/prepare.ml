@@ -186,7 +186,7 @@ let get_target_pp bstate target = function
 let get_modules_desc bstate target toplevelModules =
   let autogenDir = Dist.get_build_exn Dist.Autogen in
   let modulesDeps = Hashtbl.create 64 in
-  let file_search_paths hier = [target.target_obits.target_srcdir <//> Hier.to_dirpath hier; autogenDir] in
+  let file_search_paths hier = (List.map (fun dir -> dir <//> Hier.to_dirpath hier) target.target_obits.target_srcdir) @ [autogenDir] in
 
   let targetPP = get_target_pp bstate target target.target_obits.target_pp in
 
@@ -515,7 +515,8 @@ let prepare_target_ bstate buildDir target toplevelModules =
       ((match m with
           | Normal    -> buildDir
           | WithDebug -> buildDirD
-          | WithProf  -> buildDirP) <//> Hier.to_dirpath hier) :: [autogenDir; obits.target_srcdir <//> Hier.to_dirpath hier ] @
+          | WithProf  -> buildDirP) <//> Hier.to_dirpath hier) :: [autogenDir] @
+      (List.map (fun dir -> dir <//> Hier.to_dirpath hier) obits.target_srcdir) @
       (match m with
        | Normal    -> depIncludePaths
        | WithDebug -> depIncludePathsD

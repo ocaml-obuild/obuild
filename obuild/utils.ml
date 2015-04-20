@@ -34,7 +34,7 @@ let parseCSV value = List.map string_stripSpaces (string_split ',' value)
 let to_include_path_options paths =
   let ss = ref StringSet.empty in
   List.concat $ list_filter_map (fun p -> let ps = fp_to_string p in
-                                  if (ps = "") || (StringSet.mem ps !ss) then None
+                                  if (ps = "") || (StringSet.mem ps !ss) || not (Filesystem.exists p) then None
                                   else (
                                     ss := StringSet.add ps !ss;
                                     Some ["-I"; ps]

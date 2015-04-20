@@ -114,7 +114,7 @@ let parse_otarget t k value =
   | "builddepends" | "builddeps"
   | "build-deps" -> Handled { t with target_builddeps = parse_deps Libname.of_string value @ t.target_builddeps }
   | "path" | "srcdir"
-  | "src-dir"    -> Handled { t with target_srcdir    = fp value }
+  | "src-dir"    -> Handled { t with target_srcdir    = List.map (fun p -> fp p) (Utils.parseCSV value) }
   | "preprocessor"
   | "pp"         -> Handled { t with target_pp = Some (Pp.Type.of_string value) }
   | "extra-deps" -> Handled { t with target_extradeps = t.target_extradeps @ parse_extra_dep value }
@@ -522,17 +522,13 @@ let check proj =
 
     let check_files_exists target names =
         let srcdir = target.target_obits.target_srcdir in
-        List.iter (fun n ->
-            let path = srcdir </> n in
-            if not (Filesystem.exists path)
-                then raise (FileDoesntExist (target, n))
-        ) names
-        in
+        List.iter (fun n -> ignore(Utils.find_in_paths srcdir n)) names
+    in
 
     let check_modules_exists target modules =
         let srcdir = target.target_obits.target_srcdir in
         List.iter (fun m ->
-            if not (Utils.exist_choice_in_paths [srcdir] (List.map (fun f -> f m) Hier.module_lookup_methods))
+            if not (Utils.exist_choice_in_paths srcdir (List.map (fun f -> f m) Hier.module_lookup_methods))
                 then raise (ModuleDoesntExist (target, m))
         ) modules
         in
@@ -593,7 +589,7 @@ let write file proj =
         let show_target iStr target =
             let obits = target.target_obits in
             let cbits = target.target_cbits in
-            add (sprintf "%ssrc-dir: %s\n" iStr (fp_to_string obits.target_srcdir));
+            add (sprintf "%ssrc-dir: %s\n" iStr (String.concat "," (List.map fp_to_string obits.target_srcdir)));
             add_string (iStr ^ "build-deps") (Utils.showList ", " (fun (l,_) -> Libname.to_string l) obits.target_builddeps);
             add_string (iStr ^ "oflags") (Utils.showList " " id obits.target_oflags);
             add_string (iStr ^ "pp") (maybe "" (fun ppty -> Pp.Type.to_string ppty) obits.target_pp);

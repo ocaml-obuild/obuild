@@ -76,7 +76,7 @@ let run () =
 
     let question_obits obits =
         let dir = ask valid_fp "What is the directory name where to find the source ? (default .)" in
-        { obits with target_srcdir = fp dir }
+        { obits with target_srcdir = [fp dir] }
         in
     let question_cbits cbits =
         cbits

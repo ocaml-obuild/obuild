@@ -80,7 +80,7 @@ type target_cbits =
     }
 
 type target_obits =
-    { target_srcdir    : filepath
+    { target_srcdir    : filepath list
     ; target_builddeps : dependency list
     ; target_oflags    : string list
     ; target_pp        : Pp.Type.t option
@@ -119,7 +119,7 @@ let newTargetObits =
     { target_oflags    = []
     ; target_builddeps = []
     ; target_pp        = None
-    ; target_srcdir    = currentDir
+    ; target_srcdir    = [currentDir]
     ; target_extradeps = []
     ; target_stdlib    = Stdlib_Standard
     }

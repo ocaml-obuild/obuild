@@ -73,7 +73,7 @@ let main () =
             ; target_cpkgs     = List.map (fun p -> (p, None)) !cpkgs (* no constraints *)
             }
         ; target_obits =
-            { target_srcdir    = !srcDir
+            { target_srcdir    = [!srcDir]
             ; target_builddeps = List.map (fun p -> (p, None)) !depends (* no constraints *)
             ; target_oflags    = []
             ; target_pp        = None
@@ -101,6 +101,7 @@ let main () =
         in
 
 
+    let file_or_link_exists fn = try let _ = Unix.lstat fn in true with _ -> false in
     let tmpDir = Filesystem.mktemp_dir_in "dist-" in
     Dist.set_path tmpDir;
     try
@@ -116,6 +117,8 @@ let main () =
             let files = Build.get_destination_files exe.Executable.target in
             List.iter (fun file ->
                 printf "copying %s to %s\n" (fp_to_string (buildDir </> file)) (fp_to_string $ in_current_dir file);
+                if(file_or_link_exists (fp_to_string $ in_current_dir file)) then
+                  Unix.unlink (fp_to_string $ in_current_dir file); 
                 Filesystem.copy_file (buildDir </> file) (in_current_dir file)
             ) files
         ) (fun () -> if !removeDist then Filesystem.removeDir tmpDir)
