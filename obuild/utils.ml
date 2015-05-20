@@ -29,7 +29,7 @@ let toKVeq line =
     | [k;v] -> (string_stripSpaces k, Some (string_stripSpaces v))
     | _     -> assert false
 
-let parseCSV value = List.map string_stripSpaces (string_split ',' value)
+let parseCSV value = List.filter (fun s -> (String.length s) > 0) (List.map string_stripSpaces (string_split ',' value))
 
 let to_include_path_options paths =
   let ss = ref StringSet.empty in
