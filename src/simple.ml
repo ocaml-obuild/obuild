@@ -27,6 +27,15 @@ let main () =
     let set_fp r v = r := fp v in
     let append f l v = l := f v :: !l in
 
+    let append_several
+        (f: string -> Obuild.Libname.t)
+        (l: Obuild.Libname.t list ref)
+        (v: string): unit =
+      let values = string_split ',' v in
+      let values' = List.rev_map f values in
+      l := List.rev_append values' !l
+    in
+
     let anonParams = ref [] in
     let removeDist = ref true in
     Arg.parse
@@ -43,6 +52,8 @@ let main () =
         ; ("--cfile", Arg.String (append fn cfiles), "append one c file")
         ; ("--cpkg", Arg.String (append id cpkgs), "append one c pckage")
         ; ("--dep", Arg.String (append Libname.of_string depends), "append one dependency")
+        ; ("--deps", Arg.String (append_several Libname.of_string depends),
+           "x,y,z append dependencies x, y and z")
         ; ("--depends", Arg.String (append Libname.of_string depends), "append one dependency")
         ]
         (fun anon -> anonParams := anon :: !anonParams)
