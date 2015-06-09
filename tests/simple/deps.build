@@ -1,2 +1,2 @@
 #!/bin/sh
-${OBUILDSIMPLE} deps.ml
+${OBUILDSIMPLE} --deps unix,str deps.ml
