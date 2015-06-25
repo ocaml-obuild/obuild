@@ -230,12 +230,15 @@ let get_modules_desc bstate target toplevelModules =
           match generator_file with
           | None -> srcPath
           | Some f ->
-            verbose Debug "  %s is a generator\n%!" moduleName;
+            verbose Debug "  %s is a generator %s\n%!" moduleName (fp_to_string f);
+            let src_file = fn (fp_to_string f) in
             let actual_src_path = Dist.get_build_exn (Dist.Target target.target_name) in
-            let dest_file = Hier.to_filename hier actual_src_path in
-            if not (Filesystem.exists dest_file) ||
-               ((Filesystem.getModificationTime dest_file) < (Filesystem.getModificationTime f)) then begin
-              let w = Generators.run (actual_src_path </> Modname.to_directory (Hier.leaf hier)) f in
+            let dest_file = actual_src_path </> (chop_extension src_file) in
+            let full_dest_file = actual_src_path </> ((chop_extension src_file) <.>  "ml") in
+            verbose Debug "  %s -> %s\n%!" (fn_to_string src_file) (fp_to_string full_dest_file);
+            if not (Filesystem.exists full_dest_file) ||
+               ((Filesystem.getModificationTime full_dest_file) < (Filesystem.getModificationTime f)) then begin
+              let w = Generators.run dest_file f in
               print_warnings w
             end;
             actual_src_path
