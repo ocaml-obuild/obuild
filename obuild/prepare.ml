@@ -231,10 +231,11 @@ let get_modules_desc bstate target toplevelModules =
           | None -> srcPath
           | Some f ->
             verbose Debug "  %s is a generator %s\n%!" moduleName (fp_to_string f);
-            let src_file = fn (fp_to_string f) in
+            let src_path = path_dirname f in
+            let src_file = path_basename f in
             let actual_src_path = Dist.get_build_exn (Dist.Target target.target_name) in
             let dest_file = actual_src_path </> (chop_extension src_file) in
-            let full_dest_file = actual_src_path </> ((chop_extension src_file) <.>  "ml") in
+            let full_dest_file = actual_src_path <//> src_path </> ((chop_extension src_file) <.>  "ml") in
             verbose Debug "  %s -> %s\n%!" (fn_to_string src_file) (fp_to_string full_dest_file);
             if not (Filesystem.exists full_dest_file) ||
                ((Filesystem.getModificationTime full_dest_file) < (Filesystem.getModificationTime f)) then begin
