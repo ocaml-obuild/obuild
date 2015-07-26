@@ -1,4 +1,5 @@
 open Ext.Filepath
+open Ext.Fugue
 
 type t = string
 
@@ -30,8 +31,18 @@ let to_directory = to_x ""
 let to_filename = to_x ".ml"
 let to_parser = to_x ".mly"
 let to_lexer = to_x ".mll"
+let atd_modname modname =
+  if (String.length modname) > 2 then
+    let (b,e) = string_splitAt ((String.length modname) - 2) modname in
+    match e with
+    | "_t" | "_v" | "_j" -> b
+    | _ -> modname
+  else
+    modname
 
-let module_lookup_methods = [ to_directory; to_parser; to_lexer; to_filename ]
+let to_atd modname = to_x ".atd" (atd_modname modname)
+
+let module_lookup_methods = [ to_directory; to_parser; to_lexer; to_atd; to_filename ]
 
 let of_directory filename = wrap (String.capitalize (fn_to_string filename))
 let of_filename filename =

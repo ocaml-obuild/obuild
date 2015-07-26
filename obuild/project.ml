@@ -527,11 +527,11 @@ let check proj =
 
     let check_modules_exists target modules =
         let srcdir = target.target_obits.target_srcdir in
-        List.iter (fun m ->
-            if not (Utils.exist_choice_in_paths srcdir (List.map (fun f -> f m) Hier.module_lookup_methods))
-                then raise (ModuleDoesntExist (target, m))
-        ) modules
-        in
+        List.iter (fun m -> try ignore(Hier.get_file_entry m srcdir)
+                    with Not_found ->
+                      raise (ModuleDoesntExist (target, m))
+                  ) modules
+    in
 
     maybe_unit (fun x -> if not (Filesystem.exists x) then raise (LicenseFileDoesntExist x)) proj.license_file;
     maybe_unit (fun x -> let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in

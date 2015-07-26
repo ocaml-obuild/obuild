@@ -5,8 +5,20 @@ open Types
 exception EmptyModuleHierarchy
 
 type t = Modname.t list
+(* first filepath is the source path, second is the actual path *)
+type file_entry = FileEntry of (filepath * filepath) (* root_path, full_path *)
+                | GeneratedFileEntry of (filepath * filepath * filename) (* root_path, full_path, generated_path *)
+                | DirectoryEntry of (filepath * filepath) (* root_path, full_path *)
 
-let hiers = Hashtbl.create 128
+let file_entry_to_string = function
+  | FileEntry (p, f) ->
+      Printf.sprintf "FileEntry %s %s" (fp_to_string p) (fp_to_string f)
+  | DirectoryEntry (p, f) ->
+      Printf.sprintf "DirectoryEntry %s %s" (fp_to_string p) (fp_to_string f)
+  | GeneratedFileEntry (p,f,n) ->
+      Printf.sprintf "GeneratedFileEntry %s %s %s" (fp_to_string p) (fp_to_string f) (fn_to_string n)
+
+let hiers : (t, file_entry) Hashtbl.t = Hashtbl.create 128
 
 let root = List.hd
 let parent x = match x with
@@ -21,6 +33,11 @@ let to_string x = String.concat "." (List.map Modname.to_string x)
 let of_string x =
   let l = string_split '.' x in
   make (List.map Modname.of_string l)
+
+let ml_to_ext path ext =
+  let f = path_basename path in
+  let d = path_dirname path in
+  d </> ((chop_extension f) <.> (Filetype.to_string ext))
 
 let of_modname x = [x]
 
@@ -59,67 +76,99 @@ let add_prefix prefix_path hier =
   end
 
 let check_file path filename ext =
-  if ext <>  Filetype.FileOther "" then
+  if ext <> Filetype.FileOther "" then
     Ext.Filesystem.exists (path </> ((fn filename) <.> (Filetype.to_string ext)))
   else
     Ext.Filesystem.exists (path </> (fn filename))
 
-let get_filename path hier ext = 
-  if Hashtbl.mem hiers hier then Hashtbl.find hiers hier
-  else begin
+let check_modname path modname ext =
+  if (check_file path modname ext) then
+    Some modname
+  else
+    let name = String.uncapitalize modname in
+    if (check_file path name ext) then
+      Some name
+    else
+      None
+
+let get_filepath root_path hier ext : file_entry option =
+  if (Hashtbl.mem hiers hier) then
+    Some (Hashtbl.find hiers hier)
+  else
+    let path = add_prefix root_path hier in
     let modname = Modname.to_string (leaf hier) in
-    let filename = if (check_file path modname ext) then begin
-        Hashtbl.add hiers hier modname;
-        modname
-      end else begin
-        let name = String.uncapitalize modname in
-        if (check_file path name ext) then
-          Hashtbl.add hiers hier name;
-        name
-      end in
-    filename
-  end
-
-let add modname filename =
-  let h = make [modname] in
-  Hashtbl.add hiers h filename;
-  h
-
-let get_filepath path hier ext =
-  let path = add_prefix path hier in
-  path </> ((fn (get_filename path hier ext)) <.> (Filetype.to_string ext))
-
-let get_dirpath path hier =
-  let path = add_prefix path hier in
-  path </> (fn (get_filename path hier (Filetype.FileOther "")))
+    let res = check_modname path modname ext in
+    match res with
+    | None -> None
+    | Some name ->
+      let entry = if ext <> Filetype.FileOther "" then
+          FileEntry (root_path, path </> ((fn name) <.> (Filetype.to_string ext)))
+        else
+          DirectoryEntry (root_path, path </> (fn name))
+      in
+      Hashtbl.add hiers hier entry;
+      Some entry
 
 let to_filename hier prefix_path = get_filepath prefix_path hier Filetype.FileML
-let to_directory hier prefix_path = get_dirpath prefix_path hier
-let to_generators = List.map (fun gen hier prefix_path ->
-    get_filepath prefix_path hier (Filetype.FileOther gen.Generators.suffix)
-  ) !Generators.generators
+let to_directory hier prefix_path = get_filepath prefix_path hier (Filetype.FileOther "")
+let to_generators hier prefix_path =
+  if (Hashtbl.mem hiers hier) then
+    Some (Hashtbl.find hiers hier)
+  else
+    try
+      Some (list_findmap (fun gen ->
+          let path = add_prefix prefix_path hier in
+          let modname = Modname.to_string (leaf hier) in
+          let modname = gen.Generators.modname modname in
+          let ext = Filetype.FileOther gen.Generators.suffix in
+          let res = check_modname path modname ext in
+          match res with
+          | None -> None
+          | Some name ->
+            let filename = (fn name) <.> (Filetype.to_string ext) in
+            let fullname = path </> filename in
+            let generated_file = gen.Generators.generated_files filename (Modname.to_string (leaf hier)) in
+            Hashtbl.add hiers hier (GeneratedFileEntry (prefix_path, fullname, generated_file));
+            Some (GeneratedFileEntry (prefix_path, fullname, generated_file))
+        ) !Generators.generators)
+    with Not_found -> None
+
+let get_src_file dst_dir = function
+  | FileEntry (_,f) -> f
+  | GeneratedFileEntry (_,_,fn) -> dst_dir </> fn
+  | DirectoryEntry (_,f) -> f
+
+let get_dest_file dst_dir ext hier =
+  let entry = Hashtbl.find hiers hier in
+  match entry with
+    | FileEntry (_,f) ->
+      let filename = path_basename f in
+      let path = add_prefix dst_dir hier in
+      path </> ((chop_extension filename) <.> Filetype.to_string ext)
+    | GeneratedFileEntry (_,_,filename) ->
+      let path = add_prefix dst_dir hier in
+      path </> ((chop_extension filename) <.> Filetype.to_string ext)
+    | DirectoryEntry (_,f) ->
+      let filename = path_basename f in
+      let path = add_prefix dst_dir hier in
+      path </> (filename <.> Filetype.to_string ext)
+
 let to_interface hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
 
-let to_cmx prefix_path hier = get_filepath prefix_path hier Filetype.FileCMX
-let to_cmo prefix_path hier = get_filepath prefix_path hier Filetype.FileCMO
-let to_cmc bmode prefix_path hier = if bmode = Native then
-    to_cmx prefix_path hier
+let get_file_entry hier paths =
+  if (Hashtbl.mem hiers hier) then
+    Hashtbl.find hiers hier
   else
-    to_cmo prefix_path hier
-
-let to_cmi prefix_path hier = get_filepath prefix_path hier Filetype.FileCMI
-
-let module_lookup_methods = to_directory::to_generators @ [to_filename]
-
-let of_directory filename =
-  let name = fn_to_string filename in
-  let m = Modname.wrap (String.capitalize name) in
-  add m name
+    list_findmap (fun path ->
+        try
+          Some (list_findmap (fun lookup -> lookup hier path) [to_filename; to_directory; to_generators; to_interface])
+        with Not_found -> None
+      ) paths
 
 let of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in
   let m = try Modname.wrap (String.capitalize name)
     with Modname.EmptyModuleName -> raise (Modname.ModuleFilenameNotValid (fn_to_string filename))
-    | Invalid_argument _ -> raise (Modname.ModuleFilenameNotValid (fn_to_string filename))
+       | Invalid_argument _ -> raise (Modname.ModuleFilenameNotValid (fn_to_string filename))
   in
-  add m name;
+  make [m]

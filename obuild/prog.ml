@@ -46,7 +46,7 @@ let getLD       () = get_cache "ld" ["ld"]
 let getPkgConfig() = get_cache "pkg-config" ["pkg-config"]
 let getOcaml () = get_cache "ocaml" ["ocaml"]
 let getOcamlMktop () = get_cache "ocamlmktop" ["ocamlmktop"]
-
+let getAtdGen () = get_cache "atdgen" ["atdgen"; "atdgen.run"]
 
 let get_ocaml_version cfg =
   let ver = Hashtbl.find cfg "version" in

@@ -134,7 +134,7 @@ let compile_c task_index task c_file bstate task_context dag =
   )
 
 (* compile a set of modules in directory into a pack *)
-let compile_directory task_index task h task_context dag =
+let compile_directory task_index task (h : Hier.t) task_context dag =
   let (cstate,target) = Hashtbl.find task_context task in
   let pack_opt = Hier.parent h in
   (* get all the modules defined at level h+1 *)
@@ -152,9 +152,11 @@ let compile_directory task_index task h task_context dag =
     let (byte_list,native_list) = List.partition (fun (t,_) -> t = ByteCode) all_modes in
     (List.map (fun pair_list ->
          List.map (fun (build_mode, comp_opt) ->
-             let dest = (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
+             let path = cstate.compilation_builddir_ml comp_opt in
+             let dest = (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h) in
              let mdeps = List.map (fun m ->
-                 (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) m)) modules in
+                 (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI m)
+               ) modules in
              let dir = cstate.compilation_builddir_ml comp_opt in
              let fcompile = (fun () -> runOcamlPack dir dir annot_mode build_mode pack_opt h modules) in
              match check_destination_valid_with mdeps dest with
@@ -191,23 +193,26 @@ let dep_descs is_intf hdesc bstate cstate target h =
       | Some intf -> intf
     in
     List.map (fun comp_opt ->
-        let dest = (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) h) in
+        let path = cstate.compilation_builddir_ml comp_opt in
+        let dest = (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h) in
         let src  = [ (Filetype.FileMLI, intf_desc.Module.Intf.path) ] in
         let m_deps = List.map (fun module_dep ->
-            (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)) module_deps in
+            (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep)) module_deps in
         let internal_deps = List.assoc (comp_opt,ByteCode) internal_libs_paths_all_modes in
         (dest,Interface,comp_opt, src @ internal_deps @ m_deps)
       ) compile_opts
   ) else (
     List.map (fun (compiled_ty, comp_opt) ->
         let file_compile_ty = buildmode_to_filety compiled_ty in
-        let dest = (file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) h) in
+        let ext = if compiled_ty = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
+        let path = cstate.compilation_builddir_ml comp_opt in
+        let dest = (file_compile_ty, Hier.get_dest_file path ext h) in
         let src = (match hdesc.Module.File.intf_desc with
               None -> []
             | Some intf -> [Filetype.FileMLI,intf.Module.Intf.path]) @ [(Filetype.FileML, hdesc.Module.File.path)] in
         let m_deps = List.concat (List.map (fun module_dep ->
-            [(file_compile_ty, Hier.to_cmc compiled_ty (cstate.compilation_builddir_ml comp_opt) module_dep);
-             (Filetype.FileCMI, Hier.to_cmi (cstate.compilation_builddir_ml comp_opt) module_dep)]
+            [(file_compile_ty, Hier.get_dest_file path ext module_dep);
+             (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep)]
           ) module_deps) in
         let internal_deps = List.assoc (comp_opt,compiled_ty) internal_libs_paths_all_modes in
         (dest,Compiled compiled_ty,comp_opt,src @ internal_deps @ m_deps)
@@ -355,10 +360,13 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
     | WithProf  -> cstate.compilation_linking_paths_p
   in
   let destTime = Filesystem.getModificationTime dest in
+  let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
+  let path = cstate.compilation_builddir_ml compileOpt in
   let depsTime =
     try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p)
-                (List.map (fun m -> Hier.to_cmc compiledType (cstate.compilation_builddir_ml compileOpt) m)
-                   compiled))
+                (List.map (fun m ->
+                     Hier.get_dest_file path ext m)
+                    compiled))
     with Not_found -> None
   in
   if depsTime <> None then (

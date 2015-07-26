@@ -190,16 +190,19 @@ let get_modules_desc bstate target toplevelModules =
 
   let targetPP = get_target_pp bstate target target.target_obits.target_pp in
 
-  let module_lookup_method = Hier.to_filename::Hier.to_generators @ [Hier.to_directory; Hier.to_interface] in
   let get_one hier =
     let moduleName = Hier.to_string hier in
     verbose Verbose "Analysing %s\n%!" moduleName;
-    let srcPath =
-      try Utils.find_choice_in_paths (file_search_paths hier) (List.map (fun f -> f hier) module_lookup_method)
-      with Utils.FilesNotFoundInPaths (paths, _) -> raise (Module.NotFound (paths, hier))
+    let file_entry =
+      let paths = (file_search_paths hier) in
+      try Hier.get_file_entry hier paths
+      with Not_found ->
+        raise (Module.NotFound (paths, hier))
     in
-    let srcDir = srcPath </> Modname.to_directory (Hier.leaf hier) in
-
+    let (srcPath,srcDir) =
+      match file_entry with
+      | Hier.FileEntry (s, d) | Hier.DirectoryEntry (s, d) | Hier.GeneratedFileEntry (s, d, _) -> (s, d)
+    in
     let module_desc_ty =
       if Filesystem.is_dir srcDir
       then (
@@ -222,31 +225,23 @@ let get_modules_desc bstate target toplevelModules =
         in
         Module.make_dir currentDir (List.map (fun m -> Hier.append hier m) modules)
       ) else (
-        let generators_files = List.map (fun gen_fun -> gen_fun hier srcPath) Hier.to_generators in
-        let generator_file = try
-            Some (List.find (fun file -> Filesystem.exists file) generators_files)
-          with Not_found -> None in
-        let srcPath =
-          match generator_file with
-          | None -> srcPath
-          | Some f ->
-            verbose Debug "  %s is a generator %s\n%!" moduleName (fp_to_string f);
-            let src_file = path_basename f in
+        let (srcPath, srcFile, intfFile) =
+          match file_entry with
+          | Hier.FileEntry (path, file) ->
+            (path, file, (Hier.ml_to_ext file Filetype.FileMLI))
+          | Hier.DirectoryEntry (path, file) ->
+            (path, file, (Hier.ml_to_ext file Filetype.FileMLI))
+          | Hier.GeneratedFileEntry (path, file, generated) ->
+            let src_file = path_basename file in
             let actual_src_path = Dist.get_build_exn (Dist.Target target.target_name) in
-            let gen = Generators.get_generator f in
-            let generated_files = gen.Generators.generated_files src_file in
-            if (List.exists (fun generated_file ->
-                let full_dest_file = actual_src_path </> generated_file in
-                not (Filesystem.exists full_dest_file) ||
-                ((Filesystem.getModificationTime full_dest_file) < (Filesystem.getModificationTime f))
-              ) generated_files) then begin
-              let w = Generators.run (actual_src_path </> (chop_extension src_file)) f in
-              print_warnings w
-            end;
-            actual_src_path
+            let full_dest_file = actual_src_path </> generated in
+            let intf_file = Hier.ml_to_ext full_dest_file Filetype.FileMLI in
+            if not (Filesystem.exists full_dest_file) ||
+               ((Filesystem.getModificationTime full_dest_file) < (Filesystem.getModificationTime file))
+            then
+              Generators.run (actual_src_path </> (chop_extension src_file)) file moduleName;
+            (actual_src_path, full_dest_file, intf_file)
         in
-        let srcFile = Hier.to_filename hier srcPath in
-        let intfFile = Hier.to_interface hier srcPath in
         let modTime = Filesystem.getModificationTime srcFile in
         let hasInterface = Filesystem.exists intfFile in
         let intfModTime = Filesystem.getModificationTime intfFile in
@@ -290,11 +285,12 @@ let get_modules_desc bstate target toplevelModules =
         verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," allDeps);
         let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
             try
-              let _ = Utils.find_choice_in_paths (file_search_paths hier)
-                  (List.map (fun x -> x (Hier.of_modname dep)) module_lookup_method)
-              in true
+              let entry = Hier.get_file_entry (Hier.of_modname dep) (file_search_paths hier) in
+              match entry with
+              | Hier.DirectoryEntry (p,_) | Hier.FileEntry (p,_) | Hier.GeneratedFileEntry (p,_,_) ->
+                List.mem p (file_search_paths hier)
             with
-              Utils.FilesNotFoundInPaths _ -> false
+              Not_found -> false
           ) allDeps in
         verbose Debug "  %s internally depends on %s\n%!" moduleName (String.concat "," (List.map Modname.to_string cwdDepsInDir));
         let use_thread =
@@ -314,7 +310,7 @@ let get_modules_desc bstate target toplevelModules =
           else None
         in 
         Module.make_file use_thread srcFile modTime 
-          (if generator_file = None then SimpleModule else GeneratedModule)
+          (match file_entry with Hier.FileEntry _ -> SimpleModule | Hier.GeneratedFileEntry _ -> GeneratedModule)
           intfDesc pp
           (target.target_obits.target_oflags @ 
            (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier)))))

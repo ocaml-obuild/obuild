@@ -18,7 +18,7 @@ exception UnknownOption of string
 
 let env_variables = [
   "ocamlopt"; "ocamlc"; "ocaml"; "ocamldep"; "ocamldoc"; "ocamlyacc"; "ocamllex"; "ocamlmklib";
-  "ocamlmktop"; "cc"; "ranlib"; "ar"; "ld"; "pkg-config"; "camlp4"; "findlib-path"
+  "ocamlmktop"; "cc"; "ranlib"; "ar"; "ld"; "pkg-config"; "camlp4"; "findlib-path"; "atdgen"
 ]
 
 let env_ =
