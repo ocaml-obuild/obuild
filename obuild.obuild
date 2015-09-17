@@ -47,26 +47,26 @@ extra-srcs: bootstrap
 
 library obuild
   modules: obuild
-  build-deps: unix, obuild.ext
+  build-deps: unix, str, obuild.ext
   library ext
     modules: ext
-    build-deps: unix
+    build-deps: unix, str
 
 # a comment
 executable obuild
   main-is: main.ml
   src-dir: src
-  build-deps: unix, obuild
+  build-deps: unix, str, obuild
 
 executable obuild-simple
   main-is: simple.ml
   src-dir: src
-  build-deps: unix, obuild
+  build-deps: unix, str, obuild
 
 executable obuild-from-oasis
   main-is: assimilate_oasis.ml
   src-dir: tools
-  build-deps: obuild, obuild.ext
+  build-deps: str, obuild, obuild.ext
   installable: false
 
 test dag

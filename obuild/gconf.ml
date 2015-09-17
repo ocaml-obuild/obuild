@@ -8,6 +8,7 @@ type t = {
   mutable parallel_jobs : int;
   mutable dump_dot : bool;
   mutable color : bool;
+  mutable bash : bool;
   mutable bin_annot : bool;
   mutable short_path : bool;
   mutable ocamlmklib : bool;
@@ -18,7 +19,8 @@ exception UnknownOption of string
 
 let env_variables = [
   "ocamlopt"; "ocamlc"; "ocaml"; "ocamldep"; "ocamldoc"; "ocamlyacc"; "ocamllex"; "ocamlmklib";
-  "ocamlmktop"; "cc"; "ranlib"; "ar"; "ld"; "pkg-config"; "camlp4"; "findlib-path"; "atdgen"
+  "ocamlmktop"; "cc"; "ranlib"; "ar"; "ld"; "pkg-config"; "camlp4"; "findlib-path"; "atdgen";
+  "bash"
 ]
 
 let env_ =
@@ -77,6 +79,7 @@ let defaults = {
   parallel_jobs = 2;
   dump_dot      = false;
   color         = false;
+  bash          = false;
   bin_annot     = true;
   short_path    = false;
   ocamlmklib    = true;

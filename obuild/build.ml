@@ -1,5 +1,6 @@
 open Ext.Fugue
 open Ext.Filepath
+open Ext.Bash
 open Ext
 open Types
 open Helper
@@ -129,6 +130,8 @@ let compile_c task_index task c_file bstate task_context dag =
      let (nb_step,nb_step_len) = get_nb_step dag in
      verbose Report "[%*d of %d] Compiling C %-30s%s\n%!" nb_step_len task_index nb_step (fn_to_string c_file)
        (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+     bash_comment (sprintf "[%*d of %d] Compiling C %-30s%s%!" nb_step_len task_index nb_step (fn_to_string c_file)
+       (if reason <> "" then "    ( " ^ reason ^ " )" else ""));
      let cflags = cbits.target_cflags in
      Scheduler.AddProcess (task, runCCompile bstate.bstate_config c_dir_spec cflags c_file)
   )
@@ -176,6 +179,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
   if ops <> [] then (
     let (nb_step,nb_step_len) = get_nb_step dag in
     verbose Report "[%*d of %d] Packing %-30s%s\n%!" nb_step_len task_index nb_step (Hier.to_string h) reason;
+    bash_comment (sprintf "[%*d of %d] Packing %-30s%s%!" nb_step_len task_index nb_step (Hier.to_string h) reason);
     Scheduler.AddTask (task, ops)
   ) else
     Scheduler.FinishTask task
@@ -287,6 +291,8 @@ let compile_module task_index task is_intf h bstate task_context dag =
     let (nb_step, nb_step_len) = get_nb_step dag in
     verbose Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb (Hier.to_string h)
       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+    bash_comment (sprintf "[%*d of %d] %s %-30s%s%!" nb_step_len task_index nb_step verb (Hier.to_string h)
+      (if reason <> "" then "    ( " ^ reason ^ " )" else ""));
     Scheduler.AddTask (task, all_fun_lists)
 
 let wait_for_files cdep_files =
@@ -375,6 +381,8 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       if is_lib target then LinkingLibrary else LinkingExecutable in
     verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
       (if is_lib target then "library" else "executable") (fp_to_string dest);
+    bash_comment (sprintf "[%*d of %d] Linking %s %s%!" nb_step_len task_index nb_step
+      (if is_lib target then "library" else "executable") (fp_to_string dest));
     [(fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
          link_type compileOpt useThreadLib systhread cclibs buildDeps compiled dest)]
   ) else []

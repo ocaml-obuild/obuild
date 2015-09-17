@@ -2,6 +2,7 @@ open Types
 open Ext
 open Ext.Filepath
 open Ext.Fugue
+open Ext.Bash
 open Process
 open Prepare
 open Gconf
@@ -139,7 +140,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread syst
          let real = fp_to_string dest in
          let basename = Filename.basename real in
          if not (file_or_link_exists basename)
-         then Unix.symlink real basename)
+         then Unix.symlink real basename; bash_symlink real basename;)
   in
   let prog = match buildMode with
     | Native    -> Prog.getOcamlOpt ()
