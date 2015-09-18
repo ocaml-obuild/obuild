@@ -55,7 +55,7 @@ let bash_cmd args =
 
 let bash_comment str = bash_write ("\n# " ^ str)
 
-let bash_mkdir str perm = bash_write ("mkdir -m " ^ (sprintf "%o" perm) ^ " " ^ str)
+let bash_mkdir str perm = bash_write ("mkdir -p -m " ^ (sprintf "%o" perm) ^ " " ^ str)
 
 let bash_symlink target link_name = bash_write ("ln -s " ^ target ^ " " ^ link_name)
 
