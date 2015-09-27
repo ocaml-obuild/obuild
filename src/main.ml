@@ -349,8 +349,16 @@ let defaultMain () =
     let cmd = List.hd args in
 
     let ocamlCfg = Prog.getOcamlConfig () in
-    let stdlibPath = fp_to_string (fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg)) in
-    if gconf.bash then Bash.init_bash (Gconf.get_env "bash") cmd stdlibPath else (); 
+    if gconf.bash then 
+        begin
+        FindlibConf.load ();
+        let stdlibPath = match FindlibConf.get_destdir () with
+            | None -> if gconf.bash then failwith "Cannot find dest_dir in with ocamlfind" else ""
+            | Some str -> fp_to_string (str)
+        in
+        Bash.init_bash (Gconf.get_env "bash") cmd stdlibPath;
+        end
+    else ();
 
     try
         let mainF = List.assoc cmd knownCommands in
