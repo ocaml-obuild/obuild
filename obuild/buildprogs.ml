@@ -26,7 +26,7 @@ let annotToOpts = function
 let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
   let dstDir = dirSpec.dst_dir in
   let entry = Hier.get_file_entry modhier [dirSpec.src_dir] in
-  let src_file = Hier.get_src_file dstDir entry in
+  let src_file = Hier.get_src_file dirSpec.src_dir entry in
   let compileOpt = if buildMode = Interface && compileOpt = WithProf then WithDebug else compileOpt in
   Filesystem.mkdirSafeRecursive dstDir 0o755;
   let (prog, srcFile, dstFile) =
