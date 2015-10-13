@@ -44,7 +44,7 @@ let target_options_defaults = [
   ("library-debugging", false);
   ("library-native", true);
   ("library-bytecode", true);
-  ("library-plugin", true);
+  ("library-plugin", (if Sys.os_type = "Unix" then true else false));
   ("build-benchs", false);
   ("build-tests", false);
   ("build-examples", false);
