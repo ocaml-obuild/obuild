@@ -55,13 +55,32 @@ let runOcamldep dopt srcFile =
 (* TODO
  * gcc escape spaces in filename with a \, tweak strings_words_noempty
  * to take that in consideration.
- *)
+*)
+let joinLines s =
+  let s_end = String.length s in
+  let rec replace start =
+    try
+      let index = String.index_from s start '\\' in
+      if index < s_end - 1 then
+        if (String.get s (index + 1)) = '\n' then begin
+          String.set s index  ' ';
+          String.set s (index + 1) ' ';
+          replace (index + 2)
+        end
+        else
+          replace (index + 1)
+      else
+        s
+    with Not_found -> s
+  in
+  replace 0
+
 let runCCdep srcDir files : (filename * filepath list) list =
-    let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
-    match Process.run args with
-    | Process.Failure err     -> raise (BuildCDepAnalyzeFailed err)
-    | Process.Success (out,_,_) ->
-        parse_output_KsemiVs
-            (fun _ -> raise (BuildCDepAnalyzeFailed "missing semicolon in gcc dependency output"))
-            fn fp out
+  let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
+  match Process.run args with
+  | Process.Failure err     -> raise (BuildCDepAnalyzeFailed err)
+  | Process.Success (out,_,_) ->
+    parse_output_KsemiVs
+      (fun _ -> raise (BuildCDepAnalyzeFailed "missing semicolon in gcc dependency output"))
+      fn fp (joinLines out)
 
