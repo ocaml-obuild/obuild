@@ -140,8 +140,21 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
   (* get all the modules defined at level h+1 *)
   let modules_task = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [task] in
   let filter_modules t : Hier.t option = match t with
-    | (CompileC _) | (CompileInterface _) | (LinkTarget _) | (CheckTarget _) -> None
+    | (CompileC _) | (LinkTarget _) | (CheckTarget _) -> None
     | (CompileDirectory m) | (CompileModule m) -> if Hier.lvl m = (Hier.lvl h + 1) then Some m else None
+    | (CompileInterface m) ->
+      if Hier.lvl m = (Hier.lvl h + 1) then begin
+        let fe = Hier.get_file_entry_maybe m in
+        match fe with
+          None -> None
+        | Some e -> match e with
+          Hier.FileEntry (_, f) ->
+            if (Filetype.of_filepath f) = Filetype.FileMLI then
+              Some m
+            else None
+          | _ -> None
+      end
+      else None
   in
   let modules = List.rev $ list_filter_map filter_modules modules_task in
   let all_modes = get_all_modes target in

@@ -39,11 +39,14 @@ let runOcamldep dopt srcFile =
     try Modname.wrap f
     with _ -> raise (BuildDepAnalyzeFailed ("ocamldep returned a bad module name " ^ f))
   in
-  let mlFile = fp_to_string srcFile in
+  let fileType = Filetype.of_filepath srcFile in
+  let baseFile = fp_to_string srcFile in
+  let files = if fileType = Filetype.FileML then [baseFile; baseFile ^ "i"]
+    else [baseFile] in
   let args = [Prog.getOcamlDep ()]
              @ (Utils.to_include_path_options dopt.dep_includes)
              @ (Pp.to_params dopt.dep_pp)
-             @ ["-modules"; mlFile; mlFile ^ "i"] in
+             @ ["-modules"] @ files in
   match Process.run args with
   | Process.Failure er -> raise (BuildDepAnalyzeFailed er)
   | Process.Success (out,_,_) ->

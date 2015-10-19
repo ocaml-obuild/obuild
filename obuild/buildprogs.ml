@@ -66,13 +66,18 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
 let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
   let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
   let ext = if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
-
+  let ext_f = function
+    | Filetype.FileML -> ext
+    | Filetype.FileMLI -> Filetype.FileCMI
+    | _ -> (* It should not happen *)
+      if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX
+  in
   Filesystem.mkdirSafeRecursive dstDir 0o755;
   let args = [prog]
              @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; Hier.to_string x ] else []) packOpt
              @ annotToOpts annotMode
              @ [ "-pack"; "-o"; fp_to_string (Hier.get_dest_file dstDir ext dest); ]
-             @ List.map (fun m -> fp_to_string (Hier.get_dest_file dstDir ext m)) modules
+             @ List.map (fun m -> fp_to_string (Hier.get_dest_file_ext dstDir m ext_f)) modules
   in
   Process.make args
 
