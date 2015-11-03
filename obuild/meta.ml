@@ -353,6 +353,18 @@ module Token = struct
           parse pkg_name nacc xs3
         | _ -> raise (MetaParseError (pkg_name, "parsing archive failed"))
       )
+    | ID "plugin" :: xs -> (
+        let (preds, xs2) = parse_predicate_list pkg_name "plugin" xs in
+        let preds = Predicate.Plugin :: preds in
+        match xs2 with
+        | PLUSEQ :: S v :: xs3 ->
+          let nacc = { acc with Pkg.append_archives = acc.Pkg.append_archives @ [(preds, v)] } in
+          parse pkg_name nacc xs3
+        | EQ :: S v :: xs3 ->
+          let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [(preds, v)] } in
+          parse pkg_name nacc xs3
+        | _ -> raise (MetaParseError (pkg_name, "parsing plugin failed"))
+      )
     | ID "preprocessor" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.preprocessor = v } xs
     | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs
     | ID "exists_if" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.exists_if = v } xs
