@@ -57,6 +57,25 @@ let () =
   let netstring_byte_nonetaccel = Meta.Pkg.get_archive_with_filter (None, netstring) (Libname.of_string "netstring")
       [Meta.Predicate.Byte; (Meta.Predicate.Unknown "nonetaccel")] in
   assumeEq "netstring byte nonetaccel" "archive(byte) = [netstring.cma]" (archives_to_string netstring_byte_nonetaccel);
+  let meta_num = 
+    "# Specification for the \"num\" library:\n\
+     requires = \"num.core\"\n\
+     requires(toploop) = \"num.core,num-top\"\n\
+     version = \"[distributed with Ocaml]\"\n\
+     description = \"Arbitrary-precision rational arithmetic\"\n\
+     package \"core\" (\n\
+    \  directory = \"^\"\n\
+    \  version = \"[internal]\"\n\
+    \  browse_interfaces = \" Unit name: Arith_flags Unit name: Arith_status Unit name: Big_int Unit name: Int_misc Unit name: Nat Unit name: Num Unit name: Ratio \"\n\
+    \  archive(byte) = \"nums.cma\"\n\
+    \  archive(native) = \"nums.cmxa\"\n\
+    \  plugin(byte) = \"nums.cma\"\n\
+    \  plugin(native) = \"nums.cmxs\"\n\
+     )\n" in
+  let num = Meta.parse (Filepath.fp "num") meta_num "num" in
+  let num_answer = Meta.Pkg.get_archive_with_filter (None, num) (Libname.of_string "num.core")
+      [Meta.Predicate.Native; Meta.Predicate.Plugin] in  
+  assumeEq "num plugin native" "archive(plugin,native) = [nums.cmxs]" (archives_to_string num_answer);
   let meta_ctypes = 
     "\
   version = \"0.4\"\n\

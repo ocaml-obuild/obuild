@@ -153,7 +153,31 @@ let get_dest_file dst_dir ext hier =
       let path = add_prefix dst_dir hier in
       path </> (filename <.> Filetype.to_string ext)
 
+let get_dest_file_ext dst_dir hier ext_f =
+  let entry = Hashtbl.find hiers hier in
+  match entry with
+    | FileEntry (_,f) ->
+      let filename = path_basename f in
+      let filetype = Filetype.of_filepath f in
+      let path = add_prefix dst_dir hier in
+      path </> ((chop_extension filename) <.> Filetype.to_string (ext_f filetype))
+    | GeneratedFileEntry (_,_,filename) ->
+      let path = add_prefix dst_dir hier in
+      let filetype = Filetype.of_filename filename in
+      path </> ((chop_extension filename) <.> Filetype.to_string (ext_f filetype))
+    | DirectoryEntry (_,f) ->
+      let filename = path_basename f in
+      let path = add_prefix dst_dir hier in
+      let filetype = Filetype.of_filepath f in
+      path </> (filename <.> Filetype.to_string (ext_f filetype))
+
 let to_interface hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
+
+let get_file_entry_maybe hier =
+  if (Hashtbl.mem hiers hier) then
+    Some (Hashtbl.find hiers hier)
+  else
+    None
 
 let get_file_entry hier paths =
   if (Hashtbl.mem hiers hier) then

@@ -94,5 +94,9 @@ let show exn =
     | Ext.Filepath.InvalidFilename f ->
         error "the filename \"%s\" is not valid, it contains a directory separator\n" f;
         exit 30
+    | Utils.FileNotFoundInPaths (ds,f) ->
+      error "File %s not found in directories %s\n" (fn_to_string f)
+        (Utils.showList "; " fp_to_string ds);
+      exit 40
     | Exit              -> ()
     | e                 -> eprintf "uncaught exception\n"; raise e

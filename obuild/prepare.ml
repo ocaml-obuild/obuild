@@ -217,6 +217,11 @@ let get_modules_desc bstate target toplevelModules =
                 Some (Modname.of_directory f)
             else (match Filetype.of_filepath fp with
                 | Filetype.FileML  -> Some (Modname.of_filename f)
+                | Filetype.FileMLI  ->
+                  if (Filesystem.exists (srcDir </> ((chop_extension f) <.> "ml"))) then
+                    None
+                  else (* lonely mli *)
+                    Some (Modname.of_filename f)
                 | Filetype.FileOther s -> if Generators.is_generator_ext s then Some (Modname.of_filename f)
                   else None
                 | _                -> None
@@ -373,7 +378,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
           let mStep = match mdep with
             | Module.DescFile f ->
               (* if it is a .mli only module ... *)
-              if not ((Filesystem.exists f.Module.File.path)) && (f.Module.File.type_ = SimpleModule) then
+              if  (Filetype.of_filepath f.Module.File.path) = Filetype.FileMLI then
                 CompileInterface m
               else begin
                 if Module.has_interface mdep then (
@@ -387,7 +392,12 @@ let prepare_target_ bstate buildDir target toplevelModules =
                   (*printf "  %s depends %s" (string_of_compilation_step mStep) ((Compi *)
                   let depChild = Hashtbl.find modulesDeps dirChild in
                   let cStep = match depChild with
-                    | Module.DescFile _ -> CompileModule dirChild
+                    | Module.DescFile f ->
+                      (* if it is a .mli only module ... *)
+                      if  (Filetype.of_filepath f.Module.File.path) = Filetype.FileMLI then
+                        CompileInterface dirChild
+                      else
+                        CompileModule dirChild
                     | Module.DescDir _ -> CompileDirectory dirChild
                   in
                   Dag.addEdge mStep cStep stepsDag
