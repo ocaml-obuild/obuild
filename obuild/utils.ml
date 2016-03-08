@@ -42,8 +42,7 @@ let to_include_path_options paths =
 
 let showList sep f l = String.concat sep (List.map f l)
 
-(* hacky way to detect windows *)
-let is_windows = Filename.dir_sep <> "/"
+let isWindows = Sys.os_type = "Win32"
 
 let to_exe_name mode build name =
     let ext = extDP mode in
@@ -52,14 +51,15 @@ let to_exe_name mode build name =
         | ByteCode -> ".byte"
         | Native   -> if (Gconf.get_target_option "executable-as-obj") then ".o" else ""
         in
-    fn (name ^ ext ^ ext2 ^ (if is_windows then ".exe" else ""))
+    fn (name ^ ext ^ ext2 ^ (if isWindows then ".exe" else ""))
 
 exception FileNotFoundInPaths of (filepath list * filename)
 exception FilesNotFoundInPaths of (filepath list * filepath list)
 
 let get_system_paths () =
-    try List.map fp (string_split ':' (Sys.getenv "PATH"))
-    with Not_found -> List.map fp ["/usr/bin"; "/usr/local/bin"]
+  let sep = if isWindows then ';' else ':' in
+  try List.map fp (string_split sep (Sys.getenv "PATH"))
+  with Not_found -> List.map fp ["/usr/bin"; "/usr/local/bin"]
 
 let find_in_paths paths name =
     try List.find (fun p -> Filesystem.exists (p </> name)) paths
