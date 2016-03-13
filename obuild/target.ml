@@ -79,22 +79,24 @@ type target_cbits =
     ; target_cpkgs     : cdependency list (* pkg-config name *)
     }
 
-type target_obits =
-    { target_srcdir    : filepath list
-    ; target_builddeps : dependency list
-    ; target_oflags    : string list
-    ; target_pp        : Pp.Type.t option
-    ; target_extradeps : (Hier.t * Hier.t) list
-    ; target_stdlib    : target_stdlib
-    }
+type target_obits = {
+  target_srcdir    : filepath list;
+  target_builddeps : dependency list;
+  target_oflags    : string list;
+  target_pp        : Pp.Type.t option;
+  target_ppx       : string list;
+  target_extradeps : (Hier.t * Hier.t) list;
+  target_stdlib    : target_stdlib;
+}
 
-type target_extra =
-    { target_extra_objects   : string list     (* targets of those extra settings *)
-    ; target_extra_builddeps : dependency list
-    ; target_extra_oflags    : string list
-    ; target_extra_cflags    : string list
-    ; target_extra_pp        : Pp.Type.t option
-    }
+type target_extra = {
+  target_extra_objects   : string list;     (* targets of those extra settings *)
+  target_extra_builddeps : dependency list;
+  target_extra_oflags    : string list;
+  target_extra_cflags    : string list;
+  target_extra_pp        : Pp.Type.t option;
+  target_extra_ppx       : string list;
+}
 
 type target =
     { target_name        : Name.t
@@ -115,14 +117,15 @@ let newTargetCbits =
     ; target_cpkgs     = []
     }
 
-let newTargetObits =
-    { target_oflags    = []
-    ; target_builddeps = []
-    ; target_pp        = None
-    ; target_srcdir    = [currentDir]
-    ; target_extradeps = []
-    ; target_stdlib    = Stdlib_Standard
-    }
+let newTargetObits = {
+  target_oflags    = [];
+  target_builddeps = [];
+  target_pp        = None;
+  target_ppx       = [];
+  target_srcdir    = [currentDir];
+  target_extradeps = [];
+  target_stdlib    = Stdlib_Standard;
+}
 
 let newTarget n ty buildable installable =
     { target_name        = n
@@ -134,13 +137,14 @@ let newTarget n ty buildable installable =
     ; target_obits       = newTargetObits
     }
 
-let newTargetExtra objs =
-    { target_extra_objects   = objs
-    ; target_extra_builddeps = []
-    ; target_extra_oflags    = []
-    ; target_extra_cflags    = []
-    ; target_extra_pp        = None
-    }
+let newTargetExtra objs = {
+  target_extra_objects   = objs;
+  target_extra_builddeps = [];
+  target_extra_oflags    = [];
+  target_extra_cflags    = [];
+  target_extra_pp        = None;
+  target_extra_ppx       = [];
+}
 
 let get_target_name target = Name.to_string target.target_name
 let get_target_dest_name target = Name.get_dest_name target.target_name

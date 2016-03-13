@@ -274,6 +274,20 @@ let get_modules_desc bstate target toplevelModules =
             Pp.append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
         in
 
+        let ppx = match target.target_obits.target_ppx with
+          | [] -> []
+          | l ->
+            let p = List.hd l in
+            let (fp_ppx, ppx_meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta (Libname.of_string p) in
+            let ppx = ppx_meta.Meta.Pkg.ppx in
+            if (ppx = "") then
+              failwith (p ^ " is not a ppx!");
+            let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
+            let includePath = Meta.getIncludeDir stdlib (fp_ppx,ppx_meta) in
+            let full_path_ppx = (fp_to_string includePath) ^ "/" ^ ppx in
+            let res = ["-I"; fp_to_string includePath; "-ppx"; full_path_ppx] in
+            res
+        in
         verbose Debug "  %s has mtime %f\n%!" moduleName modTime;
         if hasInterface then
           verbose Debug "  %s has interface (mtime=%f)\n%!" moduleName intfModTime;
@@ -317,8 +331,8 @@ let get_modules_desc bstate target toplevelModules =
         Module.make_file use_thread srcFile modTime 
           (match file_entry with Hier.FileEntry _ -> SimpleModule | Hier.GeneratedFileEntry _ -> GeneratedModule)
           intfDesc pp
-          (target.target_obits.target_oflags @ 
-           (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier)))))
+          ((target.target_obits.target_oflags @
+           (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier))))) @ ppx)
           cwdDeps otherDeps
       )
     in
