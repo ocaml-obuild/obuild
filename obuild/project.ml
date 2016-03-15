@@ -107,6 +107,7 @@ let parse_per strict (acc: target_extra) line cont =
     | "build-deps" -> { acc with target_extra_builddeps = parse_deps Libname.of_string value @ acc.target_extra_builddeps }
     | "oflags"     -> { acc with target_extra_oflags = acc.target_extra_oflags @ string_words_noempty value }
     | "pp"         -> { acc with target_extra_pp = Some (Pp.Type.of_string value) }
+    | "ppx"        -> { acc with target_extra_ppx = acc.target_extra_ppx @ string_words_noempty value }
     | _            -> raise_if_strict strict ("unexpected item in : " ^ k); acc
 
 let parse_otarget t k value =
@@ -117,6 +118,7 @@ let parse_otarget t k value =
   | "src-dir"    -> Handled { t with target_srcdir    = List.map (fun p -> fp p) (Utils.parseCSV value) }
   | "preprocessor"
   | "pp"         -> Handled { t with target_pp = Some (Pp.Type.of_string value) }
+  | "ppx"        -> Handled { t with target_ppx = t.target_ppx @ string_words_noempty value }
   | "extra-deps" -> Handled { t with target_extradeps = t.target_extradeps @ parse_extra_dep value }
   | "oflags"     -> Handled { t with target_oflags = t.target_oflags @ string_words_noempty value }
   | "stdlib"     -> Handled { t with target_stdlib = parse_stdlib value }

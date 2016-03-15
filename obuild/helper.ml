@@ -19,7 +19,7 @@ let verbose lvl fmt =
         else ifprintf stdout fmt
 
 let support_color () =
-    if Utils.is_windows
+    if Utils.isWindows
         then false
     else if Unix.isatty Unix.stdout
         then Gconf.gconf.color

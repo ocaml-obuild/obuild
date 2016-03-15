@@ -83,14 +83,15 @@ let main () =
             ; target_clibpaths = List.rev !clibpaths
             ; target_cpkgs     = List.map (fun p -> (p, None)) !cpkgs (* no constraints *)
             }
-        ; target_obits =
-            { target_srcdir    = [!srcDir]
-            ; target_builddeps = List.map (fun p -> (p, None)) !depends (* no constraints *)
-            ; target_oflags    = []
-            ; target_pp        = None
-            ; target_extradeps = []
-            ; target_stdlib    = Stdlib_Standard
-            }
+        ; target_obits = {
+            target_srcdir    = [!srcDir];
+            target_builddeps = List.map (fun p -> (p, None)) !depends; (* no constraints *)
+            target_oflags    = [];
+            target_pp        = None;
+            target_ppx       = [];
+            target_extradeps = [];
+            target_stdlib    = Stdlib_Standard;
+          }
         ; target_buildable   = BoolConst true
         ; target_installable = BoolConst true
         ; target_extras      = []

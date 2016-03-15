@@ -17,6 +17,7 @@ let get_cache prog names =
     try
       let syspath = Utils.get_system_paths () in
       let found = list_findmap (fun n ->
+          let n = if Utils.isWindows then (n ^ ".exe") else n in
           if Filename.is_implicit n
           then (try
                   let found_path = Utils.find_in_paths syspath (fn n) in

@@ -77,6 +77,7 @@ module Pkg = struct
     description : string;
     exists_if   : string;
     preprocessor : string;
+    ppx : string;
     browse_interface : string;
     type_of_threads : string;
     archives    : (Predicate.t list * string) list;
@@ -92,6 +93,7 @@ module Pkg = struct
     directory        = "";
     description      = "";
     preprocessor     = "";
+    ppx              = "";
     linkopts         = [];
     browse_interface = "";
     type_of_threads  = "";
@@ -366,6 +368,7 @@ module Token = struct
         | _ -> raise (MetaParseError (pkg_name, "parsing plugin failed"))
       )
     | ID "preprocessor" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.preprocessor = v } xs
+    | ID "ppx" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.ppx = v } xs
     | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs
     | ID "exists_if" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.exists_if = v } xs
     | ID "error" :: LPAREN :: xs -> (
