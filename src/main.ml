@@ -5,6 +5,7 @@ open Ext
 open Obuild.Types
 open Obuild.Helper
 open Obuild.Gconf
+open Obuild.Analyze
 open Obuild
 
 let programName = "obuild"
@@ -94,8 +95,9 @@ let mainBuild argv =
     | _  ->
       let targets = List.map Target.Name.of_string !anon in
       Dag.subset project.Analyze.project_targets_dag targets
-  in
-  Build.build_dag bstate proj_file dag
+  in (
+      Build.build_dag bstate proj_file dag
+    )
 
 let mainClean _ =
   if Filesystem.exists (Dist.get_path ())
@@ -232,6 +234,16 @@ let mainGet argv =
                  | "name"    -> printf "%s\n" proj_file.Project.name;
                  | "version" -> printf "%s\n" proj_file.Project.version;
                  | "license" -> printf "%s\n" proj_file.Project.license;
+				 | "ocaml_extra_args" -> (match proj_file.Project.ocaml_extra_args with
+					| Some x -> List.iter (function y -> printf "%s\n" y) x
+					| None -> printf "None\n");
+				 | "configure_script" -> (match proj_file.Project.configure_script with
+					| Some x -> printf "%s\n" (fp_to_string (x))
+					| None -> printf "None\n");
+                 | "extra_srcs" -> List.iter (function x -> printf "%s\n" (fp_to_string (x))) proj_file.Project.extra_srcs;
+                 (*| "extra_args" -> match proj_file.Project.ocaml_extra_args with 
+					| None -> printf "None\n";
+					| Some v -> List.iter (function x -> printf "%s\n" x) v;*)
                  | _         -> eprintf "error: unknown field %s\n" field; exit 1
                  )
     | _       -> eprintf "usage: obuild get <field>\n"; exit 1
@@ -278,6 +290,7 @@ let parseGlobalArgs () =
         | []    -> failwith (optName ^ " expect a parameter")
         | x::xs -> f x; xs
         in
+
     let rec processGlobalArgs l =
         match l with
         | x::xs -> if String.length x > 0 && x.[0] = '-'
@@ -294,6 +307,7 @@ let parseGlobalArgs () =
                             | "-vvv"
                             | "--debug+"
                             | "--debug-with-cmd" -> gconf.verbosity <- DebugPlus; xs
+                            | "--bash" -> expect_param1 x xs (fun p -> (gconf.bash <- true; Gconf.set_env "bash" p;))
                             | "-q" (* for quiet *)
                             | "--silent"  -> gconf.verbosity <- Silent; xs
                             | "--strict"  -> gconf.strict    <- true; xs
@@ -339,6 +353,19 @@ let defaultMain () =
     );
 
     let cmd = List.hd args in
+
+    let ocamlCfg = Prog.getOcamlConfig () in
+    if gconf.bash then 
+        begin
+        FindlibConf.load ();
+        let stdlibPath = match FindlibConf.get_destdir () with
+            | None -> if gconf.bash then failwith "Cannot find dest_dir in with ocamlfind" else ""
+            | Some str -> fp_to_string (str)
+        in
+        Bash.init_bash (Gconf.get_env "bash") cmd stdlibPath;
+        end
+    else ();
+
     try
         let mainF = List.assoc cmd knownCommands in
         mainF args

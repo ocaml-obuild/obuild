@@ -1,6 +1,7 @@
 open Printf
 open Fugue
 open Filepath
+open Bash
 
 exception UnexpectedFileType of string
 exception WriteFailed
@@ -96,7 +97,7 @@ let mkdirSafe path perm =
     then (if Sys.is_directory (fp_to_string path)
             then false
             else failwith ("directory " ^ (fp_to_string path) ^ " cannot be created: file already exists"))
-    else (Unix.mkdir (fp_to_string path) perm; true)
+    else (Unix.mkdir (fp_to_string path) perm; Bash.bash_mkdir (fp_to_string path) perm; true)
 
 let mkdirSafe_ path perm =
     let (_: bool) = mkdirSafe path perm in
