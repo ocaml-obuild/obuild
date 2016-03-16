@@ -1,5 +1,7 @@
 open Helper
 open Gconf
+open Ext.Bash
+open Ext
 
 type output = {
   buf : Buffer.t;
@@ -29,6 +31,7 @@ let make args =
       let _ = String.index s ' ' in "\"" ^ s ^ "\""
     with Not_found -> s in
   verbose DebugPlus "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
+  bash_cmd args;
   let (r1,w1) = Unix.pipe () in
   let (r2,w2) = Unix.pipe () in
   let argv = Array.of_list args in
