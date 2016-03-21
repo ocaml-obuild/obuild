@@ -77,7 +77,8 @@ module Pkg = struct
     description : string;
     exists_if   : string;
     preprocessor : string;
-    ppx : string;
+    ppx         : (Predicate.t list * string) option;
+    ppxopt      : (Predicate.t list * string) option;
     browse_interface : string;
     type_of_threads : string;
     archives    : (Predicate.t list * string) list;
@@ -93,7 +94,8 @@ module Pkg = struct
     directory        = "";
     description      = "";
     preprocessor     = "";
-    ppx              = "";
+    ppx              = None;
+    ppxopt           = None;
     linkopts         = [];
     browse_interface = "";
     type_of_threads  = "";
@@ -368,7 +370,20 @@ module Token = struct
         | _ -> raise (MetaParseError (pkg_name, "parsing plugin failed"))
       )
     | ID "preprocessor" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.preprocessor = v } xs
-    | ID "ppx" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.ppx = v } xs
+    | ID "ppx" :: xs -> (
+        let (preds, xs2) = parse_predicate_list pkg_name "ppx" xs in
+        match xs2 with
+        | EQ :: S v :: xs3 ->
+          parse pkg_name { acc with Pkg.ppx = Some (preds, v)} xs3
+        | _ -> raise (MetaParseError (pkg_name, "parsing ppx failed"))
+      )
+    | ID "ppxopt" :: xs -> (
+        let (preds, xs2) = parse_predicate_list pkg_name "ppxopt" xs in
+        match xs2 with
+        | EQ :: S v :: xs3 ->
+          parse pkg_name { acc with Pkg.ppxopt = Some (preds, v)} xs3
+        | _ -> raise (MetaParseError (pkg_name, "parsing ppxopt failed"))
+      )
     | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs
     | ID "exists_if" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.exists_if = v } xs
     | ID "error" :: LPAREN :: xs -> (

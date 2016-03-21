@@ -274,19 +274,40 @@ let get_modules_desc bstate target toplevelModules =
             Pp.append targetPP (get_syntax_pp bstate preprocessor (List.map fst extraDeps))
         in
 
+        let rec ppx_to_flags p =
+          let full_path include_path name =
+            match name.[0] with
+            | '.' -> (fp_to_string include_path) ^ "/" ^ name
+              | _ -> name
+          in
+          let libname = Libname.of_string p in
+          let (fp_ppx, ppx_meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta libname in
+          let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
+          let includePath = Meta.getIncludeDir stdlib (fp_ppx,ppx_meta) in
+          let pkg = Meta.Pkg.find libname.Libname.subnames ppx_meta in
+          let ppx = pkg.Meta.Pkg.ppx in
+          let ppxopt = pkg.Meta.Pkg.ppxopt in
+          match (ppx,ppxopt) with
+          | None,None -> failwith (p ^ " is not a ppx!");
+          | Some (preds,name), None ->
+            let ppx_name = match ppx with Some (preds, name) -> name
+                                        | _ -> failwith (p ^ " is not a ppx!")
+            in
+            (fp_to_string includePath, full_path includePath ppx_name)
+          | None, Some (preds,name) ->
+            let ppxargs = string_split ',' name in
+            let (include_path, ppx) = ppx_to_flags (List.hd ppxargs) in
+            (include_path, ppx ^ " " ^
+                           (String.concat " "
+                              (List.map (fun a -> full_path includePath a)
+                                 (List.tl ppxargs))))
+          | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ p)
+        in
         let ppx = match target.target_obits.target_ppx with
           | [] -> []
-          | l ->
-            let p = List.hd l in
-            let (fp_ppx, ppx_meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta (Libname.of_string p) in
-            let ppx = ppx_meta.Meta.Pkg.ppx in
-            if (ppx = "") then
-              failwith (p ^ " is not a ppx!");
-            let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
-            let includePath = Meta.getIncludeDir stdlib (fp_ppx,ppx_meta) in
-            let full_path_ppx = (fp_to_string includePath) ^ "/" ^ ppx in
-            let res = ["-I"; fp_to_string includePath; "-ppx"; full_path_ppx] in
-            res
+          | l -> List.flatten (List.map (fun p ->
+              let (inc,ppx) = ppx_to_flags p in
+              ["-I"; inc; "-ppx"; ppx]) l) 
         in
         verbose Debug "  %s has mtime %f\n%!" moduleName modTime;
         if hasInterface then
