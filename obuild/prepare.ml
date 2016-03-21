@@ -279,13 +279,17 @@ let get_modules_desc bstate target toplevelModules =
           | '.' -> (fp_to_string include_path) ^ "/" ^ name
           | _ -> name
         in
-        let rec ppx_to_flags libname =
-          let (fp_ppx, ppx_meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta libname in
-          let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
-          let includePath = Meta.getIncludeDir stdlib (fp_ppx,ppx_meta) in
-          let pkg = Meta.Pkg.find libname.Libname.subnames ppx_meta in
+        let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
+        let get_ppx_ppxopt fpath meta libname = 
+          let includePath = Meta.getIncludeDir stdlib (fpath,meta) in
+          let pkg = Meta.Pkg.find libname.Libname.subnames meta in
           let ppx = pkg.Meta.Pkg.ppx in
           let ppxopt = pkg.Meta.Pkg.ppxopt in
+          (includePath, ppx, ppxopt)
+        in
+        let rec ppx_to_flags libname =
+          let (fp_ppx, ppx_meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta libname in
+          let (includePath, ppx, ppxopt) = get_ppx_ppxopt fp_ppx ppx_meta libname in
           match (ppx,ppxopt) with
           | None,None -> failwith ((Libname.to_string libname) ^ " is not a ppx!");
           | Some (preds,name), None ->
@@ -303,25 +307,23 @@ let get_modules_desc bstate target toplevelModules =
           | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ (Libname.to_string libname))
         in
         let ppx =
-          let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
           let get_ppxs_ deps = list_filter_map (fun (dep_name,_) ->
-              let (fpath, meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta dep_name in
-              let includePath = Meta.getIncludeDir stdlib (fpath,meta) in
-              let pkg = Meta.Pkg.find dep_name.Libname.subnames meta in
-              let ppx = pkg.Meta.Pkg.ppx in
-              let ppxopt = pkg.Meta.Pkg.ppxopt in
-              match (ppx,ppxopt) with
-              | None, None -> None
-              | Some (preds,name), None ->
-                Some (fp_to_string includePath, full_path includePath name)
-              | None, Some (preds,name) ->
-                let ppxargs = string_split ',' name in
-                let (include_path, ppx) = ppx_to_flags (Libname.of_string (List.hd ppxargs)) in
-                Some (include_path, ppx ^ " " ^
-                               (String.concat " "
-                                  (List.map (fun a -> full_path includePath a)
-                                     (List.tl ppxargs))))
-              | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ (Libname.to_string dep_name))
+              try 
+                let (fpath, meta) = Hashtbl.find bstate.bstate_config.Analyze.project_pkg_meta dep_name.Libname.main_name in
+                let (includePath, ppx, ppxopt) = get_ppx_ppxopt fpath meta dep_name in
+                match (ppx,ppxopt) with
+                | None, None -> None
+                | Some (preds,name), None ->
+                  Some (fp_to_string includePath, full_path includePath name)
+                | None, Some (preds,name) ->
+                  let ppxargs = string_split ',' name in
+                  let (include_path, ppx) = ppx_to_flags (Libname.of_string (List.hd ppxargs)) in
+                  Some (include_path, ppx ^ " " ^
+                                      (String.concat " "
+                                         (List.map (fun a -> full_path includePath a)
+                                            (List.tl ppxargs))))
+                | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ (Libname.to_string dep_name))
+              with Not_found -> None
             ) deps in
           let ppxs = get_ppxs_ (get_all_builddeps target) in
           List.flatten (List.map (fun (inc,ppx) -> ["-I"; inc; "-ppx"; ppx]) ppxs)
