@@ -84,7 +84,6 @@ type target_obits = {
   target_builddeps : dependency list;
   target_oflags    : string list;
   target_pp        : Pp.Type.t option;
-  target_ppx       : string list;
   target_extradeps : (Hier.t * Hier.t) list;
   target_stdlib    : target_stdlib;
 }
@@ -95,7 +94,6 @@ type target_extra = {
   target_extra_oflags    : string list;
   target_extra_cflags    : string list;
   target_extra_pp        : Pp.Type.t option;
-  target_extra_ppx       : string list;
 }
 
 type target =
@@ -121,7 +119,6 @@ let newTargetObits = {
   target_oflags    = [];
   target_builddeps = [];
   target_pp        = None;
-  target_ppx       = [];
   target_srcdir    = [currentDir];
   target_extradeps = [];
   target_stdlib    = Stdlib_Standard;
@@ -143,7 +140,6 @@ let newTargetExtra objs = {
   target_extra_oflags    = [];
   target_extra_cflags    = [];
   target_extra_pp        = None;
-  target_extra_ppx       = [];
 }
 
 let get_target_name target = Name.to_string target.target_name

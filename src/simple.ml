@@ -88,7 +88,6 @@ let main () =
             target_builddeps = List.map (fun p -> (p, None)) !depends; (* no constraints *)
             target_oflags    = [];
             target_pp        = None;
-            target_ppx       = [];
             target_extradeps = [];
             target_stdlib    = Stdlib_Standard;
           }
