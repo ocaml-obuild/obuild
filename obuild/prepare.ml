@@ -287,46 +287,52 @@ let get_modules_desc bstate target toplevelModules =
           let ppxopt = pkg.Meta.Pkg.ppxopt in
           (includePath, ppx, ppxopt)
         in
-        let rec ppx_to_flags libname =
-          let (fp_ppx, ppx_meta) = Metacache.get libname.Libname.main_name in
-          let (includePath, ppx, ppxopt) = get_ppx_ppxopt fp_ppx ppx_meta libname in
-          match (ppx,ppxopt) with
-          | None,None -> failwith ((Libname.to_string libname) ^ " is not a ppx!");
-          | Some (preds,name), None ->
-            let ppx_name = match ppx with Some (preds, name) -> name
-                                        | _ -> failwith ((Libname.to_string libname) ^ " is not a ppx!")
-            in
-            (fp_to_string includePath, full_path includePath ppx_name)
-          | None, Some (preds,name) ->
-            let ppxargs = string_split ',' name in
-            let (include_path, ppx) = ppx_to_flags (Libname.of_string (List.hd ppxargs)) in
-            (include_path, ppx ^ " " ^
-                           (String.concat " "
-                              (List.map (fun a -> full_path includePath a)
-                                 (List.tl ppxargs))))
-          | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ (Libname.to_string libname))
-        in
         let ppx =
-          let get_ppxs_ deps = list_filter_map (fun (dep_name,_) ->
-              match (Metacache.find dep_name.Libname.main_name) with
-              | None -> None
-              | Some (fpath, meta) ->
-                let (includePath, ppx, ppxopt) = get_ppx_ppxopt fpath meta dep_name in
-                match (ppx,ppxopt) with
-                | None, None -> None
-                | Some (preds,name), None ->
-                  Some (fp_to_string includePath, full_path includePath name)
-                | None, Some (preds,name) ->
-                  let ppxargs = string_split ',' name in
-                  let (include_path, ppx) = ppx_to_flags (Libname.of_string (List.hd ppxargs)) in
-                  Some (include_path, ppx ^ " " ^
-                                      (String.concat " "
-                                         (List.map (fun a -> full_path includePath a)
-                                            (List.tl ppxargs))))
-                | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ (Libname.to_string dep_name))
-            ) deps in
-          let ppxs = get_ppxs_ (get_all_builddeps target) in
-          List.flatten (List.map (fun (inc,ppx) -> ["-I"; inc; "-ppx"; ppx]) ppxs)
+          let target_deps = get_all_builddeps target in
+          let dag = bstate.bstate_config.project_pkgdeps_dag in
+          let deps_lists = list_filter_map (fun (l,_) ->
+              let dag_dep = Analyze.Dependency l in
+              if (Dag.existsNode dag_dep dag) then begin
+                let children = Dag.getChildren_full dag dag_dep in
+                let deps = list_filter_map (fun d -> match d with Analyze.Target _ -> None
+                                                                | Analyze.Dependency l -> Some l)
+                    children in
+                let uniq_deps = list_uniq deps in
+                Some (l :: uniq_deps)
+              end else
+                None
+            ) target_deps in
+          let ppx_list = List.map (fun l ->
+              let (ppxs,ppxopts) = List.fold_left (fun (ppxs,ppxopts) d ->
+                  match (Metacache.find d.Libname.main_name) with
+                  | None -> (ppxs,ppxopts)
+                  | Some (fpath, meta) ->
+                    let (includePath, ppx, ppxopt) = get_ppx_ppxopt fpath meta d in
+                    let ppxs_ = match ppx with None -> ppxs
+                                             | Some (_,s) -> (includePath,s,d) :: ppxs in
+                    let ppxopts_ = ppxopts @ (List.map (fun (_,s) ->
+                        let ppxargs = string_split ',' s in
+                        (includePath, ppxargs)
+                      ) ppxopt) in
+                    (ppxs_, ppxopts_)
+                ) ([],[]) (List.rev l) in
+              let ppxs = list_uniq ppxs in
+              if (List.length ppxs) > 1 then
+                failwith ("More than 1 ppx " ^ (String.concat ", " (List.map (fun (_,s,_) -> s) ppxs)));
+              if (List.length ppxs) = 0 then
+                []
+              else
+                let (includePath,ppx_name,ppx_lib) = List.hd ppxs in
+                List.iter (fun (_,ss) ->
+                    let res = (Libname.of_string (List.hd ss)) = ppx_lib in
+                    if not res then
+                      failwith ("Different ppx " ^ ppx_name ^ " <> " ^ (List.hd ss))
+                  ) ppxopts;
+                (full_path includePath ppx_name) :: (List.map (fun (includePath,args) ->
+                    String.concat " " (List.map (fun a -> full_path includePath a) (List.tl args))) ppxopts)
+            ) deps_lists in
+          let ppx_list = no_empty [] ppx_list in
+          List.flatten (List.map (fun l -> ["-ppx"; String.concat " " l]) ppx_list)
         in
 
         verbose Debug "  %s has mtime %f\n%!" moduleName modTime;

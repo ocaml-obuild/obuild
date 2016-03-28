@@ -2,7 +2,6 @@ open Ext.Fugue
 open Ext.Filepath
 open Ext
 open Printf
-open Dependencies
 open Helper
 open Gconf
     
@@ -77,13 +76,13 @@ module Pkg = struct
 (* preliminaries structures, adjust as needed by meta. *)
   type t = {
     name        : string;
-    requires    : (Predicate.t list * dep_name list) list;
+    requires    : (Predicate.t list * Libname.t list) list;
     directory   : string;
     description : string;
     exists_if   : string;
     preprocessor : string;
     ppx         : (Predicate.t list * string) option;
-    ppxopt      : (Predicate.t list * string) option;
+    ppxopt      : (Predicate.t list * string) list;
     browse_interface : string;
     type_of_threads : string;
     archives    : (Predicate.t list * string) list;
@@ -100,7 +99,7 @@ module Pkg = struct
     description      = "";
     preprocessor     = "";
     ppx              = None;
-    ppxopt           = None;
+    ppxopt           = [];
     linkopts         = [];
     browse_interface = "";
     type_of_threads  = "";
@@ -124,6 +123,10 @@ module Pkg = struct
         else None
       ) pkg.archives
 
+  let satisfy preds constraints =
+    List.for_all (fun p -> match p with Predicate.Neg n -> not (List.mem n constraints)
+                                      | _ -> List.mem p constraints) preds
+    
   let is_syntax_ pkg = List.length (get_syntaxes pkg) > 0
 
   let is_syntax (_, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
@@ -387,7 +390,7 @@ module Token = struct
         match xs2 with
         | PLUSEQ :: S v :: xs3 
         | EQ :: S v :: xs3 ->
-          parse pkg_name { acc with Pkg.ppxopt = Some (preds, v)} xs3
+          parse pkg_name { acc with Pkg.ppxopt = acc.Pkg.ppxopt @ [(preds, v)]} xs3
         | _ -> raise (MetaParseError (pkg_name, "parsing ppxopt failed"))
       )
     | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } xs

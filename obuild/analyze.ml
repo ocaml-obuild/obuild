@@ -7,7 +7,7 @@ open Gconf
 open Target
 open Dependencies
 
-exception SublibraryDoesntExists of dep_name
+exception SublibraryDoesntExists of Libname.t
 exception OcamlConfigMissing of string
 
 (* differentiate if the dependency is system or is internal to the project *)
@@ -30,7 +30,7 @@ type project_config =
     ; project_file        : Project.t
     ; project_ocamlcfg    : (string, string) Hashtbl.t
     ; project_ocamlmkcfg  : (string, string) Hashtbl.t
-    ; project_cpkgs       : (c_dep_name, cpkg_config) Hashtbl.t
+    ; project_cpkgs       : (string, cpkg_config) Hashtbl.t
     }
 
 let get_ocaml_config_key_hashtbl key h =

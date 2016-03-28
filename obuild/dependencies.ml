@@ -8,18 +8,9 @@ exception DependencyMissing of string
 exception DependenciesMissing of string list
 exception DependencyFailedParsing of string
 
-type dep_constraint = Expr.t
+type dependency = Libname.t * (Expr.t option)
 
-type dep_main_name = string
-
-(* represent a dependency in a form abc[.def.xyz] *)
-type dep_name = Libname.t
-
-type dependency = dep_name * (dep_constraint option)
-
-type c_dep_name = string
-
-type cdependency = c_dep_name * (dep_constraint option)
+type cdependency = string * (Expr.t option)
 
 type dep_opt =
     { dep_includes: filepath list
