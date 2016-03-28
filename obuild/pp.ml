@@ -15,9 +15,9 @@ module Type = struct
     | "p4r" | "camlp4r" -> CamlP4R
     | _                 -> raise (InvalidPreprocessor s)
 
-let to_string = function
-  | CamlP4O -> "camlp4o"
-  | CamlP4R -> "camlp4r"
+  let to_string = function
+    | CamlP4O -> "camlp4o"
+    | CamlP4R -> "camlp4r"
 end
 
 type desc = {

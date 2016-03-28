@@ -143,7 +143,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
           Some [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.Library.name) ]
         ) else None
       ) else (
-        let meta = Analyze.get_pkg_meta spkg conf in
+        let meta = Metacache.get_from_cache spkg in
         let preds =
           if spkg = camlp4Libname
           then p4pred :: syntaxPredsCommon
@@ -172,7 +172,7 @@ let get_target_pp bstate target = function
     in
     verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
     let p4pred = get_p4pred pp in
-    let p4Meta = Analyze.get_pkg_meta camlp4Libname conf in
+    let p4Meta = Metacache.get_from_cache camlp4Libname in
     let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
     let archive = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] in
     (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
@@ -288,7 +288,7 @@ let get_modules_desc bstate target toplevelModules =
           (includePath, ppx, ppxopt)
         in
         let rec ppx_to_flags libname =
-          let (fp_ppx, ppx_meta) = Analyze.get_meta_cache bstate.bstate_config.Analyze.project_pkg_meta libname in
+          let (fp_ppx, ppx_meta) = Metacache.get libname.Libname.main_name in
           let (includePath, ppx, ppxopt) = get_ppx_ppxopt fp_ppx ppx_meta libname in
           match (ppx,ppxopt) with
           | None,None -> failwith ((Libname.to_string libname) ^ " is not a ppx!");
@@ -308,8 +308,9 @@ let get_modules_desc bstate target toplevelModules =
         in
         let ppx =
           let get_ppxs_ deps = list_filter_map (fun (dep_name,_) ->
-              try 
-                let (fpath, meta) = Hashtbl.find bstate.bstate_config.Analyze.project_pkg_meta dep_name.Libname.main_name in
+              match (Metacache.find dep_name.Libname.main_name) with
+              | None -> None
+              | Some (fpath, meta) ->
                 let (includePath, ppx, ppxopt) = get_ppx_ppxopt fpath meta dep_name in
                 match (ppx,ppxopt) with
                 | None, None -> None
@@ -323,7 +324,6 @@ let get_modules_desc bstate target toplevelModules =
                                          (List.map (fun a -> full_path includePath a)
                                             (List.tl ppxargs))))
                 | _,_ -> failwith ("ppx and ppxopt are both defined in " ^ (Libname.to_string dep_name))
-              with Not_found -> None
             ) deps in
           let ppxs = get_ppxs_ (get_all_builddeps target) in
           List.flatten (List.map (fun (inc,ppx) -> ["-I"; inc; "-ppx"; ppx]) ppxs)
@@ -549,7 +549,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   let depIncPathInter = List.map (fun dep ->
       Dist.get_build_exn (Dist.Target (Name.Lib dep))) depsInternal in
   let depIncPathSystem = List.map (fun dep ->
-      Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.Libname.main_name)) depsSystem in
+      Meta.getIncludeDir stdlib (Metacache.get_from_cache dep)) depsSystem in
   let depIncludePaths = depIncPathInter @ depIncPathSystem in
   let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncPathInter @ depIncPathSystem in
   let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncPathInter @ depIncPathSystem in
@@ -557,7 +557,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
     List.map (fun dep ->
         match Hashtbl.find conf.project_dep_data dep with
         | Internal -> Dist.get_build_exn (Dist.Target (Name.Lib dep))
-        | System   -> Meta.getIncludeDir stdlib (Hashtbl.find conf.project_pkg_meta dep.Libname.main_name)
+        | System   -> Meta.getIncludeDir stdlib (Metacache.get_from_cache dep)
       ) depPkgs
   in
   let cdepsIncludePaths : filepath list =

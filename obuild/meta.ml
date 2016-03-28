@@ -3,7 +3,9 @@ open Ext.Filepath
 open Ext
 open Printf
 open Dependencies
-
+open Helper
+open Gconf
+    
 module Predicate = struct
   type t =
     | Byte
@@ -20,6 +22,7 @@ module Predicate = struct
     | Preprocessor
     | Camlp4o
     | Camlp4r
+    | Ppx_driver
     | Neg of t
     | Unknown of string
 
@@ -38,6 +41,7 @@ module Predicate = struct
     | Preprocessor -> "preprocessor"
     | Camlp4o -> "camlp4o"
     | Camlp4r -> "camlp4r"
+    | Ppx_driver -> "ppx_driver"
     | Neg t -> "-" ^ (to_string t)
     | Unknown s -> s
 
@@ -60,6 +64,7 @@ module Predicate = struct
       | "preprocessor"   -> Preprocessor
       | "camlp4o"        -> Camlp4o
       | "camlp4r"        -> Camlp4r
+      | "ppx_driver"     -> Ppx_driver
       | _ as s           -> Unknown s
 end
 
@@ -153,12 +158,12 @@ module Pkg = struct
         best_archive (-1) (List.hd pkg.archives) pkg.archives in
     res @ (all_append_archives pkg.append_archives)
 
-  let get_archive (path, root) dep csv =
+  let get_archive (path, root) dep preds =
     let pkg = find dep.Libname.subnames root in
     try
-      snd (List.find (fun (e,_) -> list_eq_noorder e csv) pkg.archives)
+      snd (List.find (fun (e,_) -> list_eq_noorder e preds) pkg.archives)
     with Not_found ->
-      raise (ArchiveNotFound (path, dep, csv))
+      raise (ArchiveNotFound (path, dep, preds))
 
   let write path package =
     let out = Buffer.create 1024 in
@@ -380,6 +385,7 @@ module Token = struct
     | ID "ppxopt" :: xs -> (
         let (preds, xs2) = parse_predicate_list pkg_name "ppxopt" xs in
         match xs2 with
+        | PLUSEQ :: S v :: xs3 
         | EQ :: S v :: xs3 ->
           parse pkg_name { acc with Pkg.ppxopt = Some (preds, v)} xs3
         | _ -> raise (MetaParseError (pkg_name, "parsing ppxopt failed"))
@@ -460,3 +466,4 @@ let getIncludeDir stdlib ((path, pkg) : t) : filepath =
     | '^' -> path_dirname (path_dirname path) <//> fp (string_drop 1 o)
     | '+' -> stdlib <//> fp (string_drop 1 o)
     | _   -> fp o
+    

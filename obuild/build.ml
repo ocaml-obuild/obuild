@@ -334,7 +334,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
         | Internal -> [(in_current_dir (Libname.to_cmca compiledType compileOpt dep))]
         | System   ->
-          let meta = Analyze.get_pkg_meta dep bstate.bstate_config in
+          let meta = Metacache.get_from_cache dep in
           let pred = match compiledType with
             | Native    -> Meta.Predicate.Native
             | ByteCode  -> Meta.Predicate.Byte

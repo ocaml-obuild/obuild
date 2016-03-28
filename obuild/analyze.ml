@@ -24,7 +24,6 @@ type cpkg_config =
  *)
 type project_config =
     { project_dep_data    : (Libname.t, dep_type) Hashtbl.t
-    ; project_pkg_meta    : (dep_main_name, Meta.t) Hashtbl.t
     ; project_pkgdeps_dag : dependency_tag Dag.t
     ; project_targets_dag : Name.t Dag.t
     ; project_all_deps    : dependency list
@@ -33,19 +32,6 @@ type project_config =
     ; project_ocamlmkcfg  : (string, string) Hashtbl.t
     ; project_cpkgs       : (c_dep_name, cpkg_config) Hashtbl.t
     }
-
-let get_meta_from_disk dep =
-    verbose Debug "  fetching META %s\n%!" dep.Libname.main_name;
-    try Meta.findLib dep.Libname.main_name
-    with Meta.LibraryNotFound name -> raise (DependencyMissing name)
-
-let get_meta_cache metaTable dep =
-    try
-        Hashtbl.find metaTable dep.Libname.main_name
-    with Not_found ->
-        let r = get_meta_from_disk dep in
-        Hashtbl.add metaTable dep.Libname.main_name r;
-        r
 
 let get_ocaml_config_key_hashtbl key h =
     try Hashtbl.find h key
@@ -67,10 +53,6 @@ let get_c_pkg cname project =
 let is_pkg_internal project pkg = Hashtbl.find project.project_dep_data pkg = Internal
 let is_pkg_system project pkg   = Hashtbl.find project.project_dep_data pkg = System
 
-let get_pkg_meta lib project =
-    try Hashtbl.find project.project_pkg_meta lib.Libname.main_name
-    with Not_found -> failwith (sprintf "package %s not found in the hashtbl: internal error" (Libname.to_string lib))
-
 let get_internal_library_deps project target =
     let internalDeps = Dag.getChildren project.project_targets_dag target.target_name in
     list_filter_map (fun name ->
@@ -86,7 +68,7 @@ let get_internal_library_deps project target =
  * it allows to bootstrap better when ocamlfind has not been yet installed or
  * to detect difference of opinions of where the stdlib is, between ocamlfind and ocamlc.
  *)
-let initializeSystemStdlib ocamlCfg metaTable =
+let initializeSystemStdlib ocamlCfg =
     let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in
     let stdlibPath = fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg) in
     let stdlibLibs =
@@ -114,7 +96,7 @@ let initializeSystemStdlib ocamlCfg metaTable =
                             ; Meta.Pkg.version   = ocaml_ver
                             ; Meta.Pkg.archives  = archives
                        } in
-            Hashtbl.add metaTable lib (stdlibPath </> fn ("META-" ^ lib), meta)
+            Metacache.add lib (stdlibPath </> fn ("META-" ^ lib), meta)
         )
     ) libs
 
@@ -143,8 +125,7 @@ let prepare projFile user_flags =
 
     let missingDeps = ref StringSet.empty in
 
-    let metaTable  = Hashtbl.create 8 in
-    initializeSystemStdlib ocamlCfg metaTable;
+    initializeSystemStdlib ocamlCfg;
 
     (* check for findlib / ocaml configuration mismatch *)
     let () =
@@ -192,7 +173,7 @@ let prepare projFile user_flags =
                 Internal
             ) else (
                 try begin
-                  let (_, meta) = get_meta_cache metaTable dep in
+                  let (_, meta) = Metacache.get dep.Libname.main_name in
                   Dag.addNode (Dependency dep) depsDag;
                   let pkg =
                       try Meta.Pkg.find dep.Libname.subnames meta
@@ -231,7 +212,7 @@ let prepare projFile user_flags =
         in
         List.iter (fun (dep,constr) ->
             maybe_unit (fun c ->
-                let (_,pkg) = get_meta_cache metaTable dep in
+                let (_,pkg) = Metacache.get dep.Libname.main_name in
                 if not (Expr.eval pkg.Meta.Pkg.version c) then
                   raise (Dependencies.BuildDepAnalyzeFailed
                            (Libname.to_string dep ^ " (" ^ pkg.Meta.Pkg.version ^
@@ -274,7 +255,6 @@ let prepare projFile user_flags =
 
     { project_dep_data    = depsTable
     ; project_pkgdeps_dag = depsDag
-    ; project_pkg_meta    = metaTable
     ; project_targets_dag = targetsDag
     ; project_all_deps    = List.concat $ List.map (fun target -> target.target_obits.target_builddeps) allTargets
     ; project_ocamlcfg    = ocamlCfg
