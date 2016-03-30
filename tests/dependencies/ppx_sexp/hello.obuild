@@ -1,0 +1,39 @@
+name: hello
+version: 1.0
+obuild-ver: 1
+
+executable hello
+  src-dir: .
+  main-is: hello.ml
+  build-deps: ppx_sexp
+
+executable hello_lwt
+  src-dir: .
+  main-is: hello_lwt.ml
+  build-deps: lwt.ppx
+
+executable both
+  src-dir: .
+  main-is: both.ml
+  build-deps: lwt.ppx, ppx_sexp
+
+executable show
+  src-dir: .
+  main-is: show.ml
+  build-deps: ppx_deriving.show
+
+Executable deriving
+  src-dir: .
+  build-deps: ppx_deriving.std
+  main-is: deriving.ml
+
+Executable sexp
+  src-dir: .
+  build-deps: ppx_sexp_conv
+  main-is: sexp.ml
+
+Executable binprot
+  src-dir: .
+  build-deps: ppx_bin_prot, bin_prot
+  main-is: binprot.ml
+
