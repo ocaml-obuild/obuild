@@ -1,3 +1,5 @@
+open Ext.Fugue
+
 exception UnknownSymbol of (string * string)
 exception UnknownExpression of string
 exception ExpressionEmpty
@@ -118,18 +120,75 @@ type t =
   | Gt of version
   | Ne of version
 
+let compare_version v1 v2 =
+  let skip i p s e =
+    let rec loop i = if i = e then i else if (p s.[i]) then loop (i + 1) else i
+    in loop i
+  in
+  let split_version v =
+    let (p1,rest) = match (string_split ':' v ~limit:2) with
+        [ _ ] -> ("", v)
+      | [ p1; rest] -> (p1, rest) in
+    let (p1, p2, p3) = match (string_split '-' rest ~limit:2) with
+        [ _ ] -> (p1, rest, "")
+      | [ p2 ; p3 ] -> (p1, p2, p3) in
+    (p1, p2, p3)
+  in
+  let compare_part p1 p2 =
+    let l1 = String.length p1 in
+    let l2 = String.length p2 in
+    let is_digit = function | '0'..'9' -> true | _ -> false in
+    let rec loop i1 i2 =
+      let compare_numbers i1 i2 =
+        let rec loop_numbers n1 n2 last =
+          if n2 = last then loop n1 n2
+          else
+            let comp = Char.compare p1.[n1] p2.[n2] in
+            if comp = 0 then loop_numbers (n1 + 1) (n2 + 1) last else comp
+        in
+        let end1 = skip i1 is_digit p1 l1 in
+        let end2 = skip i2 is_digit p2 l2 in
+        let comp = compare (end1 - i1) (end2 - i2) in
+        if comp = 0 then loop_numbers i1 i2 end1 else comp
+      in
+      match (i1 = l1, i2 = l2) with
+      | true,true -> 0
+      | true,false -> let end2 = skip i2 (fun c -> c = '0') p2 l2 in
+        if end2 = l2 then 0 else -1
+      | false,true -> let end1 = skip i1 (fun c -> c = '0') p1 l1 in
+        if end1 = l1 then 0 else 1
+      | false,false -> match (is_digit p1.[i1], is_digit p2.[i2]) with
+        | true,true ->
+          compare_numbers (skip i1 (fun c -> c = '0') p1 l1) (skip i2 (fun c -> c = '0') p2 l2)
+        | true,false -> -1
+        | false,true -> 1
+        | false,false -> let comp = Char.compare p1.[i1] p2.[i2] in
+          if comp = 0 then loop (i1 + 1) (i2 + 1) else comp
+    in
+    loop 0 0
+  in
+  if v1 = v2 then 0
+  else
+    let (v1_1, v1_2, v1_3) = split_version v1 in
+    let (v2_1, v2_2, v2_3) = split_version v2 in
+    let c1 = compare_part v1_1 v2_1 in
+    if c1 <> 0 then c1 else
+      let c2 = compare_part v1_2 v2_2 in
+      if c2 <> 0 then c2 else
+        compare_part v1_3 v2_3
+
 let rec eval version constr =
   match constr with
   | And (e1,e2) -> (eval version e1) && (eval version e2)
   | Or (e1,e2) -> (eval version e1) || (eval version e2)
   | Not e -> not (eval version e)
   | Paren e -> eval version e
-  | Eq v -> version = v
-  | Le v -> version <= v
-  | Lt v -> version < v
-  | Ge v -> version >= v
-  | Gt v -> version > v
-  | Ne v -> version <> v
+  | Eq v -> compare_version version v = 0
+  | Le v -> compare_version version v <= 0
+  | Lt v -> compare_version version v < 0
+  | Ge v -> compare_version version v >= 0
+  | Gt v -> compare_version version v > 0
+  | Ne v -> compare_version version v <> 0
 
 let rec to_string = function
   | And (e1,e2) -> (to_string e1) ^ " && " ^ (to_string e2)
