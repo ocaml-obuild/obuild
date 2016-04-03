@@ -1,0 +1,10 @@
+name: test
+version: 0.1.0
+synopsis: Demo
+obuild-ver: 1
+
+executable test
+  main: main.ml
+  src-dir: .
+  pp: camlp4o
+  build-deps: pa_fields_conv
