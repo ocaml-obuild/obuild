@@ -94,3 +94,8 @@ time ./obuild.bootstrap build
 if [ -x dist/build/obuild/obuild ]; then
 	rm obuild.bootstrap
 fi
+
+# install where is your current OCaml toplevel
+cp -t $(dirname `which ocaml`) \
+dist/build/obuild/obuild \
+dist/build/obuild-simple/obuild-simple
