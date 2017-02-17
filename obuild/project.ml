@@ -508,8 +508,13 @@ let parse strict lines =
           Gconf.gconf.Gconf.ocaml_extra_args <- v;
           { acc with ocaml_extra_args = Some v }
         (* for better error reporting *)
-        | "executable" | "library" | "test" | "bench" | "example" -> raise (BlockSectionAsValue k)
-        | k             -> raise_if_strict strict ("unknown key: " ^ k); acc
+        | "bench"
+        | "example"
+        | "executable"
+        | "library" 
+        | "ppx"
+        | "test" -> raise (BlockSectionAsValue k)
+        | k -> raise_if_strict strict ("unknown key: " ^ k); acc
       )
   in
   process_chunk parse_root make lines
