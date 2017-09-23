@@ -120,7 +120,7 @@ let write_no_partial fd b o l =
     let len = ref l in
     let ofs = ref o in
     while !len > 0 do
-        let written = Unix.write fd b !ofs !len in
+        let written = Unix.write fd (Bytes.of_string b) !ofs !len in
         if written = 0 then raise WriteFailed;
         ofs := !ofs + written;
         len := !len - written
@@ -137,13 +137,13 @@ let writeFile path s =
 
 let readFile path =
     let buf = Buffer.create 1024 in
-    let b = String.make 1024 ' ' in
+    let b = Bytes.make 1024 ' ' in
     withfile path [Unix.O_RDONLY] 0o644 (fun fd ->
         let isDone = ref false in
         while not !isDone do
             let r = Unix.read fd b 0 1024 in
             if r > 0
-                then Buffer.add_substring buf b 0 r
+                then Buffer.add_subbytes buf b 0 r
                 else isDone := true
         done;
         Buffer.contents buf
@@ -151,7 +151,7 @@ let readFile path =
 
 let copy_file src dst =
     mkdirSafeRecursive (path_dirname dst) 0o755;
-    let s = String.make 4096 ' ' in
+    let s = Bytes.make 4096 ' ' in
     let srcStat = Unix.stat (fp_to_string src) in
     let operm = srcStat.Unix.st_perm in
     withfile dst [Unix.O_WRONLY; Unix.O_CREAT] operm (fun fdDst ->
@@ -160,7 +160,7 @@ let copy_file src dst =
             while not !isDone do
                 let r = Unix.read fdSrc s 0 4096 in
                 if r > 0
-                    then write_no_partial fdDst s 0 r
+                    then write_no_partial fdDst (Bytes.to_string s) 0 r
                     else isDone := true
             done
         )
@@ -171,7 +171,7 @@ let copy_to_dir src dst = copy_file src (dst <//> src)
 let copy_many_files srcs dst = List.iter (fun src -> copy_to_dir src dst) srcs
 
 let rec mktemp_dir_in prefix =
-    let s = String.make 4 ' ' in
+    let s = Bytes.make 4 ' ' in
     let fd = Unix.openfile "/dev/urandom" [Unix.O_RDONLY] 0o640 in
     let r = ref 0 in
     while !r < 4 do
@@ -181,7 +181,7 @@ let rec mktemp_dir_in prefix =
             else r := n + !r
     done;
     Unix.close fd;
-
+    let s = Bytes.to_string s in
     let tmpName = sprintf "%d-%02x%02x%02x%02x" (Unix.getpid ()) (Char.code s.[0]) (Char.code s.[1]) (Char.code s.[2]) (Char.code s.[3]) in
     let dirName = fp (prefix ^ tmpName) in
     let v = mkdirSafe dirName 0o755 in

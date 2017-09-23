@@ -110,7 +110,7 @@ let getChildren dag a = (getNode dag a).children
 
 let getParents dag a = (getNode dag a).parents
 
-let rec getChildren_full dag a = 
+let rec getChildren_full dag a =
     let children = getChildren dag a in
     children @ List.concat (List.map (getChildren_full dag) children)
 
@@ -191,13 +191,14 @@ let toDot a_to_string name fromLeaf dag =
     let nodes = getNodes dag in
     let dotIndex = Hashtbl.create (List.length nodes) in
     let append = Buffer.add_string buf in
-    let sanitizeName = String.copy name in
+    let sanitizeName = Bytes.of_string name in
     for i = 0 to String.length name - 1
     do
-        if sanitizeName.[i] = '-' then sanitizeName.[i] <- '_'
+      if Bytes.get sanitizeName i = '-' then
+        Bytes.set sanitizeName i '_';
     done;
 
-    append ("digraph " ^ sanitizeName ^ " {\n");
+    append ("digraph " ^ Bytes.to_string sanitizeName ^ " {\n");
 
     let list_iteri f list =
         let rec loop i l =
@@ -220,6 +221,6 @@ let toDot a_to_string name fromLeaf dag =
             append (sprintf "  %d -> %d;\n" i ci)
         ) ((if fromLeaf then getParents else getChildren) dag n)
     ) nodes;
-    
+
     append "}\n";
     Buffer.contents buf

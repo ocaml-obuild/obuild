@@ -54,7 +54,7 @@ let wait processes =
   let is_finished (_, p) = p.err.closed && p.out.closed in
   let remove_from_list e list = List.filter (fun x -> x <> e) list in
   let process_loop () =
-    let b = String.create 1024 in
+    let b = Bytes.create 1024 in
     let live_processes = ref processes in
     let done_processes = ref None in
     let read_fds () = List.fold_left (fun acc (_, p) ->
@@ -68,7 +68,7 @@ let wait processes =
         if not out.closed && List.mem out.fd reads then
           let nb = Unix.read out.fd b 0 1024 in
           if nb > 0
-          then Buffer.add_substring out.buf b 0 nb
+          then Buffer.add_subbytes out.buf b 0 nb
           else (Unix.close out.fd; out.closed <- true; fds := read_fds ())
       in
       List.iter (fun (task, p) ->
