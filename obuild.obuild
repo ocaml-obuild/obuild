@@ -47,10 +47,10 @@ extra-srcs: bootstrap
 
 library obuild
   modules: obuild
-  build-deps: unix, obuild.ext
+  build-deps: unix, bytes, obuild.ext
   library ext
     modules: ext
-    build-deps: unix
+    build-deps: unix, bytes
 
 # a comment
 executable obuild

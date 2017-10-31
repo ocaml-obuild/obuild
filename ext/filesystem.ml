@@ -143,7 +143,7 @@ let readFile path =
         while not !isDone do
             let r = Unix.read fd b 0 1024 in
             if r > 0
-                then Buffer.add_subbytes buf b 0 r
+                then Buffer.add_substring buf (Bytes.to_string b) 0 r
                 else isDone := true
         done;
         Buffer.contents buf

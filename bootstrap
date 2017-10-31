@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 
-libs="unix.cmxa"
-OCAMLOPT="ocamlopt -g"
-# use faster ocamlopt, if available
-OCAMLOPT_OPT=`which ocamlopt.opt`
-if [[ $OCAMLOPT_OPT != "" ]] ; then
-    OCAMLOPT="ocamlopt.opt -g"
-fi
+libs="unix,bytes"
+OCAMLOPT="ocamlfind ocamlopt -g -package ${libs}"
 
 extmodules="fugue filepath filesystem"
 libmodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare buildprogs build exception"
@@ -74,7 +69,7 @@ do
 	APPEND+="${mod}.cmx "
 done
 echo "LINKING obuild.bootstrap"
-$OCAMLOPT -o ../obuild.bootstrap -I ../ ${libs} obuild_ext.cmxa obuild.cmxa $APPEND
+$OCAMLOPT -o ../obuild.bootstrap -I ../ -linkpkg obuild_ext.cmxa obuild.cmxa $APPEND
 cd ..
 
 rm -f obuild/*.cmi obuild/*.cmx obuild/*.o

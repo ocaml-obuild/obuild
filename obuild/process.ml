@@ -68,7 +68,7 @@ let wait processes =
         if not out.closed && List.mem out.fd reads then
           let nb = Unix.read out.fd b 0 1024 in
           if nb > 0
-          then Buffer.add_subbytes out.buf b 0 nb
+          then Buffer.add_substring out.buf (Bytes.to_string b) 0 nb
           else (Unix.close out.fd; out.closed <- true; fds := read_fds ())
       in
       List.iter (fun (task, p) ->

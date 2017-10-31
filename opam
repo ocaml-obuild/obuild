@@ -8,4 +8,7 @@ maintainer: "jmaloberti@gmail.com"
 build: [
   ["./bootstrap"]
 ]
-available: [ocaml-version >= "4.02.0"]
+depends: [
+  "ocamlfind" {build}
+  "base-bytes"
+]
