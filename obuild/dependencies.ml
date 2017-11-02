@@ -1,6 +1,7 @@
 open Ext.Fugue
 open Ext.Filepath
-
+open Ext.Compat
+       
 exception BuildDepAnalyzeFailed of string
 exception BuildCDepAnalyzeFailed of string
 
@@ -51,14 +52,15 @@ let runOcamldep dopt srcFile =
  * to take that in consideration.
 *)
 let joinLines s =
-  let s_end = String.length s in
+  let s = bytes_of_string s in
+  let s_end = bytes_length s in
   let rec replace start =
     try
-      let index = String.index_from s start '\\' in
+      let index = bytes_index_from s start '\\' in
       if index < s_end - 1 then
-        if (String.get s (index + 1)) = '\n' then begin
-          String.set s index  ' ';
-          String.set s (index + 1) ' ';
+        if (bytes_get s (index + 1)) = '\n' then begin
+          bytes_set s index  ' ';
+          bytes_set s (index + 1) ' ';
           replace (index + 2)
         end
         else
@@ -67,7 +69,7 @@ let joinLines s =
         s
     with Not_found -> s
   in
-  replace 0
+  bytes_to_string (replace 0)
 
 let runCCdep srcDir files : (filename * filepath list) list =
   let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in

@@ -1,6 +1,7 @@
 (* simple bi-directional DAG implementation using shallow link*)
 open Printf
-
+open Ext.Compat
+    
 (* represent a node that point shallowly to children and parents *)
 type 'a dagnode =
     { mutable parents  : 'a list
@@ -191,13 +192,14 @@ let toDot a_to_string name fromLeaf dag =
     let nodes = getNodes dag in
     let dotIndex = Hashtbl.create (List.length nodes) in
     let append = Buffer.add_string buf in
-    let sanitizeName = String.copy name in
+    let sanitizeName = bytes_of_string name in
     for i = 0 to String.length name - 1
     do
-        if sanitizeName.[i] = '-' then sanitizeName.[i] <- '_'
+      if (bytes_get sanitizeName i) = '-'
+      then bytes_set sanitizeName i '_'
     done;
 
-    append ("digraph " ^ sanitizeName ^ " {\n");
+    append ("digraph " ^ (bytes_to_string sanitizeName) ^ " {\n");
 
     let list_iteri f list =
         let rec loop i l =

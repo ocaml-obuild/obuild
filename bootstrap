@@ -7,8 +7,18 @@ OCAMLOPT_OPT=`which ocamlopt.opt`
 if [[ $OCAMLOPT_OPT != "" ]] ; then
     OCAMLOPT="ocamlopt.opt -g"
 fi
+OCAMLVER=`$OCAMLOPT -vnum`
+echo $OCAMLVER
 
-extmodules="fugue filepath filesystem"
+if [[ $OCAMLVER < "4.02.0" ]] ; then
+    echo "Using compat402.ml"
+    cp compat402.ml ext/compat.ml
+else
+    echo "Using compat403.ml"
+    cp -f compat403.ml ext/compat.ml
+fi
+
+extmodules="compat fugue filepath filesystem"
 libmodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare buildprogs build exception"
 mainmodules="sdist doc init help install path_generated main"
 
