@@ -51,14 +51,15 @@ let runOcamldep dopt srcFile =
  * to take that in consideration.
 *)
 let joinLines s =
-  let s_end = String.length s in
+  let s = Bytes.of_string s in
+  let s_end = Bytes.length s in
   let rec replace start =
     try
-      let index = String.index_from s start '\\' in
+      let index = Bytes.index_from s start '\\' in
       if index < s_end - 1 then
-        if (String.get s (index + 1)) = '\n' then begin
-          String.set s index  ' ';
-          String.set s (index + 1) ' ';
+        if (Bytes.get s (index + 1)) = '\n' then begin
+          Bytes.set s index  ' ';
+          Bytes.set s (index + 1) ' ';
           replace (index + 2)
         end
         else
@@ -67,7 +68,7 @@ let joinLines s =
         s
     with Not_found -> s
   in
-  replace 0
+  Bytes.to_string (replace 0)
 
 let runCCdep srcDir files : (filename * filepath list) list =
   let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
@@ -77,4 +78,3 @@ let runCCdep srcDir files : (filename * filepath list) list =
     parse_output_KsemiVs
       (fun _ -> raise (BuildCDepAnalyzeFailed "missing semicolon in gcc dependency output"))
       fn fp (joinLines out)
-

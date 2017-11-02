@@ -8,3 +8,7 @@ maintainer: "jmaloberti@gmail.com"
 build: [
   ["./bootstrap"]
 ]
+depends: [
+  "ocamlfind" {build}
+  "base-bytes"
+]
