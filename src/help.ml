@@ -19,7 +19,7 @@ let helpClean =
 let helpBuild =
     [ "Build --- Build every buildable bits"
     ; ""
-    ; "Build all your differents targets (library, executable,"
+    ; "Build all your different targets (library, executable,"
     ; "tests, benchmarks, example) that are marked as buildable."
     ]
 

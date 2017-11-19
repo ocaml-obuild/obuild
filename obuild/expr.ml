@@ -6,7 +6,7 @@ exception ExpressionEmpty
 exception UnbalancedParenthesis
 exception MalformedExpression
 exception InvalidDependencyName of string
-exception CannotParseContraints of (string * string)
+exception CannotParseConstraints of (string * string)
 
 type version = string
 
@@ -252,12 +252,12 @@ let parse_constraints name cs =
   with e ->
     let err =
       match e with
-      | UnknownExpression z -> "unknown contraints expression \"" ^ z ^ "\""
+      | UnknownExpression z -> "unknown constraints expression \"" ^ z ^ "\""
       | UnbalancedParenthesis -> "unbalanced parenthesis"
       | MalformedExpression -> "malformed expression"
       | _                   -> Printexc.to_string e
     in
-    raise (CannotParseContraints (name,err))
+    raise (CannotParseConstraints (name,err))
 
 let parse name s =
   match Token.lexer s with

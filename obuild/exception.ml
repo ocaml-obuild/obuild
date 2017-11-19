@@ -32,8 +32,8 @@ let show exn =
     | Project.BadOcamlVersion (ver,c) ->
       error "wrong ocaml version: actual %s expected %s\n" ver (Expr.to_string c);
       exit 3
-    | Expr.CannotParseContraints (builddep, s) ->
-        error "cannot parse contraints for build dependency '%s': %s\n" builddep s;
+    | Expr.CannotParseConstraints (builddep, s) ->
+        error "cannot parse constraints for build dependency '%s': %s\n" builddep s;
         exit 3
     (* dist directory related *)
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
