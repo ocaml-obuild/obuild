@@ -192,7 +192,7 @@ let mainTest argv =
                     let dir = Dist.get_build_exn (Dist.Target testTarget.Target.target_name) in
                     let exePath = dir </> outputName in
                     if not (Filesystem.exists exePath) then (
-                        eprintf "error: %s doesn't appears built, make sure build has been run first\n" (Target.get_target_name testTarget);
+                        eprintf "error: %s doesn't appears built, make sure 'obuild build' is run first\n" (Target.get_target_name testTarget);
                         exit 1
                     );
                     (match Process.run [ fp_to_string exePath ] with

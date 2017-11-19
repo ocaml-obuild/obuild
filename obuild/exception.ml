@@ -37,7 +37,7 @@ let show exn =
         exit 3
     (* dist directory related *)
     | Dist.NotADirectory -> error "dist is not a directory\n"; exit 4
-    | Dist.DoesntExist   -> error "run the configure command first\n"; exit 4
+    | Dist.DoesntExist   -> error "run 'obuild configure' first\n"; exit 4
     | Dist.MissingDestinationDirectory dir -> error "missing destination directory: %s\n" (Dist.to_string dir); exit 4
     (* types stuff *)
     | Target.TargetNameNoType s      ->
@@ -54,13 +54,13 @@ let show exn =
     (* reconfigure *)
     | Configure.ConfigChanged r ->
             (match r with
-            | "digest" -> error "project file changed. run the configure command again\n"; exit 4
-            | _        -> error "config changed (reason=%s). run the configure command again\n" r; exit 4
+            | "digest" -> error "project file changed. run 'obuild configure' again\n"; exit 4
+            | _        -> error "config changed (reason=%s). run 'obuild configure' again\n" r; exit 4
             )
     | Configure.ConfigurationMissingKey k ->
-        error "cannot find key %s in setup. run the configure command again\n" k; exit 4
+        error "cannot find key %s in setup. run 'obuild configure' again\n" k; exit 4
     | Configure.ConfigurationTypeMismatch (k,t,v) ->
-        error "%s type mismatch (got '%s') in setup key %s. run the configure command again\n" t v k; exit 4
+        error "%s type mismatch (got '%s') in setup key %s. run 'obuild configure' again\n" t v k; exit 4
     | Meta.MetaParseError (fp,err) ->
         error "unexpected parse error '%s' in meta file %s\n" err (fp_to_string fp); exit 4
     | Meta.ArchiveNotFound (path, dep, preds) ->
