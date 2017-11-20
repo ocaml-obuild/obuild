@@ -42,12 +42,14 @@ let configure argv =
     ("--flag", Arg.String user_set_flags, "enable or disable a project's flag");
     ("--executable-as-obj", Arg.Unit (set_target_options "executable-as-obj" true), "output executable as obj file");
     ("--annot", Arg.Unit (set_target_options "annot" true), "generate .annot files");
-    ("-g", Arg.Unit (
-        (set_target_options "library-debugging" true) ();
-        (set_target_options "executable-debugging" true)), "compilation with debugging");
-    ("-pg", Arg.Unit (
-        (set_target_options "library-profiling" true) ();
-        (set_target_options "executable-profiling" true)), "compilation with profiling")
+    ("-g", Arg.Unit (fun () ->
+        (set_target_options "library-debugging" true)();
+        (set_target_options "executable-debugging" true)();
+    ), "compilation with debugging");
+    ("-pg", Arg.Unit (fun () ->
+        (set_target_options "library-profiling" true)();
+        (set_target_options "executable-profiling" true)();
+    ), "compilation with profiling")
   ] in
   Arg.parse_argv (Array.of_list argv) (
     enable_disable_opt "library-bytecode" "library compilation as bytecode"
