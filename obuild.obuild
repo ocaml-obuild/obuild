@@ -9,6 +9,7 @@ license: BSD
 license-file: LICENSE
 authors: Vincent Hanquez <tab@snarc.org>, Jerome Maloberti <jmaloberti@gmail.com>
 obuild-ver: 1
+configure-script: configure.ml
 homepage: http://github.com/ocaml-obuild/obuild
 ocaml-extra-args: -w A
 extra-srcs: bootstrap

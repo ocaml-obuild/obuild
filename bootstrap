@@ -10,12 +10,13 @@ fi
 OCAMLVER=`$OCAMLOPT -vnum`
 echo $OCAMLVER
 
+rm -f ext/compat.ml
 if [[ $OCAMLVER < "4.02.0" ]] ; then
-    echo "Using compat402.ml"
-    cp compat402.ml ext/compat.ml
+    echo "Using compat401.ml"
+    cp -f compat401.ml ext/compat.ml
 else
-    echo "Using compat403.ml"
-    cp -f compat403.ml ext/compat.ml
+    echo "Using compat402.ml"
+    cp -f compat402.ml ext/compat.ml
 fi
 
 extmodules="compat fugue filepath filesystem"
