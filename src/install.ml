@@ -20,7 +20,7 @@ let list_lib_files lib build_dir = list_target_files_pred lib (fun f ->
     else
       match Filetype.of_filepath (build_dir </> f) with
       | Filetype.FileCMX | Filetype.FileCMI | Filetype.FileA | Filetype.FileCMXS
-      | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMTI -> true
+      | Filetype.FileCMXA | Filetype.FileCMA | Filetype.FileCMT | Filetype.FileCMTI -> true
       | _                  -> false)
 
 let list_exe_files lib build_dir = list_target_files_pred lib (fun f ->
