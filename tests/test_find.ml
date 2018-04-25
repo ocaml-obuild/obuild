@@ -76,6 +76,42 @@ let () =
   let num_answer = Meta.Pkg.get_archive_with_filter (None, num) (Libname.of_string "num.core")
       [Meta.Predicate.Native; Meta.Predicate.Plugin] in  
   assumeEq "num plugin native" "archive(plugin,native) = [nums.cmxs]" (archives_to_string num_answer);
+  let meta_threads =  "# Specifications for the \"threads\" library:\n\
+  version = \"[distributed with Ocaml]\"\n\
+  description = \"Multi-threading\"\n\
+  requires(mt,mt_vm) = \"threads.vm\"\n\
+  requires(mt,mt_posix) = \"threads.posix\"\n\
+  directory = \"^\"\n\
+  type_of_threads = \"posix\"\n\
+  \n\
+  browse_interfaces = \" Unit name: Condition Unit name: Event Unit name: Mutex Unit name: Thread Unit name: ThreadUnix \"\n\
+  \n\
+  warning(-mt) = \"Linking problems may arise because of the missing -thread or -vmthread switch\"\n\
+  warning(-mt_vm,-mt_posix) = \"Linking problems may arise because of the missing -thread or -vmthread switch\"\n\
+  \n\
+  package \"vm\" (\n\
+  \  # --- Bytecode-only threads:\n\
+  \  requires = \"unix\"\n\
+  \  directory = \"+vmthreads\"\n\
+  \  exists_if = \"threads.cma\"\n\
+  \  archive(byte,mt,mt_vm) = \"threads.cma\"\n\
+  \  version = \"[internal]\"\n\
+  )\n\
+  \n\
+  package \"posix\" (\n\
+  \  # --- POSIX-threads:\n\
+  \  requires = \"unix\"\n\
+  \  directory = \"+threads\"\n\
+  \  exists_if = \"threads.cma\"\n\
+  \  archive(byte,mt,mt_posix) = \"threads.cma\"\n\
+  \  archive(native,mt,mt_posix) = \"threads.cmxa\"\n\
+  \  version = \"[internal]\"\n\
+                       )\n" in
+  let threads = Meta.parse (Filepath.fp "threads") meta_threads "threads" in
+  let threads_answer = Meta.Pkg.get_archive_with_filter (None, threads) (Libname.of_string "threads.posix")
+      [Meta.Predicate.Native; Meta.Predicate.Mt; Meta.Predicate.Mt_posix] in
+  assumeEq "threads native" "archive(native,mt,mt_posix) = [threads.cmxa]" (archives_to_string threads_answer);
+
   let meta_ctypes = 
     "\
   version = \"0.4\"\n\

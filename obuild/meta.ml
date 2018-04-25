@@ -86,6 +86,7 @@ module Pkg = struct
     browse_interface : string;
     type_of_threads : string;
     archives    : (Predicate.t list * string) list;
+    warning    : (Predicate.t list * string) list;
     append_archives    : (Predicate.t list * string) list;
     version     : string;
     assignment  : (string * string) list;
@@ -106,6 +107,7 @@ module Pkg = struct
     exists_if        = "";
     archives         = [];
     append_archives  = [];
+    warning          = [];
     version          = "";
     assignment       = [];
     subs             = [];
@@ -354,6 +356,15 @@ module Token = struct
     | ID "directory" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.directory = dir } xs
     | ID "description" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.description = dir } xs
     | ID "browse_interfaces" :: EQ :: S _ :: xs -> parse pkg_name acc xs
+    | ID "warning" :: xs -> (
+        let (preds, xs2) = parse_predicate_list pkg_name "archive" xs in
+        match xs2 with
+        | EQ :: S v :: xs3 ->
+          let nacc = { acc with Pkg.warning = acc.Pkg.warning @ [(preds, v)] } in
+          parse pkg_name nacc xs3
+        | _ -> raise (MetaParseError (pkg_name, "parsing warning failed"))
+      )
+                                                     
     | ID "archive" :: xs -> (
         let (preds, xs2) = parse_predicate_list pkg_name "archive" xs in
         match xs2 with
