@@ -60,7 +60,7 @@ let ocaml_config = ref None
 let getOcamlConfig () =
   match !ocaml_config with
   | None ->
-    (match Process.run [ getOcamlOpt (); "-config" ] with
+    (match Process.run [ getOcamlC (); "-config" ] with
      | Process.Success (s,_,_) ->
        let lines = string_lines_noempty s in
        let h = Hashtbl.create 32 in
