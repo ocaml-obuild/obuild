@@ -95,6 +95,7 @@ export OCAMLRUNPARAM=b
 ./obuild.bootstrap clean
 if [ -x "$(command -v ocamlopt)" ]; then
 	./obuild.bootstrap configure
+	time ./obuild.bootstrap build
 else
 	./obuild.bootstrap configure \
 		--disable-executable-native \
@@ -102,8 +103,10 @@ else
 		--disable-library-plugin \
 		--enable-executable-bytecode \
 		--enable-library-bytecode
+	time ./obuild.bootstrap build
+	mv dist/build/obuild/obuild.byte dist/build/obuild/obuild
+	mv dist/build/obuild-simple/obuild-simple.byte dist/build/obuild-simple/obuild-simple
 fi
-time ./obuild.bootstrap build
-if [ -x dist/build/obuild/obuild ] || [ -x dist/build/obuild/obuild.byte ]; then
+if [ -x dist/build/obuild/obuild ]; then
 	rm obuild.bootstrap
 fi
