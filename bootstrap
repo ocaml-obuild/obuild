@@ -3,8 +3,8 @@
 libs="unix.cma"
 
 OCAMLC="ocamlc -g"
-OCAMLVER=`$OCAMLC -version`
-echo $OCAMLVER
+OCAMLVER=$($OCAMLC -version)
+echo "$OCAMLVER"
 
 rm -f ext/compat.ml
 if [[ $OCAMLVER < "4.02.0" ]] ; then
@@ -26,37 +26,37 @@ set -e
 ########################################################################
 # build ext
 cd ext
-rm -f *.cmi *.cmo *.o
-APPEND=""
+rm -f ./*.cmi ./*.cmo ./*.o
+FILES=()
 for mod in $extmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && $OCAMLC -for-pack Ext -c ${mod}.mli
-	$OCAMLC -for-pack Ext -c ${mod}.ml
-	APPEND+="ext/${mod}.cmo "
+	[ -f "${mod}.mli" ] && $OCAMLC -for-pack Ext -c "${mod}.mli"
+	$OCAMLC -for-pack Ext -c "${mod}.ml"
+	FILES+=("ext/${mod}.cmo")
 done;
 cd ..
 echo "BUILDING library Ext.cmo"
-$OCAMLC -pack -o Ext.cmo -I ext/ $APPEND
+$OCAMLC -pack -o Ext.cmo -I ext/ "${FILES[@]}"
 
 ########################################################################
 ########################################################################
 ########################################################################
 # build the library
 cd obuild
-rm -f *.cmi *.cmo *.o
+rm -f ./*.cmi ./*.cmo ./*.o
 
-APPEND=""
+FILES=()
 for mod in $libmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && $OCAMLC -for-pack Obuild -I ../ -c ${mod}.mli
-	$OCAMLC -for-pack Obuild -I ../ -c ${mod}.ml
-	APPEND+="obuild/${mod}.cmo "
+	[ -f "${mod}.mli" ] && $OCAMLC -for-pack Obuild -I ../ -c "${mod}.mli"
+	$OCAMLC -for-pack Obuild -I ../ -c "${mod}.ml"
+	FILES+=("obuild/${mod}.cmo")
 done;
 cd ..
 echo "BUILDING library Obuild.cmo"
-$OCAMLC -pack -o Obuild.cmo -I ext/ $APPEND
+$OCAMLC -pack -o Obuild.cmo -I ext/ "${FILES[@]}"
 
 # then bootstrap the main executable
 # main needs the version number
@@ -69,21 +69,21 @@ let project_version = "0.0.0"
 
 EOF
 cd src
-APPEND=""
+FILES=()
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && $OCAMLC -I ../ -c ${mod}.mli
-	$OCAMLC -I ../ -c ${mod}.ml
-	APPEND+="${mod}.cmo "
+	[ -f "${mod}.mli" ] && $OCAMLC -I ../ -c "${mod}.mli"
+	$OCAMLC -I ../ -c "${mod}.ml"
+	FILES+=("${mod}.cmo")
 done
 echo "LINKING obuild.bootstrap"
-$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} Ext.cmo Obuild.cmo $APPEND
+$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} Ext.cmo Obuild.cmo "${FILES[@]}"
 cd ..
 
 rm -f obuild/*.cmi obuild/*.cmo obuild/*.o
 rm -f src/*.cmi src/*.cmo src/*.o
-rm -f *.cmi *.o *a *.cmo
+rm -f ./*.cmi ./*.o ./*a ./*.cmo
 rm -f src/path_generated.ml
 
 ########################################################################
