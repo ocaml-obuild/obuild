@@ -92,7 +92,16 @@ rm -f src/path_generated.ml
 # rebuild everything with the bootstraped version
 export OCAMLRUNPARAM=b
 ./obuild.bootstrap clean
-./obuild.bootstrap configure --disable-executable-native --disable-library-native --disable-library-plugin --enable-executable-bytecode --enable-library-bytecode
+if [ -x "$(command -v ocamlopt)" ]; then
+	./obuild.bootstrap configure
+else
+	./obuild.bootstrap configure \
+		--disable-executable-native \
+		--disable-library-native \
+		--disable-library-plugin \
+		--enable-executable-bytecode \
+		--enable-library-bytecode
+fi
 time ./obuild.bootstrap build
 if [ -x dist/build/obuild/obuild ]; then
 	rm obuild.bootstrap
