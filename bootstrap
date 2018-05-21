@@ -2,7 +2,8 @@
 
 libs="unix.cma"
 
-OCAMLVER=`ocamlc -version`
+OCAMLC="ocamlc -g"
+OCAMLVER=`$OCAMLC -version`
 echo $OCAMLVER
 
 rm -f ext/compat.ml
@@ -30,13 +31,13 @@ APPEND=""
 for mod in $extmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && ocamlc -for-pack Ext -c ${mod}.mli
-	ocamlc -for-pack Ext -c ${mod}.ml
+	[ -f ${mod}.mli ] && $OCAMLC -for-pack Ext -c ${mod}.mli
+	$OCAMLC -for-pack Ext -c ${mod}.ml
 	APPEND+="ext/${mod}.cmo "
 done;
 cd ..
 echo "BUILDING library Ext.cmo"
-ocamlc -pack -o Ext.cmo -I ext/ $APPEND
+$OCAMLC -pack -o Ext.cmo -I ext/ $APPEND
 
 ########################################################################
 ########################################################################
@@ -49,13 +50,13 @@ APPEND=""
 for mod in $libmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && ocamlc -for-pack Obuild -I ../ -c ${mod}.mli
-	ocamlc -for-pack Obuild -I ../ -c ${mod}.ml
+	[ -f ${mod}.mli ] && $OCAMLC -for-pack Obuild -I ../ -c ${mod}.mli
+	$OCAMLC -for-pack Obuild -I ../ -c ${mod}.ml
 	APPEND+="obuild/${mod}.cmo "
 done;
 cd ..
 echo "BUILDING library Obuild.cmo"
-ocamlc -pack -o Obuild.cmo -I ext/ $APPEND
+$OCAMLC -pack -o Obuild.cmo -I ext/ $APPEND
 
 # then bootstrap the main executable
 # main needs the version number
@@ -72,12 +73,12 @@ APPEND=""
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && ocamlc -I ../ -c ${mod}.mli
-	ocamlc -I ../ -c ${mod}.ml
+	[ -f ${mod}.mli ] && $OCAMLC -I ../ -c ${mod}.mli
+	$OCAMLC -I ../ -c ${mod}.ml
 	APPEND+="${mod}.cmo "
 done
 echo "LINKING obuild.bootstrap"
-ocamlc -o ../obuild.bootstrap -I ../ ${libs} Ext.cmo Obuild.cmo $APPEND
+$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} Ext.cmo Obuild.cmo $APPEND
 cd ..
 
 rm -f obuild/*.cmi obuild/*.cmo obuild/*.o
@@ -103,6 +104,6 @@ else
 		--enable-library-bytecode
 fi
 time ./obuild.bootstrap build
-if [ -x dist/build/obuild/obuild ]; then
+if [ -x dist/build/obuild/obuild ] || [ -x dist/build/obuild/obuild.byte ]; then
 	rm obuild.bootstrap
 fi
