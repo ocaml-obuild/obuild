@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 
-libs="unix.cmxa"
-OCAMLOPT="ocamlopt -g"
-# use faster ocamlopt, if available
-OCAMLOPT_OPT=`which ocamlopt.opt`
-if [[ $OCAMLOPT_OPT != "" ]] ; then
-    OCAMLOPT="ocamlopt.opt -g"
-fi
-OCAMLVER=`$OCAMLOPT -vnum`
+libs="unix.cma"
+
+OCAMLVER=`ocamlc -version`
 echo $OCAMLVER
 
 rm -f ext/compat.ml
@@ -30,40 +25,37 @@ set -e
 ########################################################################
 # build ext
 cd ext
-rm -f *.cmi *.cmx *.o
+rm -f *.cmi *.cmo *.o
 APPEND=""
 for mod in $extmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && $OCAMLOPT -for-pack Ext -c ${mod}.mli
-	$OCAMLOPT -for-pack Ext -c ${mod}.ml
-	APPEND+="ext/${mod}.cmx "
+	[ -f ${mod}.mli ] && ocamlc -for-pack Ext -c ${mod}.mli
+	ocamlc -for-pack Ext -c ${mod}.ml
+	APPEND+="ext/${mod}.cmo "
 done;
 cd ..
-
-echo "BUILDING library obuild_ext.cmxa"
-$OCAMLOPT -pack -o ext.cmx -I ext/ $APPEND
-$OCAMLOPT -a -o obuild_ext.cmxa ext.cmx
+echo "BUILDING library Ext.cmo"
+ocamlc -pack -o Ext.cmo -I ext/ $APPEND
 
 ########################################################################
 ########################################################################
 ########################################################################
 # build the library
 cd obuild
-rm -f *.cmi *.cmx *.o
+rm -f *.cmi *.cmo *.o
 
 APPEND=""
 for mod in $libmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && $OCAMLOPT -for-pack Obuild -I ../ -c ${mod}.mli
-	$OCAMLOPT -for-pack Obuild -I ../ -c ${mod}.ml
-	APPEND+="obuild/${mod}.cmx "
+	[ -f ${mod}.mli ] && ocamlc -for-pack Obuild -I ../ -c ${mod}.mli
+	ocamlc -for-pack Obuild -I ../ -c ${mod}.ml
+	APPEND+="obuild/${mod}.cmo "
 done;
 cd ..
-echo "BUILDING library obuild.cmxa"
-$OCAMLOPT -pack -o obuild.cmx -I ext/ $APPEND
-$OCAMLOPT -a -o obuild.cmxa obuild.cmx
+echo "BUILDING library Obuild.cmo"
+ocamlc -pack -o Obuild.cmo -I ext/ $APPEND
 
 # then bootstrap the main executable
 # main needs the version number
@@ -80,17 +72,17 @@ APPEND=""
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
-	[ -f ${mod}.mli ] && $OCAMLOPT -I ../ -c ${mod}.mli
-	$OCAMLOPT -I ../ -c ${mod}.ml
-	APPEND+="${mod}.cmx "
+	[ -f ${mod}.mli ] && ocamlc -I ../ -c ${mod}.mli
+	ocamlc -I ../ -c ${mod}.ml
+	APPEND+="${mod}.cmo "
 done
 echo "LINKING obuild.bootstrap"
-$OCAMLOPT -o ../obuild.bootstrap -I ../ ${libs} obuild_ext.cmxa obuild.cmxa $APPEND
+ocamlc -o ../obuild.bootstrap -I ../ ${libs} Ext.cmo Obuild.cmo $APPEND
 cd ..
 
-rm -f obuild/*.cmi obuild/*.cmx obuild/*.o
-rm -f src/*.cmi src/*.cmx src/*.o
-rm -f *.cmi *.o *a *.cmx *.cmxa
+rm -f obuild/*.cmi obuild/*.cmo obuild/*.o
+rm -f src/*.cmi src/*.cmo src/*.o
+rm -f *.cmi *.o *a *.cmo
 rm -f src/path_generated.ml
 
 ########################################################################
@@ -100,7 +92,7 @@ rm -f src/path_generated.ml
 # rebuild everything with the bootstraped version
 export OCAMLRUNPARAM=b
 ./obuild.bootstrap clean
-./obuild.bootstrap configure
+./obuild.bootstrap configure --disable-executable-native --disable-library-native --disable-library-plugin --enable-executable-bytecode --enable-library-bytecode
 time ./obuild.bootstrap build
 if [ -x dist/build/obuild/obuild ]; then
 	rm obuild.bootstrap
