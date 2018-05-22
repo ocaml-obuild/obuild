@@ -70,7 +70,7 @@ let getOcamlConfig () =
          ) lines;
        ocaml_config := Some h;
        h
-     | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err)))
+     | Process.Failure err -> raise (OCamlProgramError ("ocamlc cannot get config " ^ err)))
   | Some h -> h
 
 let getCamlp4Config () =
