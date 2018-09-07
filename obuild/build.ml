@@ -306,7 +306,7 @@ let wait_for_files cdep_files =
   List.for_all (fun f ->
       let test = Filesystem.exists f in
       if not test then
-        verbose Debug "warning: (temporarily?) missing file %s" (fp_to_string f);
+        verbose Debug "warning: (temporarily?) missing file %s\n" (fp_to_string f);
       test
     ) cdep_files
 
@@ -451,11 +451,11 @@ let sanity_check build_dir target =
   let allOK = List.for_all (fun f ->
       let test = Filesystem.exists (build_dir </> f) in
       if not test then
-        verbose Debug "warning: missing file %s" (fp_to_string (build_dir </> f));
+        verbose Debug "warning: missing file %s\n" (fp_to_string (build_dir </> f));
       test
     ) files in
   if not allOK
-  then verbose Report "warning: some target file appears to be missing";
+  then verbose Report "warning: some target file appears to be missing\n";
   ()
 
 let check task_index task task_context dag =
