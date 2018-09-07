@@ -500,7 +500,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
 
     (* just append each C sources as single node in the stepsDag *)
     if cbits.target_csources <> [] then (
-      let objDeps = runCCdep cbits.target_cdir cbits.target_csources in
+      let objDeps = runCCdep cbits.target_cdir cbits.target_clibpaths cbits.target_csources in
 
       List.iter (fun cSource ->
           let (fps : filepath list) =
