@@ -302,21 +302,9 @@ let compile_module task_index task is_intf h bstate task_context dag =
       (if reason <> "" then "    ( " ^ reason ^ " )" else "");
     Scheduler.AddTask (task, all_fun_lists)
 
-let wait_for_files cdep_files =
-  List.for_all (fun f ->
-      let test = Filesystem.exists f in
-      if not test then
-        verbose Debug "warning: (temporarily?) missing file %s\n" (fp_to_string f);
-      test
-    ) cdep_files
-
 let link_c cstate clib_name =
   let lib_name = cstate.compilation_builddir_c </> fn clib_name in
   let cdep_files = List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources in
-  (* Not sure why it is necessary ... gcc seems to return before the files are ready. *)
-  while not (wait_for_files cdep_files) do
-    ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
-  done;
   if gconf.ocamlmklib then
     [[(fun () -> runCLinking LinkingShared cdep_files lib_name)]]
   else (

@@ -498,7 +498,9 @@ let prepare_target_ bstate buildDir target toplevelModules =
       List.iter (Hashtbl.remove h) freeModules;
     done;
 
-    (* just append each C sources as single node in the stepsDag *)
+    (* Append each C sources as single node in the stepsDag, making them dependencies
+     * of the final linking target.
+     *)
     if cbits.target_csources <> [] then (
       let objDeps = runCCdep cbits.target_cdir cbits.target_clibpaths cbits.target_csources in
 
@@ -520,7 +522,9 @@ let prepare_target_ bstate buildDir target toplevelModules =
           Dag.addChildrenEdges oNode hFiles filesDag;
 
           (* add C source compilation task into the step DAG *)
-          Dag.addNode (CompileC cSource) stepsDag
+          let ccNode = CompileC cSource in
+          Dag.addNode ccNode stepsDag;
+          Dag.addEdge (LinkTarget target) ccNode stepsDag;
         ) cbits.target_csources;
     );
 
