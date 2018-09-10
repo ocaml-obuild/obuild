@@ -17,7 +17,7 @@ fi
 
 extmodules="compat fugue filepath filesystem"
 libmodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare buildprogs build exception"
-mainmodules="sdist doc init help install path_generated main"
+mainmodules="app_utils sdist doc init install path_generated cmd cmd_build cmd_clean cmd_configure cmd_doc cmd_get cmd_help cmd_infer cmd_init cmd_install cmd_sdist cmd_test main"
 
 set -e
 
