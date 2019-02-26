@@ -40,6 +40,7 @@ val fp_to_string : filepath -> string
 val fn_to_string : filename -> string
 val fp : string -> filepath
 val fn : string -> filename
+val is_absolute : filepath -> bool
 
 (** [got_dirsep s] returns [true] if [s] contains [Filename.dir_sep],
     i.e. "/" on Unix. *)

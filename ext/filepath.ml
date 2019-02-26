@@ -6,6 +6,7 @@ exception InvalidFilename of string
 type filepath = { absolute: bool; filepath : string list }
 type filename = { filename : string }
 
+let is_absolute fp = fp.absolute
 let emptyFn = { filename = "" }
 let currentDir = { absolute = false; filepath = [] }
 

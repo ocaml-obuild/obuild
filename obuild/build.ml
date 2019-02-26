@@ -327,6 +327,20 @@ let link_c cstate clib_name =
      [(fun () -> runRanlib a_file)]]
   )
 
+let satisfy_preds dep preds =
+  let satisfy_all current_pkg =
+    let res = List.fold_left (fun acc (req_preds,req_libs) ->
+        List.fold_left (fun in_acc lib ->
+            if lib = dep then Meta.Pkg.satisfy req_preds preds else true
+          ) acc req_libs
+      ) true current_pkg.Meta.Pkg.requires in
+    res
+  in
+  let rec dep_is_satisfied current_pkg =
+    (satisfy_all current_pkg) && (List.for_all satisfy_all current_pkg.subs) in
+  let (_,root_pkg) = Metacache.get dep.Libname.main_name in
+  dep_is_satisfied root_pkg
+
 let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
   let systhread = Analyze.getOcamlConfigKey "systhread_supported" in
   let buildDeps =  if is_lib target then []
@@ -350,11 +364,14 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
             | WithProf -> Meta.Predicate.Gprof :: preds
             | _ -> preds
           in
-          let archives = Meta.Pkg.get_archive_with_filter meta dep preds in
-          List.fold_left (fun acc (_,a) ->
-              let files = string_split ' ' a in
-              acc @ (List.map (fun f -> in_current_dir $ fn f) files)
-            ) [] archives
+          if (satisfy_preds dep preds) then
+            let archives = Meta.Pkg.get_archive_with_filter meta dep preds in
+            List.fold_left (fun acc (_,a) ->
+                let files = string_split ' ' a in
+                acc @ (List.map (fun f -> in_current_dir $ fn f) files)
+              ) [] archives
+          else
+            []
       ) pkgDeps)
   in
   let dest = match target.target_name with

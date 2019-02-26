@@ -133,8 +133,7 @@ module Pkg = struct
 
   let is_syntax (_, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
 
-  let get_archive_with_filter (_, root) dep preds =
-    let pkg = find dep.Libname.subnames root in
+  let get_archive_with_filter (_, pkg) dep preds =
     let fulfills archive_preds =
       List.for_all (fun p -> match p with Predicate.Neg n -> not (List.mem n preds)
                                         | _ -> List.mem p preds) archive_preds
@@ -479,5 +478,9 @@ let getIncludeDir stdlib ((path, pkg) : t) : filepath =
   | o   -> match o.[0]  with
     | '^' -> path_dirname (path_dirname path) <//> fp (string_drop 1 o)
     | '+' -> stdlib <//> fp (string_drop 1 o)
-    | _   -> fp o
+    | _   -> let fpo = fp o in
+      if (Ext.Filepath.is_absolute fpo) then
+        fpo
+      else
+        path_dirname path <//> fpo
     
