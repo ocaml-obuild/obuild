@@ -33,17 +33,9 @@ let removeDirContent wpath =
 let removeDir path = removeDirContent path; Unix.rmdir (fp_to_string path); ()
 
 let iterate f path =
-    let dirhandle = Unix.opendir (fp_to_string path) in
-    (try
-        while true do
-            let ent = Unix.readdir dirhandle in
-            if ent <> ".." && ent <> "."
-                then f (fn ent)
-        done;
-    with End_of_file ->
-        ()
-    );
-    Unix.closedir dirhandle;
+    let entries = Sys.readdir (fp_to_string path) in
+    Array.fast_sort String.compare entries;
+    Array.iter (fun ent -> f (fn ent)) entries;
     ()
 
 (* list directory entry with a map function included for efficiency *)
@@ -62,19 +54,9 @@ let list_dir_pred (p : filename -> bool) path : filename list =
 let list_dir = list_dir_pred (const true)
 
 let list_dir_path_pred p path =
-    let accum = ref [] in
-    let dirhandle = Unix.opendir (fp_to_string path) in
-    (try
-        while true do
-            let ent = Unix.readdir dirhandle in
-            if ent <> ".." && p ent
-                then accum := (path </> fn ent) :: !accum
-        done;
-    with End_of_file ->
-        ()
-    );
-    Unix.closedir dirhandle;
-    !accum
+    let entries = List.filter p (Array.to_list (Sys.readdir (fp_to_string path))) in
+    let sorted = List.fast_sort String.compare entries in
+    List.map (fun ent -> path </> fn ent) sorted
 
 let list_dir_path = list_dir_path_pred (const true)
 
