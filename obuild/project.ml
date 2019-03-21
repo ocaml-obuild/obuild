@@ -440,7 +440,7 @@ let make = {
 }
 
 let findPath () =
-    let ents = Array.to_list (Sys.readdir ".") in
+    let ents = List.fast_sort String.compare (Array.to_list (Sys.readdir ".")) in
     match List.find_all (fun ent -> not (string_startswith "." ent) && string_endswith ".obuild" ent) ents with
     | []  -> raise NoConfFile
     | [x] -> fp x
