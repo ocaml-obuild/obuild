@@ -217,6 +217,10 @@ type t = filepath * Pkg.t
 
 let path_warning = ref false
 
+let string_split_words s =
+  List.filter (fun x -> x <> "") $
+  string_split_pred (fun c -> List.mem c [','; ' '; '\n']) s
+
 module Token = struct
   (* mini lexer *)
   type t =
@@ -346,8 +350,7 @@ module Token = struct
         match xs2 with
         | PLUSEQ :: S reqs :: xs3
         | EQ :: S reqs :: xs3 ->
-          let deps = List.map (fun r -> Libname.of_string r)
-                     $ (List.filter (fun x -> x <> "") $ string_split_pred (fun c -> List.mem c [',';' ']) reqs)
+          let deps = List.map (fun r -> Libname.of_string r) $ string_split_words reqs
           in
           parse pkg_name { acc with Pkg.requires = (preds, (List.rev deps)) :: acc.Pkg.requires } xs3
         | _ -> raise (MetaParseError (pkg_name, "parsing requires failed"))
