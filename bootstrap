@@ -2,7 +2,7 @@
 
 libs="unix.cma"
 
-OCAMLC="ocamlc -g"
+OCAMLC="ocamlc -g -I +unix"
 OCAMLVER=$($OCAMLC -version)
 echo "$OCAMLVER"
 
