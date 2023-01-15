@@ -1,0 +1,4 @@
+if-then-else=fit-or-vertical
+break-cases=fit-or-vertical
+type-decl=sparse
+margin=100

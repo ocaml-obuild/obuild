@@ -2,7 +2,7 @@
 
 libs="unix.cma"
 
-OCAMLC="ocamlc -g"
+OCAMLC="ocamlc -g -I +unix"
 OCAMLVER=$($OCAMLC -version)
 echo "$OCAMLVER"
 
@@ -11,9 +11,15 @@ if [[ $OCAMLVER < "4.02.0" ]] ; then
     echo "Using compat401.ml"
     cp -f compat401.ml ext/compat.ml
 else
-    echo "Using compat402.ml"
-    cp -f compat402.ml ext/compat.ml
+	if [[ $OCAMLVER < "4.03.0" ]] ; then
+		echo "Using compat402.ml"
+		cp -f compat402.ml ext/compat.ml
+	else
+		echo "Using compat403.ml"
+		cp -f compat403.ml ext/compat.ml
+	fi
 fi
+
 
 extmodules="compat fugue filepath filesystem"
 libmodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare buildprogs build exception"
