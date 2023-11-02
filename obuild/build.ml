@@ -367,7 +367,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
           if (satisfy_preds dep preds) then
             let archives = Meta.Pkg.get_archive_with_filter meta dep preds in
             List.fold_left (fun acc (_,a) ->
-                let files = string_split ' ' a in
+                let files = Meta.string_split_words a in
                 acc @ (List.map (fun f -> in_current_dir $ fn f) files)
               ) [] archives
           else
