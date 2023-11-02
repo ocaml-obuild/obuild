@@ -71,8 +71,8 @@ let joinLines s =
   in
   bytes_to_string (replace 0)
 
-let runCCdep srcDir files : (filename * filepath list) list =
-  let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
+let runCCdep srcDir clibpaths files : (filename * filepath list) list =
+  let args = [Prog.getCC (); "-MM"] @ (Utils.to_include_path_options clibpaths) @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
   match Process.run args with
   | Process.Failure err     -> raise (BuildCDepAnalyzeFailed err)
   | Process.Success (out,_,_) ->
