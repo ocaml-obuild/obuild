@@ -1,4 +1,3 @@
 bin: [
   "dist/build/obuild/obuild"
-  "dist/build/obuild-simple/obuild-simple"
 ]
