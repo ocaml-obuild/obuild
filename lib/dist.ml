@@ -1,6 +1,6 @@
-open Ext.Fugue
-open Ext.Filepath
-open Ext
+open Base.Fugue
+open Base.Filepath
+open Base
 
 type t = Autogen | Dot | Target of Target.Name.t
 

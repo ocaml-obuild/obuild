@@ -1,7 +1,7 @@
 open Printf
-open Ext.Fugue
-open Ext.Filepath
-open Ext
+open Lib.Base.Fugue
+open Lib.Base.Filepath
+open Lib.Base
 open Lib.Types
 open Lib.Helper
 open Lib.Gconf

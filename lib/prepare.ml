@@ -2,9 +2,9 @@
  * gather dependencies in hashtable and DAGs
  * and create compilation state for one target
  *)
-open Ext.Fugue
-open Ext.Filepath
-open Ext
+open Base.Fugue
+open Base.Filepath
+open Base
 open Analyze
 open Types
 open Helper

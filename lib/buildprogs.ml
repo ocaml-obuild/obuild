@@ -1,7 +1,7 @@
 open Types
-open Ext
-open Ext.Filepath
-open Ext.Fugue
+open Base
+open Base.Filepath
+open Base.Fugue
 open Process
 open Prepare
 open Gconf

@@ -1,6 +1,6 @@
-open Ext.Filepath
-open Ext.Fugue
-open Ext.Compat
+open Base.Filepath
+open Base.Fugue
+open Base.Compat
 
 type t = string
 

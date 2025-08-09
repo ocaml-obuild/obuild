@@ -1,6 +1,6 @@
-open Ext.Fugue
-open Ext.Filepath
-open Ext.Compat
+open Base.Fugue
+open Base.Filepath
+open Base.Compat
 open Types
 
 exception EmptyModuleHierarchy
@@ -80,9 +80,9 @@ let add_prefix prefix_path hier =
 
 let check_file path filename ext =
   if ext <> Filetype.FileOther "" then
-    Ext.Filesystem.exists (path </> (fn filename <.> Filetype.to_string ext))
+    Base.Filesystem.exists (path </> (fn filename <.> Filetype.to_string ext))
   else
-    Ext.Filesystem.exists (path </> fn filename)
+    Base.Filesystem.exists (path </> fn filename)
 
 let check_modname path modname ext =
   if check_file path modname ext then

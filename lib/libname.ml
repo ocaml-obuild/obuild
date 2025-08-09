@@ -1,6 +1,6 @@
-open Ext.Fugue
+open Base.Fugue
 open Types
-open Ext.Filepath
+open Base.Filepath
 
 exception EmptyLibName
 

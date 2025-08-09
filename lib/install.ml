@@ -1,5 +1,5 @@
-open Ext.Fugue
-open Ext.Filepath
+open Base.Fugue
+open Base.Filepath
 open Printf
 open Project
 open Types
@@ -11,7 +11,7 @@ let list_target_files_pred target pred =
   let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
   Build.sanity_check build_dir target;
   (* don't play with matches *)
-  let matches = Ext.Filesystem.list_dir_pred pred build_dir in
+  let matches = Base.Filesystem.list_dir_pred pred build_dir in
   (build_dir, matches)
 
 let list_lib_files lib build_dir =
@@ -115,7 +115,7 @@ let copy_files files dest_dir dir_name =
     (fun (build_dir, build_files) ->
       List.iter
         (fun build_file ->
-          Ext.Filesystem.copy_file (build_dir </> build_file) (dest_dir </> dir_name </> build_file))
+          Base.Filesystem.copy_file (build_dir </> build_file) (dest_dir </> dir_name </> build_file))
         build_files)
     files
 

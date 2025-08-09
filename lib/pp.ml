@@ -1,5 +1,5 @@
-open Ext.Fugue
-open Ext.Compat
+open Base.Fugue
+open Base.Compat
 
 exception InvalidPreprocessor of string
 
@@ -14,7 +14,7 @@ module Type = struct
     | CamlP4R
 
   let of_string s =
-    match Ext.Compat.string_lowercase s with
+    match Base.Compat.string_lowercase s with
     | "p4o" | "camlp4o" -> CamlP4O
     | "p4r" | "camlp4r" -> CamlP4R
     | _ -> raise (InvalidPreprocessor s)

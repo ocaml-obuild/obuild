@@ -1,6 +1,6 @@
-open Ext.Fugue
-open Ext.Filepath
-open Ext
+open Base.Fugue
+open Base.Filepath
+open Base
 open Printf
 open Helper
 open Gconf
@@ -479,7 +479,7 @@ let getIncludeDir stdlib ((path, pkg) : t) : filepath =
     | '^' -> path_dirname (path_dirname path) <//> fp (string_drop 1 o)
     | '+' -> stdlib <//> fp (string_drop 1 o)
     | _   -> let fpo = fp o in
-      if (Ext.Filepath.is_absolute fpo) then
+      if (Base.Filepath.is_absolute fpo) then
         fpo
       else
         path_dirname path <//> fpo

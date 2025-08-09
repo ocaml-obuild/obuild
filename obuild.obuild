@@ -47,10 +47,11 @@ extra-srcs: bootstrap
 
 
 library obuild
-  modules: obuild
-  build-deps: unix, obuild.ext
-  library ext
-    modules: ext
+  modules: lib
+  build-deps: unix, obuild.base
+  library base
+    modules: compat, filepath, filesystem, filesystem, fugue
+    src-dir: lib/base
     build-deps: unix
 
 # a comment
@@ -68,14 +69,14 @@ test dag
 test path
   src-dir: tests
   main-is: test_path.ml
-  build-deps: obuild, obuild.ext
+  build-deps: obuild, obuild.base
 
 test expr
   src-dir: tests
   main-is: test_expr.ml
-  build-deps: obuild, obuild.ext
+  build-deps: obuild, obuild.base
 
 test find
   src-dir: tests
   main-is: test_find.ml
-  build-deps: obuild, obuild.ext
+  build-deps: obuild, obuild.base
