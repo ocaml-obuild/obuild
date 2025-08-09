@@ -1,6 +1,5 @@
-open Base.Fugue
-open Base.Filepath
-open Base
+open Fugue
+open Filepath
 
 exception OCamlProgramError of string
 exception TarError of string

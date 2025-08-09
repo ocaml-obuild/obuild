@@ -1,6 +1,5 @@
-open Base.Fugue
-open Base.Filepath
-open Base
+open Fugue
+open Filepath
 open Helper
 open Target
 open Gconf

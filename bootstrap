@@ -22,7 +22,8 @@ fi
 
 
 extmodules="compat fugue filepath filesystem"
-libmodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare buildprogs build exception sdist doc init help install"
+coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare buildprogs build exception"
+commandmodules="sdist doc init help install"
 mainmodules="path_generated main"
 
 set -e
@@ -30,37 +31,56 @@ set -e
 ########################################################################
 ########################################################################
 ########################################################################
-# build lib (combining base utilities and core library)
+# build lib (combining base utilities, core library, and command modules)
 cd lib/
 rm -f ./*.cmi ./*.cmo ./*.o
 rm -f base/*.cmi base/*.cmo base/*.o
+rm -f core/*.cmi core/*.cmo core/*.o
 
-# First compile base modules
+# Compile base modules as top-level (for bootstrap compatibility)
 cd base
-FILES=()
 for mod in $extmodules
 do
 	echo "COMPILING base/$mod"
-	[ -f "${mod}.mli" ] && $OCAMLC -for-pack Lib.Base -c "${mod}.mli"
-	$OCAMLC -for-pack Lib.Base -c "${mod}.ml"
-	FILES+=("${mod}.cmo")
+	[ -f "${mod}.mli" ] && $OCAMLC -c "${mod}.mli"
+	$OCAMLC -c "${mod}.ml"
 done;
-echo "BUILDING Base.cmo submodule"
-$OCAMLC -pack -o ../base.cmo "${FILES[@]}"
 cd ..
 
-# Then compile library modules
-LIBFILES=("lib/base.cmo")
-for mod in $libmodules
+# Compile core modules (can access base modules directly)  
+cd core
+for mod in $coremodules
 do
-	echo "COMPILING $mod"
-	[ -f "${mod}.mli" ] && $OCAMLC -for-pack Lib -I ../ -c "${mod}.mli"
-	$OCAMLC -for-pack Lib -I ../ -c "${mod}.ml"
-	LIBFILES+=("lib/${mod}.cmo")
+	echo "COMPILING core/$mod"
+	[ -f "${mod}.mli" ] && $OCAMLC -I .. -I ../base -c "${mod}.mli"
+	$OCAMLC -I .. -I ../base -c "${mod}.ml"
 done;
 cd ..
-echo "BUILDING library Lib.cmo"
-$OCAMLC -pack -o Lib.cmo -I lib/base/ "${LIBFILES[@]}"
+
+# Compile command modules
+for mod in $commandmodules
+do
+	echo "COMPILING command/$mod"
+	[ -f "${mod}.mli" ] && $OCAMLC -I . -I base -I core -c "${mod}.mli"
+	$OCAMLC -I . -I base -I core -c "${mod}.ml"
+done;
+
+# During bootstrap, copy all modules to root for main.ml compatibility
+cd ..
+echo "COPYING modules to root for bootstrap"
+cp lib/base/*.cmo ./
+cp lib/base/*.cmi ./
+cp lib/core/*.cmo ./
+cp lib/core/*.cmi ./
+cp lib/*.cmo ./
+cp lib/*.cmi ./
+
+# Create a minimal Lib.cmo for bootstrap (main.ml expects it)
+echo "CREATING minimal Lib.cmo for bootstrap"
+touch empty.ml
+$OCAMLC -c empty.ml
+$OCAMLC -pack -o Lib.cmo empty.cmo
+rm empty.ml empty.cmo
 
 # then bootstrap the main executable
 # main needs the version number
@@ -82,11 +102,17 @@ do
 	FILES+=("${mod}.cmo")
 done
 echo "LINKING obuild.bootstrap"
-$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} Lib.cmo "${FILES[@]}"
+# Link with all individual .cmo files for bootstrap
+ALLCMO=""
+for mod in $extmodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
+for mod in $coremodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done  
+for mod in $commandmodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
+$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} $ALLCMO "${FILES[@]}"
 cd ..
 
 rm -f lib/*.cmi lib/*.cmo lib/*.o
 rm -f lib/base/*.cmi lib/base/*.cmo lib/base/*.o
+rm -f lib/core/*.cmi lib/core/*.cmo lib/core/*.o
 rm -f src/*.cmi src/*.cmo src/*.o
 rm -f ./*.cmi ./*.o ./*a ./*.cmo
 rm -f src/path_generated.ml

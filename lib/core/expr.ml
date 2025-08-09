@@ -1,4 +1,4 @@
-open Base.Fugue
+open Fugue
 
 exception UnknownSymbol of (string * string)
 exception UnknownExpression of string

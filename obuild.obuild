@@ -46,13 +46,19 @@ extra-srcs: bootstrap
      , TODO.md
 
 
+library obuild_base
+  modules: compat, filepath, filesystem, fugue
+  src-dir: lib/base
+  build-deps: unix
+
+library obuild_core
+  modules: analyze, build, buildprogs, configure, dag, dagutils, dependencies, dist, exception, expr, filetype, findlibConf, gconf, generators, helper, hier, libname, meta, metacache, modname, pp, prepare, process, prog, project, scheduler, target, taskdep, types, utils
+  src-dir: lib/core
+  build-deps: unix, obuild_base
+
 library obuild
   modules: lib
-  build-deps: unix, obuild.base
-  library base
-    modules: compat, filepath, filesystem, filesystem, fugue
-    src-dir: lib/base
-    build-deps: unix
+  build-deps: unix, obuild_base, obuild_core
 
 # a comment
 executable obuild
@@ -69,14 +75,14 @@ test dag
 test path
   src-dir: tests
   main-is: test_path.ml
-  build-deps: obuild, obuild.base
+  build-deps: obuild, obuild_base
 
 test expr
   src-dir: tests
   main-is: test_expr.ml
-  build-deps: obuild, obuild.base
+  build-deps: obuild, obuild_base
 
 test find
   src-dir: tests
   main-is: test_find.ml
-  build-deps: obuild, obuild.base
+  build-deps: obuild, obuild_base

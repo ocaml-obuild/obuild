@@ -1,6 +1,6 @@
-open Base.Fugue
-open Base.Filepath
-open Base.Compat
+open Fugue
+open Filepath
+open Compat
        
 exception BuildDepAnalyzeFailed of string
 exception BuildCDepAnalyzeFailed of string

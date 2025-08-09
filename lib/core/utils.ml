@@ -1,6 +1,5 @@
-open Base.Fugue
-open Base.Filepath
-open Base
+open Fugue
+open Filepath
 open Types
 
 let read_file_with f filename = 

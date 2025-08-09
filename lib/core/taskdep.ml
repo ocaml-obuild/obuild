@@ -1,5 +1,5 @@
 open Printf
-open Base.Fugue
+open Fugue
 
 type direction = FromChildren | FromParent
 

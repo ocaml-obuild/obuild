@@ -1,5 +1,5 @@
-open Base.Filepath
-open Base.Fugue
+open Filepath
+open Fugue
 open Types
 open Dependencies
 

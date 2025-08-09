@@ -1,7 +1,6 @@
-open Base.Fugue
-open Base.Filepath
-open Base.Compat
-open Base
+open Fugue
+open Filepath
+open Compat
 open Printf
 open Target
 

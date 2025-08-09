@@ -1,6 +1,6 @@
-open Base.Fugue
+open Fugue
 open Types
-open Base.Filepath
+open Filepath
 
 exception EmptyLibName
 

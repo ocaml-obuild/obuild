@@ -1,6 +1,6 @@
 (* simple bi-directional DAG implementation using shallow link*)
 open Printf
-open Base.Compat
+open Compat
     
 (* represent a node that point shallowly to children and parents *)
 type 'a dagnode =

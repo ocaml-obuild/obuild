@@ -1,4 +1,4 @@
-open Base.Filepath
+open Filepath
 open Helper
 open Gconf
 

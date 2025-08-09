@@ -1,6 +1,5 @@
-open Base.Fugue
-open Base.Filepath
-open Base
+open Fugue
+open Filepath
 
 type t = Autogen | Dot | Target of Target.Name.t
 

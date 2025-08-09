@@ -1,4 +1,4 @@
-open Base.Fugue
+open Fugue
 
 type verbosity_t =
   | Silent

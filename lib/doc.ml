@@ -1,4 +1,4 @@
-open Base.Fugue
+open Fugue
 
 exception DocumentationBuildingFailed of string
 

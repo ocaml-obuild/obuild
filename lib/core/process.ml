@@ -1,6 +1,6 @@
 open Helper
 open Gconf
-open Base.Compat
+open Compat
        
 type output = {
   buf : Buffer.t;

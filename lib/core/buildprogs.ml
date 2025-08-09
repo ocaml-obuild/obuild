@@ -1,7 +1,6 @@
 open Types
-open Base
-open Base.Filepath
-open Base.Fugue
+open Filepath
+open Fugue
 open Process
 open Prepare
 open Gconf

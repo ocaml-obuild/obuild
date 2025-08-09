@@ -2,9 +2,8 @@
  * gather dependencies in hashtable and DAGs
  * and create compilation state for one target
  *)
-open Base.Fugue
-open Base.Filepath
-open Base
+open Fugue
+open Filepath
 open Analyze
 open Types
 open Helper
