@@ -21,10 +21,8 @@ let get name =
 let get_from_cache lib =
   try
     let (fp,pkg) = Hashtbl.find pkgs_cache lib.Libname.main_name in
-    if (List.length lib.Libname.subnames) > 0 then
-      (fp, Meta.Pkg.find lib.Libname.subnames pkg)
-    else
-      (fp,pkg)
+    (* Always return the root package - let callers do subpackage resolution *)
+    (fp,pkg)
   with Not_found ->
     failwith (Printf.sprintf "package %s not found in the hashtbl: internal error" (Libname.to_string lib))
 

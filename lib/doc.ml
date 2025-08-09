@@ -8,4 +8,4 @@ let runOcamldoc pp =
   | Process.Failure er -> raise (DocumentationBuildingFailed er)
   | Process.Success (_, _, _) -> ()
 
-let run projFile = ()
+let run _projFile = ()

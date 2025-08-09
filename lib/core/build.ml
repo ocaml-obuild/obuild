@@ -329,7 +329,7 @@ let link_c cstate clib_name =
 let satisfy_preds dep preds =
   let satisfy_all current_pkg =
     let res = List.fold_left (fun acc (req_preds,req_libs) ->
-        List.fold_left (fun in_acc lib ->
+        List.fold_left (fun _in_acc lib ->
             if lib = dep then Meta.Pkg.satisfy req_preds preds else true
           ) acc req_libs
       ) true current_pkg.Meta.Pkg.requires in

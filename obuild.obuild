@@ -86,3 +86,8 @@ test find
   src-dir: tests
   main-is: test_find.ml
   build-deps: obuild, obuild_base
+
+test meta
+  src-dir: tests
+  main-is: test_meta.ml
+  build-deps: obuild, obuild_base

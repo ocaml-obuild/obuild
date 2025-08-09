@@ -62,7 +62,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
   in
   Process.make args
 
-let runOcamlPack srcDir dstDir annotMode buildMode packOpt dest modules =
+let runOcamlPack _srcDir dstDir annotMode buildMode packOpt dest modules =
   let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
   let ext = if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let ext_f = function

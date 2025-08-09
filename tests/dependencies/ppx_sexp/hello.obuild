@@ -5,17 +5,17 @@ obuild-ver: 1
 executable hello
   src-dir: .
   main-is: hello.ml
-  build-deps: ppx_sexp
+  build-deps: ppx_sexp_value
 
 executable hello_lwt
   src-dir: .
   main-is: hello_lwt.ml
-  build-deps: lwt.ppx
+  build-deps: lwt_ppx
 
 executable both
   src-dir: .
   main-is: both.ml
-  build-deps: lwt.ppx, ppx_sexp
+  build-deps: lwt_ppx, ppx_sexp_value
 
 executable show
   src-dir: .
@@ -29,7 +29,7 @@ Executable deriving
 
 Executable sexp
   src-dir: .
-  build-deps: ppx_sexp_conv
+  build-deps: ppx_sexp_conv, sexplib
   main-is: sexp.ml
 
 Executable binprot

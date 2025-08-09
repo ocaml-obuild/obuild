@@ -144,7 +144,8 @@ module Pkg = struct
   let is_syntax_ pkg = List.length (get_syntaxes pkg) > 0
   let is_syntax (_, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
 
-  let get_archive_with_filter (_, pkg) dep preds =
+  let get_archive_with_filter (_, rootPkg) dep preds =
+    let pkg = find dep.Libname.subnames rootPkg in
     let fulfills archive_preds =
       List.for_all
         (fun p ->
@@ -379,7 +380,7 @@ module Token = struct
             let deps =
               List.map (fun r -> Libname.of_string r)
               $ (List.filter (fun x -> x <> "")
-                $ string_split_pred (fun c -> List.mem c [ ','; ' ' ]) reqs)
+                $ string_split_pred (fun c -> List.mem c [ ','; ' '; '\n'; '\r'; '\t' ]) reqs)
             in
             parse pkg_name
               { acc with Pkg.requires = (preds, List.rev deps) :: acc.Pkg.requires }

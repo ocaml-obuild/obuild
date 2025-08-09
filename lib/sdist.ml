@@ -4,7 +4,7 @@ open Helper
 open Target
 open Gconf
 
-let run projFile isSnapshot =
+let run projFile _isSnapshot =
   let name = projFile.Project.name in
   let ver = projFile.Project.version in
   let sdistDir = name ^ "-" ^ ver in

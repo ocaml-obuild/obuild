@@ -198,7 +198,7 @@ let get_modules_desc bstate target toplevelModules =
       with Not_found ->
         raise (Module.NotFound (paths, hier))
     in
-    let (srcPath,srcDir) =
+    let (_srcPath,srcDir) =
       match file_entry with
       | Hier.FileEntry (s, d) | Hier.DirectoryEntry (s, d) | Hier.GeneratedFileEntry (s, d, _) -> (s, d)
     in
@@ -229,13 +229,13 @@ let get_modules_desc bstate target toplevelModules =
         in
         Module.make_dir currentDir (List.map (fun m -> Hier.append hier m) modules)
       ) else (
-        let (srcPath, srcFile, intfFile) =
+        let (_srcPath, srcFile, intfFile) =
           match file_entry with
           | Hier.FileEntry (path, file) ->
             (path, file, (Hier.ml_to_ext file Filetype.FileMLI))
           | Hier.DirectoryEntry (path, file) ->
             (path, file, (Hier.ml_to_ext file Filetype.FileMLI))
-          | Hier.GeneratedFileEntry (path, file, generated) ->
+          | Hier.GeneratedFileEntry (_path, file, generated) ->
             let src_file = path_basename file in
             let actual_src_path = Dist.get_build_exn (Dist.Target target.target_name) in
             let full_dest_file = actual_src_path </> generated in
@@ -554,7 +554,9 @@ let prepare_target_ bstate buildDir target toplevelModules =
   let depIncPathInter = List.map (fun dep ->
       Dist.get_build_exn (Dist.Target (Name.Lib dep))) depsInternal in
   let depIncPathSystem = List.map (fun dep ->
-      Meta.getIncludeDir stdlib (Metacache.get_from_cache dep)) depsSystem in
+      let (path, rootPkg) = Metacache.get_from_cache dep in
+      let resolvedPkg = Meta.Pkg.find dep.Libname.subnames rootPkg in
+      Meta.getIncludeDir stdlib (path, resolvedPkg)) depsSystem in
   let depIncludePaths = depIncPathInter @ depIncPathSystem in
   let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncPathInter @ depIncPathSystem in
   let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncPathInter @ depIncPathSystem in
@@ -562,7 +564,10 @@ let prepare_target_ bstate buildDir target toplevelModules =
     List.map (fun dep ->
         match Hashtbl.find conf.project_dep_data dep with
         | Internal -> Dist.get_build_exn (Dist.Target (Name.Lib dep))
-        | System   -> Meta.getIncludeDir stdlib (Metacache.get_from_cache dep)
+        | System   -> 
+            let (path, rootPkg) = Metacache.get_from_cache dep in
+            let resolvedPkg = Meta.Pkg.find dep.Libname.subnames rootPkg in
+            Meta.getIncludeDir stdlib (path, resolvedPkg)
       ) depPkgs
   in
   let cdepsIncludePaths : filepath list =
