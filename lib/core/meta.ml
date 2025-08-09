@@ -1,8 +1,6 @@
 open Fugue
 open Filepath
 open Printf
-open Helper
-open Gconf
 
 module Predicate = struct
   type t =

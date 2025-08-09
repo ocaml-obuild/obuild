@@ -1,7 +1,6 @@
 open Fugue
 open Filepath
 open Compat
-open Types
 
 exception EmptyModuleHierarchy
 

@@ -1,5 +1,4 @@
 open Fugue
-open Compat
 
 exception InvalidPreprocessor of string
 
