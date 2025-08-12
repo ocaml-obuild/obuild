@@ -555,8 +555,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
       Dist.get_build_exn (Dist.Target (Name.Lib dep))) depsInternal in
   let depIncPathSystem = List.map (fun dep ->
       let (path, rootPkg) = Metacache.get_from_cache dep in
-      let resolvedPkg = Meta.Pkg.find dep.Libname.subnames rootPkg in
-      Meta.getIncludeDir stdlib (path, resolvedPkg)) depsSystem in
+      Meta.getIncludeDirWithSubpath stdlib (path, rootPkg) dep.Libname.subnames) depsSystem in
   let depIncludePaths = depIncPathInter @ depIncPathSystem in
   let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncPathInter @ depIncPathSystem in
   let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncPathInter @ depIncPathSystem in
@@ -566,8 +565,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
         | Internal -> Dist.get_build_exn (Dist.Target (Name.Lib dep))
         | System   -> 
             let (path, rootPkg) = Metacache.get_from_cache dep in
-            let resolvedPkg = Meta.Pkg.find dep.Libname.subnames rootPkg in
-            Meta.getIncludeDir stdlib (path, resolvedPkg)
+            Meta.getIncludeDirWithSubpath stdlib (path, rootPkg) dep.Libname.subnames
       ) depPkgs
   in
   let cdepsIncludePaths : filepath list =

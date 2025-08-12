@@ -347,7 +347,8 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
         | Internal -> [(in_current_dir (Libname.to_cmca compiledType compileOpt dep))]
         | System   ->
-          let meta = Metacache.get_from_cache dep in
+          let (path, rootPkg) = Metacache.get_from_cache dep in
+          let libDir = Meta.getIncludeDirWithSubpath (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config)) (path, rootPkg) dep.Libname.subnames in
           let pred = match compiledType with
             | Native    -> Meta.Predicate.Native
             | ByteCode  -> Meta.Predicate.Byte
@@ -364,10 +365,10 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
             | _ -> preds
           in
           if (satisfy_preds dep preds) then
-            let archives = Meta.Pkg.get_archive_with_filter meta dep preds in
+            let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
             List.fold_left (fun acc (_,a) ->
                 let files = string_split ' ' a in
-                acc @ (List.map (fun f -> in_current_dir $ fn f) files)
+                acc @ (List.map (fun f -> libDir </> fn f) files)
               ) [] archives
           else
             []

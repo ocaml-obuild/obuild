@@ -512,17 +512,35 @@ let findLib name : t =
   let path = findLibPath name in
   (path, read path name)
 
-let getIncludeDir stdlib ((path, pkg) : t) : filepath =
-  match pkg.Pkg.directory with
-  | "" | "." -> path_dirname path
-  | "^" -> path_dirname (path_dirname path)
+let resolveDirectory stdlib basePath directory =
+  match directory with
+  | "" | "." -> basePath
+  | "^" -> path_dirname basePath
   | o -> (
       match o.[0] with
-      | '^' -> path_dirname (path_dirname path) <//> fp (string_drop 1 o)
+      | '^' -> path_dirname basePath <//> fp (string_drop 1 o)
       | '+' -> stdlib <//> fp (string_drop 1 o)
       | _ ->
           let fpo = fp o in
           if Filepath.is_absolute fpo then
             fpo
           else
-            path_dirname path <//> fpo)
+            basePath <//> fpo)
+
+let getIncludeDirWithSubpath stdlib ((path, pkg) : t) subnames : filepath =
+  let basePath = path_dirname path in
+  let rec buildPath currentPath remainingSubnames currentPkg =
+    match remainingSubnames with
+    | [] -> 
+        currentPath
+    | subname :: rest ->
+        try
+          let subpkg = List.find (fun spkg -> spkg.Pkg.name = subname) currentPkg.Pkg.subs in
+          let newPath = resolveDirectory stdlib currentPath subpkg.Pkg.directory in
+          buildPath newPath rest subpkg
+        with Not_found -> raise (SubpackageNotFound subname)
+  in
+  buildPath basePath subnames pkg
+
+let getIncludeDir stdlib ((path, pkg) : t) : filepath =
+  resolveDirectory stdlib (path_dirname path) pkg.Pkg.directory
