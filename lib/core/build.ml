@@ -222,10 +222,15 @@ let dep_descs is_intf hdesc bstate cstate target h =
         let src = (match hdesc.Module.File.intf_desc with
               None -> []
             | Some intf -> [Filetype.FileMLI,intf.Module.Intf.path]) @ [(Filetype.FileML, hdesc.Module.File.path)] in
-        let m_deps = List.concat (List.map (fun module_dep ->
+        let own_cmi_dep = (match hdesc.Module.File.intf_desc with
+              None -> []
+            | Some _ ->
+                (* Add dependency on the module's own .cmi file *)
+                [(Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h)]) in
+        let m_deps = own_cmi_dep @ (List.concat (List.map (fun module_dep ->
             [(file_compile_ty, Hier.get_dest_file path ext module_dep);
              (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep)]
-          ) module_deps) in
+          ) module_deps)) in
         let internal_deps = List.assoc (comp_opt,compiled_ty) internal_libs_paths_all_modes in
         (dest,Compiled compiled_ty,comp_opt,src @ internal_deps @ m_deps)
       ) all_modes
