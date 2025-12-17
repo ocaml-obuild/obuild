@@ -291,8 +291,8 @@ let get_modules_desc bstate target toplevelModules =
           let dag = bstate.bstate_config.project_pkgdeps_dag in
           let deps_lists = list_filter_map (fun (l,_) ->
               let dag_dep = Analyze.Dependency l in
-              if (Dag.existsNode dag_dep dag) then begin
-                let children = Dag.getChildren_full dag dag_dep in
+              if (Dag.exists_node dag_dep dag) then begin
+                let children = Dag.get_children_full dag dag_dep in
                 let deps = list_filter_map (fun d -> match d with Analyze.Target _ -> None
                                                                 | Analyze.Dependency l -> Some l)
                     children in
@@ -347,7 +347,7 @@ let get_modules_desc bstate target toplevelModules =
           | ml::mli::_ -> list_uniq (ml @ mli)
           | x::_ -> x
         in
-        verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," allDeps);
+        verbose Debug "  %s depends on %s\n%!" moduleName (String.concat "," (List.map Modname.to_string allDeps));
         let (cwdDepsInDir, otherDeps) = List.partition (fun dep ->
             try
               let entry = Hier.get_file_entry (Hier.of_modname dep) (file_search_paths hier) in
@@ -442,7 +442,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
                 CompileInterface m
               else begin
                 if Module.has_interface mdep then (
-                  Dag.addEdge (CompileModule m) (CompileInterface m) stepsDag;
+                  Dag.add_edge (CompileModule m) (CompileInterface m) stepsDag;
                 );
                 CompileModule m
               end
@@ -460,11 +460,11 @@ let prepare_target_ bstate buildDir target toplevelModules =
                         CompileModule dirChild
                     | Module.DescDir _ -> CompileDirectory dirChild
                   in
-                  Dag.addEdge mStep cStep stepsDag
+                  Dag.add_edge mStep cStep stepsDag
                 ) descdir.Module.Dir.modules;
               mStep
           in
-          Dag.addNode mStep stepsDag;
+          Dag.add_node mStep stepsDag;
 
           Hashtbl.iter (fun k v ->
               if k <> m then (
@@ -474,21 +474,21 @@ let prepare_target_ bstate buildDir target toplevelModules =
                   | Module.DescFile _ ->
                     if Module.has_interface kdep
                     then (
-                      Dag.addEdgesConnected [CompileModule k; CompileInterface k; mStep] stepsDag
+                      Dag.add_edges_connected [CompileModule k; CompileInterface k; mStep] stepsDag
                     ) else
-                      Dag.addEdge (CompileModule k) mStep stepsDag
+                      Dag.add_edge (CompileModule k) mStep stepsDag
                   | Module.DescDir _ ->
-                    Dag.addEdge (CompileDirectory k) mStep stepsDag
+                    Dag.add_edge (CompileDirectory k) mStep stepsDag
                 )
               )
             ) h;
         ) freeModules;
-      let roots = Dag.getRoots stepsDag in
+      let roots = Dag.get_roots stepsDag in
       List.iter (fun r ->
           match r with
           | CompileModule _ | CompileDirectory _->
-            Dag.addEdge (LinkTarget target) r stepsDag;
-            Dag.addEdge (CheckTarget target) (LinkTarget target) stepsDag;
+            Dag.add_edge (LinkTarget target) r stepsDag;
+            Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag;
           | _ -> ()
         )
         roots;
@@ -515,11 +515,11 @@ let prepare_target_ bstate buildDir target toplevelModules =
           let oNode = Filetype.make_id (Filetype.FileO, oFile) in
 
           (* add C source information into the files DAG *)
-          Dag.addEdge oNode cNode filesDag;
-          Dag.addChildrenEdges oNode hFiles filesDag;
+          Dag.add_edge oNode cNode filesDag;
+          Dag.add_children_edges oNode hFiles filesDag;
 
           (* add C source compilation task into the step DAG *)
-          Dag.addNode (CompileC cSource) stepsDag
+          Dag.add_node (CompileC cSource) stepsDag
         ) cbits.target_csources;
     );
 
@@ -532,11 +532,11 @@ let prepare_target_ bstate buildDir target toplevelModules =
     let dotDir = Dist.create_build Dist.Dot in
     let path = dotDir </> fn (Target.get_target_name target ^ ".dot") in
     let reducedDag = Dag.transitive_reduction dag in
-    let dotContent = Dag.toDot string_of_compile_step (Target.get_target_name target) true reducedDag in
+    let dotContent = Dag.to_dot string_of_compile_step (Target.get_target_name target) true reducedDag in
     Filesystem.write_file path dotContent;
 
     let path = dotDir </> fn (Target.get_target_name target ^ ".files.dot") in
-    let dotContent = Dag.toDot (fun fdep -> Filetype.to_string (Filetype.get_type fdep) ^ " " ^ 
+    let dotContent = Dag.to_dot (fun fdep -> Filetype.to_string (Filetype.get_type fdep) ^ " " ^ 
                                             fp_to_string (Filetype.get_path fdep))
         (Target.get_target_name target) true fdag in
     Filesystem.write_file path dotContent;

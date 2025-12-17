@@ -124,10 +124,11 @@ let to_generators hier prefix_path =
         (list_find_map
            (fun gen ->
              let path = add_prefix prefix_path hier in
-             let modname = Modname.to_string (leaf hier) in
-             let modname = gen.Generators.modname modname in
+             let modname_t = leaf hier in
+             let modname_t = gen.Generators.modname modname_t in
+             let modname_str = Modname.to_string modname_t in
              let ext = Filetype.FileOther gen.Generators.suffix in
-             let res = check_modname path modname ext in
+             let res = check_modname path modname_str ext in
              match res with
              | None -> None
              | Some name ->

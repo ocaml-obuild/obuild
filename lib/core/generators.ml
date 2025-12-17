@@ -24,7 +24,7 @@ let generators = ref [
       generated_files = (fun f _ -> (chop_extension f) <.>  "ml")
     };
     { suffix = "atd";
-      modname = (fun m -> Modname.atd_modname m);
+      modname = (fun m -> Modname.of_string (Modname.atd_modname (Modname.to_string m)));
       commands = (fun src dest_root moduleName ->
                    let len = String.length moduleName in
                    let ext = String.sub moduleName (len - 2) 2 in

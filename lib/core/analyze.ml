@@ -72,7 +72,7 @@ let is_pkg_system project pkg =
 
 let get_internal_library_deps project target =
   let internalDeps =
-    Dag.getChildren project.project_targets_dag target.target_name
+    Dag.get_children project.project_targets_dag target.target_name
   in
   list_filter_map
     (fun name ->
@@ -201,12 +201,12 @@ let prepare projFile user_flags =
    * only consider internal libraries *)
   List.iter
     (fun target ->
-       Dag.addNode target.target_name targetsDag;
+       Dag.add_node target.target_name targetsDag;
        List.iter
          (fun (dep, _) ->
             if isInternal dep then (
               verbose Debug "  internal depends: %s\n" (Libname.to_string dep);
-              Dag.addEdge target.target_name (Name.Lib dep) targetsDag))
+              Dag.add_edge target.target_name (Name.Lib dep) targetsDag))
          (Target.get_all_builddeps target))
     allTargets;
 
@@ -222,20 +222,20 @@ let prepare projFile user_flags =
       if isInternal dep then (
         let iLib = Project.find_lib projFile dep in
         let iLibDep = Dependency iLib.Project.Library.name in
-        Dag.addNode iLibDep depsDag;
+        Dag.add_node iLibDep depsDag;
         List.iter
           (fun (reqDep, _) ->
              verbose Debug "  library %s depends on %s\n"
                (Libname.to_string iLib.Project.Library.name)
                (Libname.to_string reqDep);
-             Dag.addEdge iLibDep (Dependency reqDep) depsDag;
+             Dag.add_edge iLibDep (Dependency reqDep) depsDag;
              loop reqDep)
           iLib.Project.Library.target.target_obits.target_builddeps;
         Internal)
       else
         try
           let _, meta = Metacache.get dep.Libname.main_name in
-          Dag.addNode (Dependency dep) depsDag;
+          Dag.add_node (Dependency dep) depsDag;
           let pkg =
             try Meta.Pkg.find dep.Libname.subnames meta with
             | Not_found -> raise (SublibraryDoesntExists dep)
@@ -250,7 +250,7 @@ let prepare projFile user_flags =
                    (fun reqDep ->
                       verbose Debug "  library %s depends on %s\n"
                         (Libname.to_string dep) (Libname.to_string reqDep);
-                      Dag.addEdge (Dependency dep) (Dependency reqDep) depsDag;
+                      Dag.add_edge (Dependency dep) (Dependency reqDep) depsDag;
                       loop reqDep)
                    reqDeps)
             pkg.Meta.Pkg.requires;
@@ -268,13 +268,13 @@ let prepare projFile user_flags =
        verbose Debug "  getting dependencies for target %s\n%!"
          (Target.get_target_name target);
        let nodeTarget = Target target.target_name in
-       Dag.addNode nodeTarget depsDag;
+       Dag.add_node nodeTarget depsDag;
        (* if a lib, then we insert ourself as dependency for executable or other library *)
        let insertEdgeForDependency =
          match target.target_name with
          | Name.Lib l ->
-           Dag.addNode (Dependency l) depsDag;
-           Dag.addEdge (Dependency l)
+           Dag.add_node (Dependency l) depsDag;
+           Dag.add_edge (Dependency l)
          | _ -> fun _ _ -> ()
        in
        List.iter
@@ -288,7 +288,7 @@ let prepare projFile user_flags =
                         (Libname.to_string dep ^ " (" ^ pkg.Meta.Pkg.version
                          ^ ") doesn't match the constraint " ^ Expr.to_string c)))
               constr;
-            Dag.addEdge nodeTarget (Dependency dep) depsDag;
+            Dag.add_edge nodeTarget (Dependency dep) depsDag;
             insertEdgeForDependency (Dependency dep) depsDag;
             loop dep)
          (Target.get_all_builddeps target);
@@ -319,12 +319,12 @@ let prepare projFile user_flags =
       | Target s -> "target(" ^ Name.to_string s ^ ")"
       | Dependency s -> Libname.to_string s
     in
-    let dotContent = Dag.toDot toString "dependencies" true depsDag in
+    let dotContent = Dag.to_dot toString "dependencies" true depsDag in
     Filesystem.write_file path dotContent;
 
     let ipath = dotDir </> fn "internal-dependencies.dot" in
     let dotIContent =
-      Dag.toDot Name.to_string "internal-dependencies" true targetsDag
+      Dag.to_dot Name.to_string "internal-dependencies" true targetsDag
     in
     Filesystem.write_file ipath dotIContent);
   {

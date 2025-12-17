@@ -33,7 +33,7 @@ let check_destination_valid_with srcs (_, dest) =
 *)
 let check_destination_valid cstate (filety, dest) =
   let children =
-    try Dag.getChildren cstate.compilation_filesdag (Filetype.make_id (filety, dest))
+    try Dag.get_children cstate.compilation_filesdag (Filetype.make_id (filety, dest))
     with Dag.DagNode_Not_found ->
       raise (Internal_Inconsistancy ((Filetype.to_string filety), ("missing destination: " ^ fp_to_string dest)))
   in
@@ -530,14 +530,14 @@ let build_exe bstate exe =
   let build_dir = Dist.create_build (Dist.Target target.target_name) in
   let cstate = prepare_target bstate build_dir target modules in
   List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
-    (Dag.getNodes cstate.compilation_dag);
+    (Dag.get_nodes cstate.compilation_dag);
   compile bstate task_context cstate.compilation_dag
 
 let rec select_leaves children duplicate dag =
   let (good,bad) = List.partition (fun a -> not (List.mem a duplicate)) children in
   let new_ = ref [] in
   List.iter (fun a ->
-      let parents = Dag.getParents dag a in
+      let parents = Dag.get_parents dag a in
       List.iter (fun p -> new_ := p :: !new_) parents
     ) bad;
   if List.length bad > 0 then
@@ -554,7 +554,7 @@ let build_dag bstate proj_file targets_dag =
     let build_dir = Dist.create_build (Dist.Target target.target_name) in
     let cstate = prepare_target bstate build_dir target modules in
     List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
-      (Dag.getNodes cstate.compilation_dag);
+      (Dag.get_nodes cstate.compilation_dag);
     let duplicate = Dag.merge dag cstate.compilation_dag in
     (cstate.compilation_dag, duplicate)
   in
@@ -581,17 +581,17 @@ let build_dag bstate proj_file targets_dag =
           prepare_state (Project.Example.to_target example) [Hier.of_filename example.Project.Example.main]
        ) in
        if (Hashtbl.mem targets_deps ntask) then begin
-         let children = Dag.getLeaves cur_dag in
+         let children = Dag.get_leaves cur_dag in
          let children = select_leaves children dups cur_dag in
          let roots = Hashtbl.find targets_deps ntask in
          List.iter (fun child ->
              List.iter (fun root ->
-                 Dag.addEdge child root dag
+                 Dag.add_edge child root dag
              ) roots
          ) children
        end;
-       let roots = Dag.getRoots cur_dag in (* should be LinkTarget *)
-       List.iter (fun p -> Hashtbl.add targets_deps p roots) (Dag.getParents targets_dag ntask);
+       let roots = Dag.get_roots cur_dag in (* should be LinkTarget *)
+       List.iter (fun p -> Hashtbl.add targets_deps p roots) (Dag.get_parents targets_dag ntask);
        Taskdep.mark_done taskdep ntask
     )
   done;

@@ -25,7 +25,7 @@ let init_with dag direction nodes = {
 }
 
 let init ?(direction=FromChildren) dag =
-  init_with dag direction (if direction = FromChildren then Dag.getLeaves dag else Dag.getRoots dag)
+  init_with dag direction (if direction = FromChildren then Dag.get_leaves dag else Dag.get_roots dag)
 
 let next_index taskdep =
   let c = taskdep.current_step in
@@ -45,13 +45,13 @@ let mark_done taskdep step =
   Hashtbl.add taskdep.steps_done step ();
   (* check if any parents is now free to complete *)
   let parents = if taskdep.direction = FromChildren
-    then Dag.getParents taskdep.dag step
-    else Dag.getChildren taskdep.dag step in
+    then Dag.get_parents taskdep.dag step
+    else Dag.get_children taskdep.dag step in
   List.iter (fun parent ->
       let children =
         if taskdep.direction = FromChildren
-        then Dag.getChildren taskdep.dag parent
-        else Dag.getParents taskdep.dag parent
+        then Dag.get_children taskdep.dag parent
+        else Dag.get_parents taskdep.dag parent
       in
       let allDone  = List.for_all (fun child -> Hashtbl.mem taskdep.steps_done child) children in
       if allDone && not (List.mem parent taskdep.next_tasks) then
@@ -67,7 +67,7 @@ let linearize dag direction nodes =
   let rec visit n =
     if not (Hashtbl.mem visited n) then (
       Hashtbl.add visited n ();
-      List.iter visit ((if direction = FromParent then Dag.getChildren else Dag.getParents) dag n);
+      List.iter visit ((if direction = FromParent then Dag.get_children else Dag.get_parents) dag n);
       l := n :: !l;
     )
   in
