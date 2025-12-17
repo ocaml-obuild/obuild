@@ -250,7 +250,7 @@ module Executable = struct
     target : target;
   }
 
-  let make name = { name; main = emptyFn; target = newTarget (Name.Exe name) Typ.Exe true true }
+  let make name = { name; main = empty_fn; target = newTarget (Name.Exe name) Typ.Exe true true }
   let to_target obj = obj.target
 
   let parse_common strict sectionName setMain setTarget myTarget other acc line cont =
@@ -307,7 +307,7 @@ module Test = struct
   let make name =
     {
       name;
-      main = emptyFn;
+      main = empty_fn;
       target = newTarget (Name.Test name) Typ.Test (Gconf.get_target_option "build-tests") false;
       rundir = None;
       runopt = [];
@@ -359,7 +359,7 @@ module Example = struct
   let make name =
     {
       name;
-      main = emptyFn;
+      main = empty_fn;
       target =
         newTarget (Name.Example name) Typ.Test (Gconf.get_target_option "build-examples") false;
     }

@@ -7,8 +7,8 @@ type filepath = { absolute: bool; filepath : string list }
 type filename = { filename : string }
 
 let is_absolute fp = fp.absolute
-let emptyFn = { filename = "" }
-let currentDir = { absolute = false; filepath = [] }
+let empty_fn = { filename = "" }
+let current_dir = { absolute = false; filepath = [] }
 
 let fp_to_string x =
     match x.filepath, x.absolute with
@@ -55,21 +55,11 @@ let (</>) (afp:filepath) (bfp:filename) =
 
 let (<.>) (afp:filename) ext = fn (afp.filename ^ "." ^ ext)
 
-let with_optpath mdir (filename : filename) =
-    let path =
-        match mdir with
-        | None     -> currentDir
-        | Some dir -> dir
-        in
-    path </> filename
-
 let path_length path   = List.length path.filepath
 
 let path_dirname path  = { path with filepath = list_init path.filepath }
 
 let path_basename path = fn (list_last path.filepath)
-
-let path_parent path = path_dirname (path_dirname path)
 
 let in_current_dir (x:filename) = fp x.filename
 

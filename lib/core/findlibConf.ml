@@ -18,7 +18,7 @@ let default = {
 let conf = ref default
 
 let parse_file path =
-  let content = Filesystem.readFile path in
+  let content = Filesystem.read_file path in
   let unquote s = match s with
     | None   -> failwith ("unknown configuration key with no value")
     | Some x -> string_init 1 (string_drop 1 x)

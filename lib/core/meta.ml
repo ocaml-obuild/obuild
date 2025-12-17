@@ -229,7 +229,7 @@ module Pkg = struct
         pkg.subs
     in
     write_one 0 package;
-    Filesystem.writeFile path (Buffer.contents out)
+    Filesystem.write_file path (Buffer.contents out)
 end
 
 type t = filepath * Pkg.t
@@ -475,7 +475,7 @@ let parse name content pkg_name =
   fst (Token.parse name (Pkg.make pkg_name) (Token.tokenize name content))
 
 let read path name =
-  let meta_content = Filesystem.readFile path in
+  let meta_content = Filesystem.read_file path in
   parse path meta_content name
 
 (* get the META file path associated to a library *)

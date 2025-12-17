@@ -227,7 +227,7 @@ let get_modules_desc bstate target toplevelModules =
               )
           ) srcDir
         in
-        Module.make_dir currentDir (List.map (fun m -> Hier.append hier m) modules)
+        Module.make_dir current_dir (List.map (fun m -> Hier.append hier m) modules)
       ) else (
         let (_srcPath, srcFile, intfFile) =
           match file_entry with
@@ -241,14 +241,14 @@ let get_modules_desc bstate target toplevelModules =
             let full_dest_file = actual_src_path </> generated in
             let intf_file = Hier.ml_to_ext full_dest_file Filetype.FileMLI in
             if not (Filesystem.exists full_dest_file) ||
-               ((Filesystem.getModificationTime full_dest_file) < (Filesystem.getModificationTime file))
+               ((Filesystem.get_modification_time full_dest_file) < (Filesystem.get_modification_time file))
             then
               Generators.run (actual_src_path </> (chop_extension src_file)) file moduleName;
             (actual_src_path, full_dest_file, intf_file)
         in
-        let modTime = Filesystem.getModificationTime srcFile in
+        let modTime = Filesystem.get_modification_time srcFile in
         let hasInterface = Filesystem.exists intfFile in
-        let intfModTime = Filesystem.getModificationTime intfFile in
+        let intfModTime = Filesystem.get_modification_time intfFile in
 
         (* augment pp if needed with per-file dependencies *)
         let per_settings = find_extra_matching target (Hier.to_string hier) in
@@ -533,13 +533,13 @@ let prepare_target_ bstate buildDir target toplevelModules =
     let path = dotDir </> fn (Target.get_target_name target ^ ".dot") in
     let reducedDag = Dag.transitive_reduction dag in
     let dotContent = Dag.toDot string_of_compile_step (Target.get_target_name target) true reducedDag in
-    Filesystem.writeFile path dotContent;
+    Filesystem.write_file path dotContent;
 
     let path = dotDir </> fn (Target.get_target_name target ^ ".files.dot") in
     let dotContent = Dag.toDot (fun fdep -> Filetype.to_string (Filetype.get_type fdep) ^ " " ^ 
                                             fp_to_string (Filetype.get_path fdep))
         (Target.get_target_name target) true fdag in
-    Filesystem.writeFile path dotContent;
+    Filesystem.write_file path dotContent;
 
   );
 

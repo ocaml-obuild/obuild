@@ -87,5 +87,5 @@ let wrap_exn print fname f =
 let generateFile file f =
     let buffer = Buffer.create 1024 in
     f (Buffer.add_string buffer);
-    Filesystem.writeFile file (Buffer.contents buffer)
+    Filesystem.write_file file (Buffer.contents buffer)
 

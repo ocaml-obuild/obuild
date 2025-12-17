@@ -107,7 +107,7 @@ type target =
     }
 
 let newTargetCbits =
-    { target_cdir      = currentDir
+    { target_cdir      = current_dir
     ; target_csources  = []
     ; target_cflags    = []
     ; target_clibs     = []
@@ -119,7 +119,7 @@ let newTargetObits = {
   target_oflags    = [];
   target_builddeps = [];
   target_pp        = None;
-  target_srcdir    = [currentDir];
+  target_srcdir    = [current_dir];
   target_extradeps = [];
   target_stdlib    = Stdlib_Standard;
 }

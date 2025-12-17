@@ -320,13 +320,13 @@ let prepare projFile user_flags =
       | Dependency s -> Libname.to_string s
     in
     let dotContent = Dag.toDot toString "dependencies" true depsDag in
-    Filesystem.writeFile path dotContent;
+    Filesystem.write_file path dotContent;
 
     let ipath = dotDir </> fn "internal-dependencies.dot" in
     let dotIContent =
       Dag.toDot Name.to_string "internal-dependencies" true targetsDag
     in
-    Filesystem.writeFile ipath dotIContent);
+    Filesystem.write_file ipath dotIContent);
   {
     project_dep_data = depsTable;
     project_pkgdeps_dag = depsDag;

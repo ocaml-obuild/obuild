@@ -122,7 +122,7 @@ let mainBuild argv =
 
 let mainClean _ =
   if Filesystem.exists (Dist.get_path ()) then (
-    Filesystem.removeDir (Dist.get_path ());
+    Filesystem.remove_dir (Dist.get_path ());
     Dist.remove_dead_links ())
 
 let mainSdist argv =

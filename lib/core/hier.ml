@@ -51,7 +51,7 @@ let to_dirpath x =
   if List.length x > 1 then
     fp (String.concat Filename.dir_sep (List.map Modname.to_dir $ list_init x))
   else
-    currentDir
+    current_dir
 
 let append x m = x @ [ m ]
 

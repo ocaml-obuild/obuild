@@ -27,7 +27,7 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
   let entry = Hier.get_file_entry modhier [dirSpec.src_dir] in
   let src_file = Hier.get_src_file dirSpec.src_dir entry in
   let compileOpt = if buildMode = Interface && compileOpt = WithProf then WithDebug else compileOpt in
-  Filesystem.mkdirSafeRecursive dstDir 0o755;
+  Filesystem.mkdir_safe_recursive dstDir 0o755;
   let (prog, srcFile, dstFile) =
     match buildMode with
     | Interface ->
@@ -71,7 +71,7 @@ let runOcamlPack _srcDir dstDir annotMode buildMode packOpt dest modules =
     | _ -> (* It should not happen *)
       if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX
   in
-  Filesystem.mkdirSafeRecursive dstDir 0o755;
+  Filesystem.mkdir_safe_recursive dstDir 0o755;
   let args = [prog]
              @ maybe [] (fun x -> if buildMode = Native then [ "-for-pack"; Hier.to_string x ] else []) packOpt
              @ annotToOpts annotMode
@@ -95,7 +95,7 @@ let o_from_cfile file = file <.> "o"
 
 let runCCompile project dirSpec cflags file =
     let dstDir = dirSpec.dst_dir in
-    Filesystem.mkdirSafeRecursive dstDir 0o755;
+    Filesystem.mkdir_safe_recursive dstDir 0o755;
     let callCCompiler = string_words_noempty (Analyze.get_ocaml_config_key "bytecomp_c_compiler" project) in
     let srcFile = dirSpec.src_dir </> file in
     (* make a .c.o file to avoid collision *)
@@ -173,7 +173,7 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread syst
                       | Native -> "-cclib"
                       | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib") (* Ugly hack but do the job for now *)
                  ; x ]) cclibs))
-             @ (List.map (fun m -> fp_to_string (Hier.get_dest_file currentDir ext m)) modules)
+             @ (List.map (fun m -> fp_to_string (Hier.get_dest_file current_dir ext m)) modules)
   in
   let res = Process.make args in
   let () = link_maybe linkingMode dest in

@@ -5,7 +5,7 @@ open Compat
 exception UnexpectedFileType of string
 exception WriteFailed
 
-let removeDirContent wpath =
+let remove_dir_content wpath =
   let path = fp_to_string wpath in
   let rec rmdir_recursive f path =
     let dirhandle = Unix.opendir path in
@@ -30,7 +30,7 @@ let removeDirContent wpath =
   then
     rmdir_recursive (const ()) path
 
-let removeDir path = removeDirContent path; Unix.rmdir (fp_to_string path); ()
+let remove_dir path = remove_dir_content path; Unix.rmdir (fp_to_string path); ()
 
 let iterate f path =
     let entries = Sys.readdir (fp_to_string path) in
@@ -51,16 +51,9 @@ let list_dir_pred_map (p : filename -> 'a option) path : 'a list =
 let list_dir_pred (p : filename -> bool) path : filename list =
     list_dir_pred_map (fun e -> if p e then Some e else None) path
 
-let list_dir = list_dir_pred (const true)
 
-let list_dir_path_pred p path =
-    let entries = List.filter p (Array.to_list (Sys.readdir (fp_to_string path))) in
-    let sorted = List.fast_sort String.compare entries in
-    List.map (fun ent -> path </> fn ent) sorted
 
-let list_dir_path = list_dir_path_pred (const true)
-
-let getModificationTime path =
+let get_modification_time path =
    try (Unix.stat (fp_to_string path)).Unix.st_mtime
    with _ -> 0.0
 
@@ -73,30 +66,25 @@ let is_dir path =
  *
  * return false if the directory already exists
  * return true if the directory has been created *)
-let mkdirSafe path perm =
+let mkdir_safe path perm =
     if Sys.file_exists (fp_to_string path)
     then (if Sys.is_directory (fp_to_string path)
             then false
             else failwith ("directory " ^ (fp_to_string path) ^ " cannot be created: file already exists"))
     else (Unix.mkdir (fp_to_string path) perm; true)
 
-let mkdirSafe_ path perm =
-    let (_: bool) = mkdirSafe path perm in
+let mkdir_safe_ path perm =
+    let (_: bool) = mkdir_safe path perm in
     ()
 
-let rec mkdirSafeRecursive path perm =
+let rec mkdir_safe_recursive path perm =
     if not (is_dir path) then (
         if path_length path > 1 then (
-            mkdirSafeRecursive (path_dirname path) perm;
-            mkdirSafe_ path perm
+            mkdir_safe_recursive (path_dirname path) perm;
+            mkdir_safe_ path perm
         )
     )
 
-let create_or_empty_dir path =
-    let created = mkdirSafe path 0o755 in
-    if not created then
-        removeDirContent path;
-    ()
 
 let write_no_partial fd b o l =
     let len = ref l in
@@ -108,19 +96,19 @@ let write_no_partial fd b o l =
         len := !len - written
     done
 
-let withfile path openflags perms f =
+let with_file path openflags perms f =
     let fd = Unix.openfile (fp_to_string path) openflags perms in
     finally (fun () -> f fd) (fun () -> Unix.close fd)
 
-let writeFile path s =
-    withfile path [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o644 (fun fd ->
+let write_file path s =
+    with_file path [Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC] 0o644 (fun fd ->
         write_no_partial fd s 0 (String.length s)
     )
 
-let readFile path =
+let read_file path =
     let buf = Buffer.create 1024 in
     let b = bytes_make 1024 ' ' in
-    withfile path [Unix.O_RDONLY] 0o644 (fun fd ->
+    with_file path [Unix.O_RDONLY] 0o644 (fun fd ->
         let isDone = ref false in
         while not !isDone do
             let r = Unix.read fd b 0 1024 in
@@ -132,12 +120,12 @@ let readFile path =
     )
 
 let copy_file src dst =
-    mkdirSafeRecursive (path_dirname dst) 0o755;
+    mkdir_safe_recursive (path_dirname dst) 0o755;
     let s = bytes_make 4096 ' ' in
     let srcStat = Unix.stat (fp_to_string src) in
     let operm = srcStat.Unix.st_perm in
-    withfile dst [Unix.O_WRONLY; Unix.O_CREAT] operm (fun fdDst ->
-        withfile src [Unix.O_RDONLY] 0o644 (fun fdSrc ->
+    with_file dst [Unix.O_WRONLY; Unix.O_CREAT] operm (fun fdDst ->
+        with_file src [Unix.O_RDONLY] 0o644 (fun fdSrc ->
             let isDone = ref false in
             while not !isDone do
                 let r = Unix.read fdSrc s 0 4096 in
@@ -150,7 +138,6 @@ let copy_file src dst =
 
 let copy_to_dir src dst = copy_file src (dst <//> src)
 
-let copy_many_files srcs dst = List.iter (fun src -> copy_to_dir src dst) srcs
 
 let rec mktemp_dir_in prefix =
     let s = bytes_make 4 ' ' in
@@ -167,5 +154,5 @@ let rec mktemp_dir_in prefix =
     let s = bytes_to_string s in
     let tmpName = sprintf "%d-%02x%02x%02x%02x" (Unix.getpid ()) (Char.code s.[0]) (Char.code s.[1]) (Char.code s.[2]) (Char.code s.[3]) in
     let dirName = fp (prefix ^ tmpName) in
-    let v = mkdirSafe dirName 0o755 in
+    let v = mkdir_safe dirName 0o755 in
     if v then dirName else mktemp_dir_in prefix

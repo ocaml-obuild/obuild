@@ -29,10 +29,10 @@ type filename
 
 (** Filename guaranteed to point to no valid file. Useful for
     initializing structures that have a field of type [filename]. *)
-val emptyFn : filename
+val empty_fn : filename
 
 (** Filepath pointing to the current working directory. *)
-val currentDir : filepath
+val current_dir : filepath
 
 (** Functions to convert the above types to and from string. *)
 
@@ -60,11 +60,7 @@ val ( </> ) : filepath -> filename -> filepath
 (** [fn <.> ext] appends the extension [ext] to [fn]. *)
 val ( <.> ) : filename -> string -> filename
 
-(** [with_optpath fp fn] is equivalent to [fp </> fn] if [fp <> None],
-    otherwise equivalent to [currentDir </> fn]. *)
-val with_optpath : filepath option -> filename -> filepath
-
-(** [in_current_dir fn] is equivalent to [currentDir </> fn]. *)
+(** [in_current_dir fn] is equivalent to [current_dir </> fn]. *)
 val in_current_dir : filename -> filepath
 
 (** [path_length fp] returns the number of components in [fp],
@@ -76,9 +72,6 @@ val path_dirname : filepath -> filepath
 
 (** Analogous to [Filename.basename], but operate on [filepath]s. *)
 val path_basename : filepath -> filename
-
-(** [path_parent fp] is equivalent to [path_dirname (path_dirname fp)]. *)
-val path_parent : filepath -> filepath
 
 (** Analogous to [Filename.chop_extension], but for [filename]s. *)
 val chop_extension : filename -> filename

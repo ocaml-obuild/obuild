@@ -35,7 +35,7 @@ let check_exn f =
     f ()
 
 let exist () = check_exn (fun () -> raise DoesntExist)
-let create_maybe () = check_exn (fun () -> let _ = Filesystem.mkdirSafe (get_path ()) 0o755 in ())
+let create_maybe () = check_exn (fun () -> let _ = Filesystem.mkdir_safe (get_path ()) 0o755 in ())
 
 let get_build () = get_path () </> fn "build"
 
@@ -50,14 +50,14 @@ let get_build_exn buildtype =
     dist
 
 let create_build buildtype =
-    let _ = Filesystem.mkdirSafe (get_build ()) 0o755 in
+    let _ = Filesystem.mkdir_safe (get_build ()) 0o755 in
     let dest = get_build_path buildtype in
-    let _ = Filesystem.mkdirSafe dest 0o755 in
+    let _ = Filesystem.mkdir_safe dest 0o755 in
     dest
 
 let read_dist_file path =
   try
-    let content = Filesystem.readFile path in
+    let content = Filesystem.read_file path in
     hashtbl_from_list (List.map (fun l -> second (default "") $ Utils.toKV l) $ string_split '\n' content)
   with _ -> raise (FileDoesntExist (fp_to_string path))
 
@@ -66,7 +66,7 @@ let read_configure () = read_dist_file configure_path
 
 let write_setup setup =
     let kv (k,v) = k ^ ": " ^ v in
-    Filesystem.writeFile setup_path (String.concat "\n" $ List.map kv (hashtbl_to_list setup))
+    Filesystem.write_file setup_path (String.concat "\n" $ List.map kv (hashtbl_to_list setup))
 
 let remove_dead_links () =
   let files = Sys.readdir "." in

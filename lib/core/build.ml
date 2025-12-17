@@ -19,14 +19,14 @@ exception Internal_Inconsistancy of string * string
 let check_destination_valid_with srcs (_, dest) =
   if Filesystem.exists dest
   then (
-    let dest_time = Filesystem.getModificationTime dest in
+    let dest_time = Filesystem.get_modification_time dest in
     try Some (List.find (fun (_,path) ->
-        let mtime = Filesystem.getModificationTime path in
+        let mtime = Filesystem.get_modification_time path in
         dest_time < mtime
       ) srcs)
     with Not_found -> None
   ) else
-    Some (Filetype.FileO, currentDir)
+    Some (Filetype.FileO, current_dir)
 
 (* same as before but the list of sources is automatically determined
  * from the file DAG
@@ -50,7 +50,7 @@ let reason_from_paths (_,dest) (srcTy,changedSrc) =
     else if string_endswith ".p" n then fn (Filename.chop_suffix n ".p")
     else z
   in
-  if changedSrc = currentDir
+  if changedSrc = current_dir
   then ""
   else (
     let bdest = path_basename dest in
@@ -253,8 +253,8 @@ let compile_module task_index task is_intf h bstate task_context dag =
     let use_thread = hdesc.Module.File.use_threads in
     let dir_spec = {
       src_dir      = src_path;
-      dst_dir      = currentDir;
-      include_dirs = [currentDir]
+      dst_dir      = current_dir;
+      include_dirs = [current_dir]
     } in
     let dep_descs = dep_descs is_intf hdesc bstate cstate target h in
     let annot_mode = annot_mode () in
@@ -394,11 +394,11 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
     | WithDebug -> cstate.compilation_linking_paths_d
     | WithProf  -> cstate.compilation_linking_paths_p
   in
-  let destTime = Filesystem.getModificationTime dest in
+  let destTime = Filesystem.get_modification_time dest in
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
   let depsTime =
-    try Some (List.find (fun p -> destTime < Filesystem.getModificationTime p)
+    try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p)
                 (List.map (fun m ->
                      Hier.get_dest_file path ext m)
                     compiled))
