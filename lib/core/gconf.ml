@@ -86,7 +86,7 @@ let rec set_target_options field value =
   | _ -> ()
 
 let get_target_options_keys () = hashtbl_keys target_options_
-let get_target_options () = hashtbl_toList target_options_
+let get_target_options () = hashtbl_to_list target_options_
 
 let get_target_option field =
   try Hashtbl.find target_options_ field with Not_found -> raise (UnknownOption field)

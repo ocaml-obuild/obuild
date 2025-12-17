@@ -39,9 +39,9 @@ let generateCFile project file flags =
         flags)
 
 let makeSetup digestKV project flags =
-  hashtbl_fromList
+  hashtbl_from_list
     (digestKV
-    @ hashtbl_toList project.Analyze.project_ocamlcfg
+    @ hashtbl_to_list project.Analyze.project_ocamlcfg
     @ List.map (fun (opt, v) -> (opt, string_of_bool v)) (Gconf.get_target_options ())
     @ List.map (fun (flagname, flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) flags)
 
@@ -188,7 +188,7 @@ let run proj_file user_flags user_opts =
     | Some stp -> (
         (* TODO harcoded for now till we do all the checks. *)
         try
-          comparekvs "setup" stp (hashtbl_toList currentSetup);
+          comparekvs "setup" stp (hashtbl_to_list currentSetup);
           (* FORCED should be false *) true
         with _ -> true)
   in

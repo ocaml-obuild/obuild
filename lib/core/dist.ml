@@ -58,7 +58,7 @@ let create_build buildtype =
 let read_dist_file path =
   try
     let content = Filesystem.readFile path in
-    hashtbl_fromList (List.map (fun l -> second (default "") $ Utils.toKV l) $ string_split '\n' content)
+    hashtbl_from_list (List.map (fun l -> second (default "") $ Utils.toKV l) $ string_split '\n' content)
   with _ -> raise (FileDoesntExist (fp_to_string path))
 
 let read_setup () = read_dist_file setup_path
@@ -66,7 +66,7 @@ let read_configure () = read_dist_file configure_path
 
 let write_setup setup =
     let kv (k,v) = k ^ ": " ^ v in
-    Filesystem.writeFile setup_path (String.concat "\n" $ List.map kv (hashtbl_toList setup))
+    Filesystem.writeFile setup_path (String.concat "\n" $ List.map kv (hashtbl_to_list setup))
 
 let remove_dead_links () =
   let files = Sys.readdir "." in

@@ -13,7 +13,6 @@ let maybe d f v =
   | None -> d
   | Some x -> f x
 
-let may f v = maybe None (fun x -> Some (f x)) v
 let default d v = maybe d (fun x -> x) v
 let maybe_unit f v = maybe () f v
 let const v _ = v
@@ -69,7 +68,7 @@ let string_startswith prefix x =
 
 let string_endswith suffix x = Filename.check_suffix x suffix
 
-let string_stripPredicate p str =
+let string_strip_predicate p str =
   let len = String.length str in
   let s = ref 0 in
   let e = ref (String.length str) in
@@ -82,22 +81,15 @@ let string_stripPredicate p str =
   done;
   String.sub str start (!e - start)
 
-let string_stripSpaces =
-  string_stripPredicate (fun c -> c = ' ' || c = '\t' || c = '\n')
+let string_strip_spaces =
+  string_strip_predicate (fun c -> c = ' ' || c = '\t' || c = '\n')
 
-let string_splitAt pos s =
+let string_split_at pos s =
   let len = String.length s in
   if pos > len then
     invalid_arg "splitAt"
   else
     (String.sub s 0 pos, String.sub s pos (len - pos))
-
-let string_take n s =
-  let len = String.length s in
-  if n > len then
-    invalid_arg "String.take"
-  else
-    String.sub s 0 n
 
 let string_drop n s =
   let len = String.length s in
@@ -128,7 +120,6 @@ let string_words s =
 let no_empty emptyVal = List.filter (fun x -> x <> emptyVal)
 let string_words_noempty s = no_empty "" (string_words s)
 let string_lines_noempty s = no_empty "" (string_lines s)
-let list_singleton x = [ x ]
 
 let rec list_init l =
   match l with
@@ -158,23 +149,8 @@ let list_eq_noorder (l1 : 'a list) (l2 : 'a list) : bool =
   List.for_all (fun z -> List.mem z l2) l1
 
 let list_filter_map (f : 'a -> 'b option) (l : 'a list) : 'b list =
-  let rec loop (z : 'a list) : 'b list =
-    match z with
-    | [] -> []
-    | x :: xs -> (
-        match f x with
-        | None -> loop xs
-        | Some y -> y :: loop xs)
-  in
-  loop l
-
-let list_mem_many needles haystack =
-  let rec loop l =
-    match l with
-    | [] -> false
-    | x :: xs -> if List.mem x needles then true else loop xs
-  in
-  loop haystack
+  (* Use safe implementation from Compat *)
+  Compat.SafeList.filter_map f l
 
 let rec list_uniq l =
   match l with
@@ -185,13 +161,11 @@ let rec list_uniq l =
       else
         x :: list_uniq xs
 
-let rec list_findmap p l =
-  match l with
-  | [] -> raise Not_found
-  | x :: xs -> (
-      match p x with
-      | Some z -> z
-      | None -> list_findmap p xs)
+let list_find_map p l =
+  (* Use safe implementation from Compat, convert option to exception *)
+  match Compat.SafeList.find_map p l with
+  | Some z -> z
+  | None -> raise Not_found
 
 let hashtbl_map f h =
   let newh = Hashtbl.create (Hashtbl.length h) in
@@ -199,10 +173,6 @@ let hashtbl_map f h =
   newh
 
 let hashtbl_keys h = Hashtbl.fold (fun k _ l -> k :: l) h []
-
-let hashtbl_modify_one f k h =
-  let v = Hashtbl.find h k in
-  Hashtbl.replace h k (f v)
 
 let hashtbl_modify_all f h =
   let keys = hashtbl_keys h in
@@ -212,12 +182,12 @@ let hashtbl_modify_all f h =
       Hashtbl.replace h k (f v))
     keys
 
-let hashtbl_fromList l =
+let hashtbl_from_list l =
   let h = Hashtbl.create (List.length l) in
   List.iter (fun (k, v) -> Hashtbl.add h k v) l;
   h
 
-let hashtbl_toList h = Hashtbl.fold (fun k v l -> (k, v) :: l) h []
+let hashtbl_to_list h = Hashtbl.fold (fun k v l -> (k, v) :: l) h []
 let first f (a, b) = (f a, b)
 let second f (a, b) = (a, f b)
 

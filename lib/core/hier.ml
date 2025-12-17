@@ -121,7 +121,7 @@ let to_generators hier prefix_path =
   else
     try
       Some
-        (list_findmap
+        (list_find_map
            (fun gen ->
              let path = add_prefix prefix_path hier in
              let modname = Modname.to_string (leaf hier) in
@@ -191,11 +191,11 @@ let get_file_entry hier paths =
   if Hashtbl.mem hiers hier then
     Hashtbl.find hiers hier
   else
-    list_findmap
+    list_find_map
       (fun path ->
         try
           Some
-            (list_findmap
+            (list_find_map
                (fun lookup -> lookup hier path)
                [ to_filename; to_directory; to_generators; to_interface ])
         with Not_found -> None)

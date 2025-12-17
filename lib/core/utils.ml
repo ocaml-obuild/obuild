@@ -18,17 +18,17 @@ let read_file_with f filename =
 
 let toKV line =
     match string_split ~limit:2 ':' line with
-    | [k]   -> (string_stripSpaces k, None)
-    | [k;v] -> (string_stripSpaces k, Some (string_stripSpaces v))
+    | [k]   -> (string_strip_spaces k, None)
+    | [k;v] -> (string_strip_spaces k, Some (string_strip_spaces v))
     | _     -> assert false
 
 let toKVeq line =
     match string_split ~limit:2 '=' line with
-    | [k]   -> (string_stripSpaces k, None)
-    | [k;v] -> (string_stripSpaces k, Some (string_stripSpaces v))
+    | [k]   -> (string_strip_spaces k, None)
+    | [k;v] -> (string_strip_spaces k, Some (string_strip_spaces v))
     | _     -> assert false
 
-let parseCSV value = List.filter (fun s -> (String.length s) > 0) (List.map string_stripSpaces (string_split ',' value))
+let parseCSV value = List.filter (fun s -> (String.length s) > 0) (List.map string_strip_spaces (string_split ',' value))
 
 let to_include_path_options paths =
   let ss = ref StringSet.empty in

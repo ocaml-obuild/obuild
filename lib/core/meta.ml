@@ -261,7 +261,7 @@ module Token = struct
     | COMMA -> ","
 
   let char_table =
-    hashtbl_fromList
+    hashtbl_from_list
       [ ('(', LPAREN); (')', RPAREN); ('=', EQ); (',', COMMA); ('.', DOT); ('-', MINUS) ]
 
   let is_token_char c = Hashtbl.mem char_table c
