@@ -94,9 +94,9 @@ let check_modname path modname ext =
       None
 
 let get_filepath root_path hier ext : file_entry option =
-  if Hashtbl.mem hiers hier then
-    Some (Hashtbl.find hiers hier)
-  else
+  match SafeHashtbl.find_opt hiers hier with
+  | Some entry -> Some entry
+  | None ->
     let path = add_prefix root_path hier in
     let modname = Modname.to_string (leaf hier) in
     let res = check_modname path modname ext in
@@ -116,9 +116,9 @@ let to_filename hier prefix_path = get_filepath prefix_path hier Filetype.FileML
 let to_directory hier prefix_path = get_filepath prefix_path hier (Filetype.FileOther "")
 
 let to_generators hier prefix_path =
-  if Hashtbl.mem hiers hier then
-    Some (Hashtbl.find hiers hier)
-  else
+  match SafeHashtbl.find_opt hiers hier with
+  | Some entry -> Some entry
+  | None ->
     try
       Some
         (list_find_map
@@ -148,7 +148,10 @@ let get_src_file dst_dir = function
   | DirectoryEntry (_, f) -> f
 
 let get_dest_file dst_dir ext hier =
-  let entry = Hashtbl.find hiers hier in
+  let entry = match SafeHashtbl.find_opt hiers hier with
+    | Some e -> e
+    | None -> raise Not_found
+  in
   match entry with
   | FileEntry (_, f) ->
       let filename = path_basename f in
@@ -163,7 +166,10 @@ let get_dest_file dst_dir ext hier =
       path </> (filename <.> Filetype.to_string ext)
 
 let get_dest_file_ext dst_dir hier ext_f =
-  let entry = Hashtbl.find hiers hier in
+  let entry = match SafeHashtbl.find_opt hiers hier with
+    | Some e -> e
+    | None -> raise Not_found
+  in
   match entry with
   | FileEntry (_, f) ->
       let filename = path_basename f in
@@ -183,15 +189,12 @@ let get_dest_file_ext dst_dir hier ext_f =
 let to_interface hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
 
 let get_file_entry_maybe hier =
-  if Hashtbl.mem hiers hier then
-    Some (Hashtbl.find hiers hier)
-  else
-    None
+  SafeHashtbl.find_opt hiers hier
 
 let get_file_entry hier paths =
-  if Hashtbl.mem hiers hier then
-    Hashtbl.find hiers hier
-  else
+  match SafeHashtbl.find_opt hiers hier with
+  | Some entry -> entry
+  | None ->
     list_find_map
       (fun path ->
         try

@@ -131,14 +131,18 @@ let exists_node a dag = Hashtbl.mem dag.node_to_id a
 let get_leaves dag =
     Hashtbl.fold (fun id v acc ->
         if IntSet.is_empty v.children then
-            (Hashtbl.find dag.id_to_node id) :: acc
+            match SafeHashtbl.find_opt dag.id_to_node id with
+            | Some node -> node :: acc
+            | None -> acc  (* Should not happen - ID exists in nodes *)
         else acc
     ) dag.nodes []
 
 let get_roots dag =
     Hashtbl.fold (fun id v acc ->
         if IntSet.is_empty v.parents then
-            (Hashtbl.find dag.id_to_node id) :: acc
+            match SafeHashtbl.find_opt dag.id_to_node id with
+            | Some node -> node :: acc
+            | None -> acc  (* Should not happen - ID exists in nodes *)
         else acc
     ) dag.nodes []
 
@@ -152,19 +156,25 @@ let get_node dag a =
 
 let get_nodes dag =
     Hashtbl.fold (fun id _ acc ->
-        (Hashtbl.find dag.id_to_node id) :: acc
+        match SafeHashtbl.find_opt dag.id_to_node id with
+        | Some node -> node :: acc
+        | None -> acc  (* Should not happen - ID exists in nodes *)
     ) dag.nodes []
 
 let get_children dag a =
     let node = get_node dag a in
     IntSet.fold (fun id acc ->
-        (Hashtbl.find dag.id_to_node id) :: acc
+        match SafeHashtbl.find_opt dag.id_to_node id with
+        | Some n -> n :: acc
+        | None -> acc  (* Should not happen - ID in children set *)
     ) node.children []
 
 let get_parents dag a =
     let node = get_node dag a in
     IntSet.fold (fun id acc ->
-        (Hashtbl.find dag.id_to_node id) :: acc
+        match SafeHashtbl.find_opt dag.id_to_node id with
+        | Some n -> n :: acc
+        | None -> acc  (* Should not happen - ID in parents set *)
     ) node.parents []
 
 let rec get_children_full dag a = 
