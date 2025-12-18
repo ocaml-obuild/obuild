@@ -353,7 +353,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
         | Internal -> [(in_current_dir (Libname.to_cmca compiledType compileOpt dep))]
         | System   ->
           let (path, rootPkg) = Metacache.get_from_cache dep in
-          let libDir = Meta.getIncludeDirWithSubpath (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config)) (path, rootPkg) dep.Libname.subnames in
+          let libDir = Meta.get_include_dir_with_subpath (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config)) (path, rootPkg) dep.Libname.subnames in
           let pred = match compiledType with
             | Native    -> Meta.Predicate.Native
             | ByteCode  -> Meta.Predicate.Byte

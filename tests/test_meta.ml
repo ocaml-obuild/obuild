@@ -340,7 +340,7 @@ let test_libname_parsing () =
 let test_ppx_stable_witness_findlib () =
   FindlibConf.load ();
   try
-    let (path, pkg) = Meta.findLib "ppx_stable_witness" in
+    let (path, pkg) = Meta.find_lib "ppx_stable_witness" in
     let stable_witness_libname = Libname.of_string "ppx_stable_witness.stable_witness" in
     let resolved_pkg = Meta.Pkg.find stable_witness_libname.Libname.subnames pkg in
     if resolved_pkg.Meta.Pkg.name = "stable_witness" then

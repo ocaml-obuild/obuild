@@ -25,7 +25,7 @@ let () =
   in
   let unix = Meta.parse (Filepath.fp "unix") meta_unix "unix" in
   let unix_answer =
-    Meta.Pkg.get_archive_with_filter (None, unix) (Libname.of_string "unix")
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "unix", unix) (Libname.of_string "unix")
       [ Meta.Predicate.Byte; Meta.Predicate.Gprof; Meta.Predicate.Mt ]
   in
   assumeEq "unix description" "Unix system calls" unix.Meta.Pkg.description;
@@ -45,14 +45,14 @@ let () =
   assumeEq "netstring description" "Ocamlnet - String processing library"
     netstring.Meta.Pkg.description;
   let netstring_byte =
-    Meta.Pkg.get_archive_with_filter (None, netstring) (Libname.of_string "netstring")
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "netstring", netstring) (Libname.of_string "netstring")
       [ Meta.Predicate.Byte ]
   in
   assumeEq "netstring byte"
     "archive(byte) = [netstring.cma]\narchive(byte,-nonetaccel) = [netaccel.cma netaccel_link.cmo]"
     (archives_to_string netstring_byte);
   let netstring_byte_nonetaccel =
-    Meta.Pkg.get_archive_with_filter (None, netstring) (Libname.of_string "netstring")
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "netstring", netstring) (Libname.of_string "netstring")
       [ Meta.Predicate.Byte; Meta.Predicate.Unknown "nonetaccel" ]
   in
   assumeEq "netstring byte nonetaccel" "archive(byte) = [netstring.cma]"
@@ -76,7 +76,7 @@ let () =
   in
   let num = Meta.parse (Filepath.fp "num") meta_num "num" in
   let num_answer =
-    Meta.Pkg.get_archive_with_filter (None, num) (Libname.of_string "num.core")
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "num", num) (Libname.of_string "num.core")
       [ Meta.Predicate.Native; Meta.Predicate.Plugin ]
   in
   assumeEq "num plugin native" "archive(plugin,native) = [nums.cmxs]"
@@ -115,7 +115,7 @@ let () =
   in
   let threads = Meta.parse (Filepath.fp "threads") meta_threads "threads" in
   let threads_answer =
-    Meta.Pkg.get_archive_with_filter (None, threads)
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "threads", threads)
       (Libname.of_string "threads.posix")
       [ Meta.Predicate.Native; Meta.Predicate.Mt; Meta.Predicate.Mt_posix ]
   in

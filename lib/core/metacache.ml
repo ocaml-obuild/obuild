@@ -6,7 +6,7 @@ let pkgs_cache : (string, Meta.t) Hashtbl.t = Hashtbl.create 100
 let get_from_disk name =
   verbose Debug "  fetching META %s\n%!" name;
   try
-    Meta.findLib name
+    Meta.find_lib name
   with Meta.LibraryNotFound n ->
     raise (Dependencies.DependencyMissing n)
 

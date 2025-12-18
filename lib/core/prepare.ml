@@ -150,7 +150,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
         in
         if Meta.Pkg.is_syntax meta spkg
         then (
-          let includePath = Meta.getIncludeDir stdlib meta in
+          let includePath = Meta.get_include_dir stdlib meta in
           Some ["-I"; fp_to_string includePath; Meta.Pkg.get_archive meta spkg preds]
         ) else
           None
@@ -280,7 +280,7 @@ let get_modules_desc bstate target toplevelModules =
         in
         let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
         let get_ppx_ppxopt fpath meta libname = 
-          let includePath = Meta.getIncludeDir stdlib (fpath,meta) in
+          let includePath = Meta.get_include_dir stdlib (fpath,meta) in
           let pkg = Meta.Pkg.find libname.Libname.subnames meta in
           let ppx = pkg.Meta.Pkg.ppx in
           let ppxopt = pkg.Meta.Pkg.ppxopt in
@@ -555,7 +555,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
       Dist.get_build_exn (Dist.Target (Name.Lib dep))) depsInternal in
   let depIncPathSystem = List.map (fun dep ->
       let (path, rootPkg) = Metacache.get_from_cache dep in
-      Meta.getIncludeDirWithSubpath stdlib (path, rootPkg) dep.Libname.subnames) depsSystem in
+      Meta.get_include_dir_with_subpath stdlib (path, rootPkg) dep.Libname.subnames) depsSystem in
   let depIncludePaths = depIncPathInter @ depIncPathSystem in
   let depIncludePathsD = List.map (fun fp -> fp </> fn "opt-d") depIncPathInter @ depIncPathSystem in
   let depIncludePathsP = List.map (fun fp -> fp </> fn "opt-p") depIncPathInter @ depIncPathSystem in
@@ -565,7 +565,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
         | Internal -> Dist.get_build_exn (Dist.Target (Name.Lib dep))
         | System   -> 
             let (path, rootPkg) = Metacache.get_from_cache dep in
-            Meta.getIncludeDirWithSubpath stdlib (path, rootPkg) dep.Libname.subnames
+            Meta.get_include_dir_with_subpath stdlib (path, rootPkg) dep.Libname.subnames
       ) depPkgs
   in
   let cdepsIncludePaths : filepath list =

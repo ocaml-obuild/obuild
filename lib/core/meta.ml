@@ -91,6 +91,8 @@ module Pkg = struct
     subs : t list;
   }
 
+  type meta_t = Filepath.filepath * t
+
   let make name =
     {
       name;
@@ -479,7 +481,7 @@ let read path name =
   parse path meta_content name
 
 (* get the META file path associated to a library *)
-let findLibPath name =
+let find_lib_path name =
   if !path_warning then (
     eprintf "warning: obuild META search paths and ocaml config mismatch\n\n";
     eprintf "  The ocamlfind configuration file used doesn't list the ocaml standard library \n";
@@ -508,11 +510,11 @@ let findLibPath name =
   in
   find_ret (FindlibConf.get_paths ())
 
-let findLib name : t =
-  let path = findLibPath name in
+let find_lib name : t =
+  let path = find_lib_path name in
   (path, read path name)
 
-let resolveDirectory stdlib basePath directory =
+let resolve_directory stdlib basePath directory =
   match directory with
   | "" | "." -> basePath
   | "^" -> path_dirname basePath
@@ -527,7 +529,7 @@ let resolveDirectory stdlib basePath directory =
           else
             basePath <//> fpo)
 
-let getIncludeDirWithSubpath stdlib ((path, pkg) : t) subnames : filepath =
+let get_include_dir_with_subpath stdlib ((path, pkg) : t) subnames : filepath =
   let basePath = path_dirname path in
   let rec buildPath currentPath remainingSubnames currentPkg =
     match remainingSubnames with
@@ -536,11 +538,11 @@ let getIncludeDirWithSubpath stdlib ((path, pkg) : t) subnames : filepath =
     | subname :: rest ->
         try
           let subpkg = List.find (fun spkg -> spkg.Pkg.name = subname) currentPkg.Pkg.subs in
-          let newPath = resolveDirectory stdlib currentPath subpkg.Pkg.directory in
+          let newPath = resolve_directory stdlib currentPath subpkg.Pkg.directory in
           buildPath newPath rest subpkg
         with Not_found -> raise (SubpackageNotFound subname)
   in
   buildPath basePath subnames pkg
 
-let getIncludeDir stdlib ((path, pkg) : t) : filepath =
-  resolveDirectory stdlib (path_dirname path) pkg.Pkg.directory
+let get_include_dir stdlib ((path, pkg) : t) : filepath =
+  resolve_directory stdlib (path_dirname path) pkg.Pkg.directory
