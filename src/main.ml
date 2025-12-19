@@ -290,7 +290,7 @@ let mainHelp argv =
   | [] -> eprintf "usage: obuild help <command>\n\n"
   | command :: _ -> (
       try
-        let msgs = List.assoc command Help.helpMessages in
+        let msgs = List.assoc command Help.help_messages in
         List.iter (eprintf "%s\n") msgs
       with Not_found -> eprintf "no helpful documentation for %s\n" command)
 

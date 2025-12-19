@@ -106,3 +106,8 @@ test project-errors
   src-dir: tests
   main-is: test_project_errors.ml
   build-deps: obuild, obuild_base, str
+
+test validate-real-world
+  src-dir: tests
+  main-is: validate_real_world.ml
+  build-deps: obuild, obuild_base, str

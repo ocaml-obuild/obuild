@@ -106,7 +106,7 @@ type target =
     ; target_installable : runtime_bool
     }
 
-let newTargetCbits =
+let new_target_cbits =
     { target_cdir      = current_dir
     ; target_csources  = []
     ; target_cflags    = []
@@ -115,7 +115,7 @@ let newTargetCbits =
     ; target_cpkgs     = []
     }
 
-let newTargetObits = {
+let new_target_obits = {
   target_oflags    = [];
   target_builddeps = [];
   target_pp        = None;
@@ -124,17 +124,17 @@ let newTargetObits = {
   target_stdlib    = Stdlib_Standard;
 }
 
-let newTarget n ty buildable installable =
+let new_target n ty buildable installable =
     { target_name        = n
     ; target_buildable   = runtime_def buildable
     ; target_installable = runtime_def installable
     ; target_type        = ty
     ; target_extras      = []
-    ; target_cbits       = newTargetCbits
-    ; target_obits       = newTargetObits
+    ; target_cbits       = new_target_cbits
+    ; target_obits       = new_target_obits
     }
 
-let newTargetExtra objs = {
+let new_target_extra objs = {
   target_extra_objects   = objs;
   target_extra_builddeps = [];
   target_extra_oflags    = [];

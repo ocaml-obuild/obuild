@@ -180,7 +180,7 @@ module Library = struct
       modules = [];
       pack = false;
       syntax = false;
-      target = newTarget (Name.Lib name) Typ.Lib true true;
+      target = new_target (Name.Lib name) Typ.Lib true true;
       subs = [];
     }
 
@@ -225,7 +225,7 @@ module Library = struct
             | "per" ->
                 let t = acc.target in
                 let doPer =
-                  do_block2 "per" newTargetExtra (parse_per strict) (fun obj ->
+                  do_block2 "per" new_target_extra (parse_per strict) (fun obj ->
                       { acc with target = { t with target_extras = obj :: t.target_extras } })
                 in
                 doPer args cont
@@ -250,7 +250,7 @@ module Executable = struct
     target : target;
   }
 
-  let make name = { name; main = empty_fn; target = newTarget (Name.Exe name) Typ.Exe true true }
+  let make name = { name; main = empty_fn; target = new_target (Name.Exe name) Typ.Exe true true }
   let to_target obj = obj.target
 
   let parse_common strict sectionName setMain setTarget myTarget other acc line cont =
@@ -265,7 +265,7 @@ module Executable = struct
             | "per" ->
                 let t = myTarget in
                 let doPer =
-                  do_block2 "per" newTargetExtra (parse_per strict) (fun obj ->
+                  do_block2 "per" new_target_extra (parse_per strict) (fun obj ->
                       setTarget acc { t with target_extras = obj :: t.target_extras })
                 in
                 doPer args cont
@@ -308,7 +308,7 @@ module Test = struct
     {
       name;
       main = empty_fn;
-      target = newTarget (Name.Test name) Typ.Test (Gconf.get_target_option "build-tests") false;
+      target = new_target (Name.Test name) Typ.Test (Gconf.get_target_option "build-tests") false;
       rundir = None;
       runopt = [];
       type_ = ExitCode;
@@ -361,7 +361,7 @@ module Example = struct
       name;
       main = empty_fn;
       target =
-        newTarget (Name.Example name) Typ.Test (Gconf.get_target_option "build-examples") false;
+        new_target (Name.Example name) Typ.Test (Gconf.get_target_option "build-examples") false;
     }
 
   let parse strict obj =

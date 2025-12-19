@@ -39,7 +39,7 @@ type project_config = {
 let get_ocaml_config_key_hashtbl key h =
   try Hashtbl.find h key with Not_found -> raise (OcamlConfigMissing key)
 
-let getOcamlConfigKey key =
+let get_ocaml_config_key_global key =
   get_ocaml_config_key_hashtbl key (Prog.getOcamlConfig ())
 
 let get_ocaml_config_key key project =

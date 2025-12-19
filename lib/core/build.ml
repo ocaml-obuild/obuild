@@ -346,7 +346,7 @@ let satisfy_preds dep preds =
   dep_is_satisfied root_pkg
 
 let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
-  let systhread = Analyze.getOcamlConfigKey "systhread_supported" in
+  let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
   let buildDeps =  if is_lib target then []
     else List.flatten (List.map (fun dep ->
         match Hashtbl.find bstate.bstate_config.project_dep_data dep with
