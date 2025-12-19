@@ -1,14 +1,14 @@
 (** Utility functions for functional programming
 
-    This module provides common functional programming utilities including
-    option handling, string operations, list utilities, and more. *)
+    This module provides common functional programming utilities including option handling, string
+    operations, list utilities, and more. *)
 
 (** {1 Control flow} *)
 
 val finally : (unit -> 'a) -> (unit -> unit) -> 'a
-(** [finally fct clean_f] executes [fct ()], then executes [clean_f ()]
-    regardless of whether [fct] succeeded or raised an exception.
-    If [fct] raises an exception, [clean_f] is called before re-raising. *)
+(** [finally fct clean_f] executes [fct ()], then executes [clean_f ()] regardless of whether [fct]
+    succeeded or raised an exception. If [fct] raises an exception, [clean_f] is called before
+    re-raising. *)
 
 (** {1 Option utilities} *)
 
@@ -30,14 +30,14 @@ val maybes_to_list : 'a option list -> 'a list
 (** {1 Either type} *)
 
 type ('a, 'b) either =
-  | Left of 'a   (** Left alternative *)
+  | Left of 'a  (** Left alternative *)
   | Right of 'b  (** Right alternative *)
 
 (** {1 Function composition} *)
 
 val ( $ ) : ('a -> 'b) -> 'a -> 'b
-(** Function application operator. [f $ x] is equivalent to [f x] but with
-    lower precedence, useful for avoiding parentheses *)
+(** Function application operator. [f $ x] is equivalent to [f x] but with lower precedence, useful
+    for avoiding parentheses *)
 
 val id : 'a -> 'a
 (** Identity function *)
@@ -49,28 +49,19 @@ val char_is_alphanum : char -> bool
 
 (** {1 String operations} *)
 
-val string_index_pred : (char -> bool) -> string -> int
-(** [string_index_pred p s] returns the index of the first character in [s]
-    satisfying predicate [p].
-    @raise Not_found if no character satisfies the predicate *)
-
 val string_split : ?limit:int -> char -> string -> string list
-(** [string_split ?limit c s] splits string [s] on character [c].
-    [limit] controls maximum number of splits (-1 for unlimited) *)
+(** [string_split ?limit c s] splits string [s] on character [c]. [limit] controls maximum number of
+    splits (-1 for unlimited) *)
 
 val string_split_pred : ?limit:int -> (char -> bool) -> string -> string list
-(** [string_split_pred ?limit p s] splits string [s] at characters satisfying
-    predicate [p]. [limit] controls maximum number of splits (-1 for unlimited) *)
+(** [string_split_pred ?limit p s] splits string [s] at characters satisfying predicate [p]. [limit]
+    controls maximum number of splits (-1 for unlimited) *)
 
 val string_startswith : string -> string -> bool
 (** [string_startswith prefix s] tests if [s] starts with [prefix] *)
 
 val string_endswith : string -> string -> bool
 (** [string_endswith suffix s] tests if [s] ends with [suffix] *)
-
-val string_strip_predicate : (char -> bool) -> string -> string
-(** [string_strip_predicate p s] removes leading and trailing characters
-    satisfying predicate [p] from [s] *)
 
 val string_strip_spaces : string -> string
 (** Remove leading and trailing whitespace (space, tab, newline) *)
@@ -122,8 +113,8 @@ val list_iteri : (int -> 'a -> unit) -> 'a list -> unit
 (** [list_iteri f lst] applies [f] to each element with its index (starting at 1) *)
 
 val list_eq_noorder : 'a list -> 'a list -> bool
-(** [list_eq_noorder l1 l2] tests if all elements of [l1] are in [l2],
-    ignoring order (not bidirectional - only checks l1 ⊆ l2) *)
+(** [list_eq_noorder l1 l2] tests if all elements of [l1] are in [l2], ignoring order (not
+    bidirectional - only checks l1 ⊆ l2) *)
 
 val list_filter_map : ('a -> 'b option) -> 'a list -> 'b list
 (** [list_filter_map f lst] applies [f] to each element, keeping only [Some] results *)

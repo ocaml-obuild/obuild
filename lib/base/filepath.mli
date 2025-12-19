@@ -1,38 +1,36 @@
-(** The module [Filepath] defines two types, [filepath] and [filename]
-    to represent paths and file names in a file system.
+(** The module [Filepath] defines two types, [filepath] and [filename] to represent paths and file
+    names in a file system.
 
-    * a [filepath] represent a path in a filesystem. It can be
-    relative or absolute, and is composed of components. The last
-    component can correspond to a directory or a file in a
-    filesystem. Other components correspond to directories.
+    * a [filepath] represent a path in a filesystem. It can be relative or absolute, and is composed
+    of components. The last component can correspond to a directory or a file in a filesystem. Other
+    components correspond to directories.
 
-    * a [filename] encapsulate the name of a file.
-*)
+    * a [filename] encapsulate the name of a file. *)
 
 (** Exceptions *)
 
-(** [EmptyFilename] is raised by [fn] when trying to create a value of
-    type [filename] out of strings "", "." or ".." *)
 exception EmptyFilename
+(** [EmptyFilename] is raised by [fn] when trying to create a value of type [filename] out of
+    strings "", "." or ".." *)
 
-(** [InvalidFilename fn] is raised by [fn] when trying to create a
-    value of type [filename] when [fn] contains [Filename.dir_sep]. *)
 exception InvalidFilename of string
+(** [InvalidFilename fn] is raised by [fn] when trying to create a value of type [filename] when
+    [fn] contains [Filename.dir_sep]. *)
 
 (** Types *)
 
-(** Type representing a path in a filesystem. *)
 type filepath
+(** Type representing a path in a filesystem. *)
 
-(** Type representing  a file in a filesystem. *)
 type filename
+(** Type representing a file in a filesystem. *)
 
-(** Filename guaranteed to point to no valid file. Useful for
-    initializing structures that have a field of type [filename]. *)
 val empty_fn : filename
+(** Filename guaranteed to point to no valid file. Useful for initializing structures that have a
+    field of type [filename]. *)
 
-(** Filepath pointing to the current working directory. *)
 val current_dir : filepath
+(** Filepath pointing to the current working directory. *)
 
 (** Functions to convert the above types to and from string. *)
 
@@ -42,36 +40,30 @@ val fp : string -> filepath
 val fn : string -> filename
 val is_absolute : filepath -> bool
 
-(** [got_dirsep s] returns [true] if [s] contains [Filename.dir_sep],
-    i.e. "/" on Unix. *)
-val got_dirsep : string -> bool
-
-(** [valid_fn s] returns [true] if [s] is a valid file name, i.e. not
-    ".", "..", not containing [Filename.dir_sep]. *)
 val valid_fn : string -> bool
+(** [valid_fn s] returns [true] if [s] is a valid file name, i.e. not ".", "..", not containing
+    [Filename.dir_sep]. *)
 
-(** [fp1 <//> fp2] concatenate [fp2] to [fp1]. [fp2] cannot be an absolute
-    path. *)
 val ( <//> ) : filepath -> filepath -> filepath
+(** [fp1 <//> fp2] concatenate [fp2] to [fp1]. [fp2] cannot be an absolute path. *)
 
-(** [fp </> fn] concatenate [fn] to [fp]. *)
 val ( </> ) : filepath -> filename -> filepath
+(** [fp </> fn] concatenate [fn] to [fp]. *)
 
-(** [fn <.> ext] appends the extension [ext] to [fn]. *)
 val ( <.> ) : filename -> string -> filename
+(** [fn <.> ext] appends the extension [ext] to [fn]. *)
 
-(** [in_current_dir fn] is equivalent to [current_dir </> fn]. *)
 val in_current_dir : filename -> filepath
+(** [in_current_dir fn] is equivalent to [current_dir </> fn]. *)
 
-(** [path_length fp] returns the number of components in [fp],
-    including the last (basename) one. *)
 val path_length : filepath -> int
+(** [path_length fp] returns the number of components in [fp], including the last (basename) one. *)
 
-(** Analogous to [Filename.dirname], but operate on [filepath]s. *)
 val path_dirname : filepath -> filepath
+(** Analogous to [Filename.dirname], but operate on [filepath]s. *)
 
-(** Analogous to [Filename.basename], but operate on [filepath]s. *)
 val path_basename : filepath -> filename
+(** Analogous to [Filename.basename], but operate on [filepath]s. *)
 
-(** Analogous to [Filename.chop_extension], but for [filename]s. *)
 val chop_extension : filename -> filename
+(** Analogous to [Filename.chop_extension], but for [filename]s. *)

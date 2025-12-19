@@ -23,14 +23,17 @@ let rec maybes_to_list l =
   | None :: xs -> maybes_to_list xs
   | Some x :: xs -> x :: maybes_to_list xs
 
-type ('a, 'b) either = Left of 'a | Right of 'b
+type ('a, 'b) either =
+  | Left of 'a
+  | Right of 'b
 
 let ( $ ) f a = f a
 let id x = x
+let char_is_alphanum c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 
-let char_is_alphanum c =
-  (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-
+(** [string_index_pred p s] returns the index of the first character in [s] satisfying predicate
+    [p].
+    @raise Not_found if no character satisfies the predicate *)
 let string_index_pred p s =
   let len = String.length s in
   let i = ref 0 in
@@ -42,14 +45,15 @@ let string_index_pred p s =
   else
     !i
 
+(** [string_strip_predicate p s] removes leading and trailing characters satisfying predicate [p]
+    from [s] *)
 let rec string_split ?(limit = -1) c s =
   let i = try String.index s c with Not_found -> -1 in
   let nlimit = if limit = -1 || limit = 0 then limit else limit - 1 in
   if i = -1 || nlimit = 0 then
     [ s ]
   else
-    let a = String.sub s 0 i
-    and b = String.sub s (i + 1) (String.length s - i - 1) in
+    let a = String.sub s 0 i and b = String.sub s (i + 1) (String.length s - i - 1) in
     a :: string_split ~limit:nlimit c b
 
 let rec string_split_pred ?(limit = -1) p s =
@@ -58,8 +62,7 @@ let rec string_split_pred ?(limit = -1) p s =
   if i = -1 || nlimit = 0 then
     [ s ]
   else
-    let a = String.sub s 0 i
-    and b = String.sub s (i + 1) (String.length s - i - 1) in
+    let a = String.sub s 0 i and b = String.sub s (i + 1) (String.length s - i - 1) in
     a :: string_split_pred ~limit:nlimit p b
 
 let string_startswith prefix x =
@@ -81,8 +84,7 @@ let string_strip_predicate p str =
   done;
   String.sub str start (!e - start)
 
-let string_strip_spaces =
-  string_strip_predicate (fun c -> c = ' ' || c = '\t' || c = '\n')
+let string_strip_spaces = string_strip_predicate (fun c -> c = ' ' || c = '\t' || c = '\n')
 
 let string_split_at pos s =
   let len = String.length s in
@@ -107,16 +109,11 @@ let string_init n s =
 
 let string_all p s =
   let len = String.length s in
-  let rec loop i =
-    if i = len then true else if not (p s.[i]) then false else loop (i + 1)
-  in
+  let rec loop i = if i = len then true else if not (p s.[i]) then false else loop (i + 1) in
   loop 0
 
 let string_lines s = string_split '\n' s
-
-let string_words s =
-  string_split_pred (fun c -> c = ' ' || c = '\n' || c = '\t') s
-
+let string_words s = string_split_pred (fun c -> c = ' ' || c = '\n' || c = '\t') s
 let no_empty emptyVal = List.filter (fun x -> x <> emptyVal)
 let string_words_noempty s = no_empty "" (string_words s)
 let string_lines_noempty s = no_empty "" (string_lines s)
@@ -145,8 +142,7 @@ let list_iteri f list =
   in
   loop 1 list
 
-let list_eq_noorder (l1 : 'a list) (l2 : 'a list) : bool =
-  List.for_all (fun z -> List.mem z l2) l1
+let list_eq_noorder (l1 : 'a list) (l2 : 'a list) : bool = List.for_all (fun z -> List.mem z l2) l1
 
 let list_filter_map (f : 'a -> 'b option) (l : 'a list) : 'b list =
   (* Use safe implementation from Compat *)
@@ -194,8 +190,7 @@ let second f (a, b) = (a, f b)
 exception ConversionIntFailed of string * string
 exception ConversionBoolFailed of string * string
 
-let user_int_of_string loc s =
-  try int_of_string s with _ -> raise (ConversionIntFailed (loc, s))
+let user_int_of_string loc s = try int_of_string s with _ -> raise (ConversionIntFailed (loc, s))
 
 let user_bool_of_string loc s =
   try bool_of_string s with _ -> raise (ConversionBoolFailed (loc, s))

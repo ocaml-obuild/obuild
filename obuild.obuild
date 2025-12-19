@@ -70,24 +70,39 @@ executable obuild
 test dag
   src-dir: tests
   main-is: test_dag.ml
-  build-deps: obuild
+  build-deps: obuild, str
 
 test path
   src-dir: tests
   main-is: test_path.ml
-  build-deps: obuild, obuild_base
+  build-deps: obuild, obuild_base, str
 
 test expr
   src-dir: tests
   main-is: test_expr.ml
-  build-deps: obuild, obuild_base
+  build-deps: obuild, obuild_base, str
 
 test find
   src-dir: tests
   main-is: test_find.ml
-  build-deps: obuild, obuild_base
+  build-deps: obuild, obuild_base, str
 
 test meta
   src-dir: tests
   main-is: test_meta.ml
-  build-deps: obuild, obuild_base
+  build-deps: obuild, obuild_base, str
+
+test framework-demo
+  src-dir: tests
+  main-is: test_framework_demo.ml
+  build-deps: obuild, obuild_base, str
+
+test meta-errors
+  src-dir: tests
+  main-is: test_meta_errors.ml
+  build-deps: obuild, obuild_base, str
+
+test project-errors
+  src-dir: tests
+  main-is: test_project_errors.ml
+  build-deps: obuild, obuild_base, str

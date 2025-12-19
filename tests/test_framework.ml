@@ -36,13 +36,41 @@ let assert_false ~actual ~name =
 let assert_raises ~expected_exn ~test_func ~name =
   try
     let _ = test_func () in
-    Failure (sprintf "Expected exception %s, but no exception was raised" 
+    Failure (sprintf "Expected exception %s, but no exception was raised"
              (Printexc.to_string expected_exn))
   with
   | exn when exn = expected_exn -> Success
-  | exn -> Failure (sprintf "Expected exception %s, got %s" 
-                    (Printexc.to_string expected_exn) 
+  | exn -> Failure (sprintf "Expected exception %s, got %s"
+                    (Printexc.to_string expected_exn)
                     (Printexc.to_string exn))
+
+let assert_string_contains ~haystack ~needle ~name =
+  try
+    let _ = Str.search_forward (Str.regexp_string needle) haystack 0 in
+    Success
+  with Not_found ->
+    Failure (sprintf "Expected string to contain '%s', but it didn't.\nActual: %s"
+             needle haystack)
+
+let assert_no_exception ~test_func ~name =
+  try
+    let _ = test_func () in
+    Success
+  with exn ->
+    Failure (sprintf "Expected no exception, but got: %s" (Printexc.to_string exn))
+
+let assert_exception_message ~test_func ~expected_substring ~name =
+  try
+    let _ = test_func () in
+    Failure "Expected exception to be raised, but no exception was raised"
+  with exn ->
+    let msg = Printexc.to_string exn in
+    try
+      let _ = Str.search_forward (Str.regexp_string expected_substring) msg 0 in
+      Success
+    with Not_found ->
+      Failure (sprintf "Expected exception message to contain '%s', but got: %s"
+               expected_substring msg)
 
 let run_test test_case =
   incr test_count;
