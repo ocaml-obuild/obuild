@@ -342,7 +342,7 @@ let get_modules_desc bstate target toplevelModules =
           dep_includes = file_search_paths hier;
           dep_pp       = pp
         } in
-        let allDeps = match runOcamldep dopt srcFile with
+        let allDeps = match run_ocamldep dopt srcFile with
           | []   -> raise Module.DependencyNoOutput
           | ml::mli::_ -> list_uniq (ml @ mli)
           | x::_ -> x
@@ -499,7 +499,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
 
     (* just append each C sources as single node in the stepsDag *)
     if cbits.target_csources <> [] then (
-      let objDeps = runCCdep cbits.target_cdir cbits.target_csources in
+      let objDeps = run_ccdep cbits.target_cdir cbits.target_csources in
 
       List.iter (fun cSource ->
           let (fps : filepath list) =

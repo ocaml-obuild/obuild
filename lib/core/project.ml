@@ -561,7 +561,7 @@ let check proj =
     proj.license_file;
   maybe_unit
     (fun x ->
-      let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in
+      let ocaml_ver = Hashtbl.find (Prog.get_ocaml_config ()) "version" in
       if not (Expr.eval ocaml_ver x) then raise (BadOcamlVersion (ocaml_ver, x)))
     proj.ocaml_ver;
 

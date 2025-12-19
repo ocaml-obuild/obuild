@@ -139,7 +139,7 @@ let to_generators hier prefix_path =
                  in
                  Hashtbl.add hiers hier (GeneratedFileEntry (prefix_path, fullname, generated_file));
                  Some (GeneratedFileEntry (prefix_path, fullname, generated_file)))
-           !Generators.generators)
+           (Generators.get_all ()))
     with Not_found -> None
 
 let get_src_file dst_dir = function

@@ -22,7 +22,7 @@ let annotToOpts = function
   | AnnotationText -> ["-annot"]
   | AnnotationBoth -> ["-bin-annot";"-annot"]
 
-let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
+let run_ocaml_compile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
   let dstDir = dirSpec.dst_dir in
   let entry = Hier.get_file_entry modhier [dirSpec.src_dir] in
   let src_file = Hier.get_src_file dirSpec.src_dir entry in
@@ -31,13 +31,13 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
   let (prog, srcFile, dstFile) =
     match buildMode with
     | Interface ->
-      (Prog.getOcamlC ()
+      (Prog.get_ocamlc ()
       ,Hier.ml_to_ext src_file Filetype.FileMLI
       ,Hier.get_dest_file dstDir Filetype.FileCMI modhier
       )
     | Compiled ct ->
       let ext = if ct = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
-      ((if ct = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt ())
+      ((if ct = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt ())
       ,src_file
       ,Hier.get_dest_file dstDir ext modhier
       )
@@ -62,8 +62,8 @@ let runOcamlCompile dirSpec useThread annotMode buildMode compileOpt packopt pp 
   in
   Process.make args
 
-let runOcamlPack _srcDir dstDir annotMode buildMode packOpt dest modules =
-  let prog = if buildMode = ByteCode then Prog.getOcamlC () else Prog.getOcamlOpt () in
+let run_ocaml_pack _srcDir dstDir annotMode buildMode packOpt dest modules =
+  let prog = if buildMode = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt () in
   let ext = if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let ext_f = function
     | Filetype.FileML -> ext
@@ -80,9 +80,9 @@ let runOcamlPack _srcDir dstDir annotMode buildMode packOpt dest modules =
   in
   Process.make args
 
-let runOcamlInfer srcDir includes pp modname =
+let run_ocaml_infer srcDir includes pp modname =
   let entry = Hier.get_file_entry modname [srcDir] in
-  let args = [Prog.getOcamlC (); "-i"]
+  let args = [Prog.get_ocamlc (); "-i"]
              @ Pp.to_params pp
              @ (Utils.to_include_path_options includes)
              @ [fp_to_string (Hier.get_src_file srcDir entry)]
@@ -93,7 +93,7 @@ let runOcamlInfer srcDir includes pp modname =
 
 let o_from_cfile file = file <.> "o"
 
-let runCCompile project dirSpec cflags file =
+let run_c_compile project dirSpec cflags file =
     let dstDir = dirSpec.dst_dir in
     Filesystem.mkdir_safe_recursive dstDir 0o755;
     let callCCompiler = string_words_noempty (Analyze.get_ocaml_config_key "bytecomp_c_compiler" project) in
@@ -108,22 +108,22 @@ let runCCompile project dirSpec cflags file =
         in
     Process.make args
 
-let runAr dest deps =
-  let args = [ Prog.getAR (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
+let run_ar dest deps =
+  let args = [ Prog.get_ar (); "rc"; fp_to_string dest ] @ List.map fp_to_string deps in
   Process.make args
 
-let runRanlib dest =
-  Process.make [ Prog.getRanlib (); fp_to_string dest ]
+let run_ranlib dest =
+  Process.make [ Prog.get_ranlib (); fp_to_string dest ]
 
-let runCLinking sharingMode depfiles dest =
+let run_c_linking sharingMode depfiles dest =
   let args = if gconf.ocamlmklib then
-      [ Prog.getOcamlMklib () ] @ (match sharingMode with
+      [ Prog.get_ocamlmklib () ] @ (match sharingMode with
           | LinkingStatic -> ["-custom"]
           | LinkingShared   -> [])
       @ ["-o"; fp_to_string dest ]
       @ List.map fp_to_string depfiles
     else (* Not working if system != linux *)
-      [ Prog.getCC () ]
+      [ Prog.get_cc () ]
       @ (match sharingMode with
           | LinkingStatic -> []
           | LinkingShared -> ["-shared"]) (* TODO: fix this for all system != linux *)
@@ -131,7 +131,7 @@ let runCLinking sharingMode depfiles dest =
       @ List.map fp_to_string depfiles in
   Process.make args
 
-let runOcamlLinking includeDirs buildMode linkingMode compileType useThread systhread cclibs libs modules dest =
+let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread systhread cclibs libs modules dest =
   (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
   let link_maybe linking_mode dest =
     let file_or_link_exists fn = try let _ = Unix.lstat fn in true with _ -> false
@@ -146,8 +146,8 @@ let runOcamlLinking includeDirs buildMode linkingMode compileType useThread syst
          then Unix.symlink real basename)
   in
   let prog = match buildMode with
-    | Native    -> Prog.getOcamlOpt ()
-    | ByteCode  -> Prog.getOcamlC ()
+    | Native    -> Prog.get_ocamlopt ()
+    | ByteCode  -> Prog.get_ocamlc ()
   in
   let ext = if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let args = [ prog ]

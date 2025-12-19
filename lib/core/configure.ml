@@ -46,9 +46,9 @@ let makeSetup digestKV project flags =
     @ List.map (fun (flagname, flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) flags)
 
 let sanityCheck () =
-  let (_ : string) = Prog.getOcamlOpt () in
-  let (_ : string) = Prog.getOcamlC () in
-  let (_ : string) = Prog.getOcamlDep () in
+  let (_ : string) = Prog.get_ocamlopt () in
+  let (_ : string) = Prog.get_ocamlc () in
+  let (_ : string) = Prog.get_ocamldep () in
   ()
 
 let comparekvs reason setup l =
@@ -75,7 +75,7 @@ let execute_configure_script proj_file =
   match proj_file.Project.configure_script with
   | None -> ()
   | Some script -> (
-      let args = [ Prog.getOcaml (); fp_to_string script ] in
+      let args = [ Prog.get_ocaml (); fp_to_string script ] in
       match Process.run args with
       | Process.Success (_, warnings, _) -> print_warnings warnings
       | Process.Failure er -> raise (ConfigureScriptFailed er))
@@ -145,7 +145,7 @@ let set_opts hashtable =
   List.iter (fun k -> Gconf.set_target_options k (bool_of_opt hashtable k)) opts
 
 let check_ocaml () =
-  let ocamlCfg = Prog.getOcamlConfig () in
+  let ocamlCfg = Prog.get_ocaml_config () in
   let ocaml_ver = Hashtbl.find ocamlCfg "version" in
   let ver = string_split '.' ocaml_ver in
   (match ver with

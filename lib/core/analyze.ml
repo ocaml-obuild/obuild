@@ -40,7 +40,7 @@ let get_ocaml_config_key_hashtbl key h =
   try Hashtbl.find h key with Not_found -> raise (OcamlConfigMissing key)
 
 let get_ocaml_config_key_global key =
-  get_ocaml_config_key_hashtbl key (Prog.getOcamlConfig ())
+  get_ocaml_config_key_hashtbl key (Prog.get_ocaml_config ())
 
 let get_ocaml_config_key key project =
   get_ocaml_config_key_hashtbl key project.project_ocamlcfg
@@ -89,7 +89,7 @@ let get_internal_library_deps project target =
  * to detect difference of opinions of where the stdlib is, between ocamlfind and ocamlc.
 *)
 let initializeSystemStdlib ocamlCfg =
-  let ocaml_ver = Hashtbl.find (Prog.getOcamlConfig ()) "version" in
+  let ocaml_ver = Hashtbl.find (Prog.get_ocaml_config ()) "version" in
   let stdlibPath =
     fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg)
   in
@@ -158,7 +158,7 @@ let readOcamlMkConfig filename =
  * and prepare the global bstate.of value *)
 let prepare projFile user_flags =
   verbose Verbose "analyzing project\n%!";
-  let ocamlCfg = Prog.getOcamlConfig () in
+  let ocamlCfg = Prog.get_ocaml_config () in
   let ocamlMkCfg =
     readOcamlMkConfig (Hashtbl.find ocamlCfg "standard_library")
   in
@@ -298,12 +298,12 @@ let prepare projFile user_flags =
 
        List.iter
          (fun (cpkg, cconstr) ->
-            let ver = Prog.runPkgConfigVersion cpkg in
+            let ver = Prog.run_pkg_config_version cpkg in
             (* TODO compare the constraints *)
             ignore cconstr;
             ignore ver;
-            let pkgIncludes = List.map fp (Prog.runPkgConfigIncludes cpkg) in
-            let pkgLibs = Prog.runPkgConfigLibs cpkg in
+            let pkgIncludes = List.map fp (Prog.run_pkg_config_includes cpkg) in
+            let pkgLibs = Prog.run_pkg_config_libs cpkg in
             let pkgConf =
               { cpkg_conf_libs = pkgLibs; cpkg_conf_includes = pkgIncludes }
             in

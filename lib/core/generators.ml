@@ -15,12 +15,12 @@ type t = {
 let generators = ref [
     { suffix = "mll";
       modname = (fun m -> m);
-      commands = (fun src dest_root _ -> [[Prog.getOcamlLex (); "-o"; (fp_to_string dest_root) ^ ".ml"; fp_to_string src]]);
+      commands = (fun src dest_root _ -> [[Prog.get_ocamllex (); "-o"; (fp_to_string dest_root) ^ ".ml"; fp_to_string src]]);
       generated_files = (fun f _ -> (chop_extension f) <.>  "ml")
     };
     { suffix = "mly";
       modname = (fun m -> m);
-      commands = (fun src dest_root _ -> [[Prog.getOcamlYacc (); "-b"; fp_to_string dest_root; fp_to_string src]]);
+      commands = (fun src dest_root _ -> [[Prog.get_ocamlyacc (); "-b"; fp_to_string dest_root; fp_to_string src]]);
       generated_files = (fun f _ -> (chop_extension f) <.>  "ml")
     };
     { suffix = "atd";
@@ -30,11 +30,11 @@ let generators = ref [
                    let ext = String.sub moduleName (len - 2) 2 in
                    match ext with
                    | "_t" ->
-                     [[Prog.getAtdGen (); "-t"; fp_to_string src; "-o"; (fp_to_string dest_root)]]
+                     [[Prog.get_atdgen (); "-t"; fp_to_string src; "-o"; (fp_to_string dest_root)]]
                    | "_v" ->
-                     [[Prog.getAtdGen (); "-v"; fp_to_string src; "-o"; (fp_to_string dest_root)]]
+                     [[Prog.get_atdgen (); "-v"; fp_to_string src; "-o"; (fp_to_string dest_root)]]
                    | "_j" ->
-                     [[Prog.getAtdGen (); "-j"; "-j-std"; fp_to_string src; "-o"; (fp_to_string dest_root)]]
+                     [[Prog.get_atdgen (); "-j"; "-j-std"; fp_to_string src; "-o"; (fp_to_string dest_root)]]
                    | _ -> raise (GeneratorFailed ("extension " ^ ext ^ " is unknown"))
                  );
       generated_files = (fun f moduleName -> let base = fn_to_string (chop_extension f) in
@@ -49,6 +49,7 @@ let generators = ref [
     };
   ]
 
+let get_all () = !generators
 let is_generator_ext ext = List.exists (fun gen -> gen.suffix = ext) !generators
 let get_generator fp =
   let ext = Filetype.of_filepath fp in

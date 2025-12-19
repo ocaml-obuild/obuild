@@ -26,7 +26,7 @@ let parse_output_KsemiVs onNonKV mapFstTy mapSndTys out =
     ) (List.map Utils.toKV (string_lines_noempty out))
 
 (* return the (modules list) dependency for a specific file *)
-let runOcamldep dopt srcFile =
+let run_ocamldep dopt srcFile =
   let wrap_module_safe f =
     try Modname.wrap f
     with _ -> raise (BuildDepAnalyzeFailed ("ocamldep returned a bad module name " ^ f))
@@ -35,7 +35,7 @@ let runOcamldep dopt srcFile =
   let baseFile = fp_to_string srcFile in
   let files = if fileType = Filetype.FileML then [baseFile; baseFile ^ "i"]
     else [baseFile] in
-  let args = [Prog.getOcamlDep ()]
+  let args = [Prog.get_ocamldep ()]
              @ (Utils.to_include_path_options dopt.dep_includes)
              @ (Pp.to_params dopt.dep_pp)
              @ ["-modules"] @ files in
@@ -71,8 +71,8 @@ let joinLines s =
   in
   bytes_to_string (replace 0)
 
-let runCCdep srcDir files : (filename * filepath list) list =
-  let args = [Prog.getCC (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
+let run_ccdep srcDir files : (filename * filepath list) list =
+  let args = [Prog.get_cc (); "-MM"] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
   match Process.run args with
   | Process.Failure err     -> raise (BuildCDepAnalyzeFailed err)
   | Process.Success (out,_,_) ->

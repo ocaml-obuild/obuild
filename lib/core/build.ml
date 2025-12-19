@@ -129,7 +129,7 @@ let compile_c task_index task c_file bstate task_context dag =
      verbose Report "[%*d of %d] Compiling C %-30s%s\n%!" nb_step_len task_index nb_step (fn_to_string c_file)
        (if reason <> "" then "    ( " ^ reason ^ " )" else "");
      let cflags = cbits.target_cflags in
-     Scheduler.AddProcess (task, runCCompile bstate.bstate_config c_dir_spec cflags c_file)
+     Scheduler.AddProcess (task, run_c_compile bstate.bstate_config c_dir_spec cflags c_file)
   )
 
 (* compile a set of modules in directory into a pack *)
@@ -170,7 +170,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
                  (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI m)
                ) modules in
              let dir = cstate.compilation_builddir_ml comp_opt in
-             let fcompile = (fun () -> runOcamlPack dir dir annot_mode build_mode pack_opt h modules) in
+             let fcompile = (fun () -> run_ocaml_pack dir dir annot_mode build_mode pack_opt h modules) in
              match check_destination_valid_with mdeps dest with
              | None            -> None
              | Some src_changed -> Some (reason_from_paths dest src_changed, fcompile)
@@ -267,7 +267,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
           include_dirs = cstate.compilation_include_paths comp_opt h
         } in
         let fcompile =
-          (build_mode,(fun () -> runOcamlCompile r_dir_spec use_thread annot_mode build_mode comp_opt
+          (build_mode,(fun () -> run_ocaml_compile r_dir_spec use_thread annot_mode build_mode comp_opt
                           pack_opt hdesc.Module.File.use_pp hdesc.Module.File.oflags h)) in
         if invalid
         then (
@@ -322,13 +322,13 @@ let link_c cstate clib_name =
     ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
   done;
   if gconf.ocamlmklib then
-    [[(fun () -> runCLinking LinkingShared cdep_files lib_name)]]
+    [[(fun () -> run_c_linking LinkingShared cdep_files lib_name)]]
   else (
     let so_file = cstate.compilation_builddir_c </> fn ("dll" ^ clib_name ^ ".so") in
     let a_file = cstate.compilation_builddir_c </> fn ("lib" ^ clib_name ^ ".a") in
-    [[(fun () -> runCLinking LinkingShared cdep_files so_file)];
-     [(fun () -> runAr a_file cdep_files)];
-     [(fun () -> runRanlib a_file)]]
+    [[(fun () -> run_c_linking LinkingShared cdep_files so_file)];
+     [(fun () -> run_ar a_file cdep_files)];
+     [(fun () -> run_ranlib a_file)]]
   )
 
 let satisfy_preds dep preds =
@@ -410,7 +410,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       if is_lib target then LinkingLibrary else LinkingExecutable in
     verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
       (if is_lib target then "library" else "executable") (fp_to_string dest);
-    [(fun () -> runOcamlLinking (linking_paths_of compileOpt) compiledType
+    [(fun () -> run_ocaml_linking (linking_paths_of compileOpt) compiledType
          link_type compileOpt useThreadLib systhread cclibs buildDeps compiled dest)]
   ) else []
 
