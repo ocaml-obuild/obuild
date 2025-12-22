@@ -83,6 +83,7 @@ let rec set_target_options field value =
   | "executable-profiling", true -> set_target_options "library-profiling" true
   | "executable-debugging", true -> set_target_options "library-debugging" true
   | "library-plugin", true -> set_target_options "library-native" true
+  | "library-native", false -> set_target_options "library-plugin" false
   | _ -> ()
 
 let get_target_options_keys () = hashtbl_keys target_options_

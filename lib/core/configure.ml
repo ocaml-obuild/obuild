@@ -177,9 +177,9 @@ let run proj_file user_flags user_opts =
   verbose Debug "  configure flag: [%s]\n"
     (Utils.showList "," (fun (n, v) -> n ^ "=" ^ string_of_bool v) flags);
   check_extra_tools proj_file;
-  let project = Analyze.prepare proj_file flags in
-  (* let's set the user opts before saving the setup file *)
+  (* Set the user opts BEFORE analyzing the project *)
   List.iter (fun (o, v) -> Gconf.set_target_options o v) user_opts;
+  let project = Analyze.prepare proj_file flags in
   let currentSetup = makeSetup digestKV project flags in
   let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
   let projectSystemChanged =

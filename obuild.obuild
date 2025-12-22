@@ -111,3 +111,13 @@ test validate-real-world
   src-dir: tests
   main-is: validate_real_world.ml
   build-deps: obuild, obuild_base, str
+
+test build-logic
+  src-dir: tests
+  main-is: test_build_logic.ml
+  build-deps: obuild, obuild_base, str, unix
+
+test build-debug
+  src-dir: tests
+  main-is: test_build_debug.ml
+  build-deps: obuild, obuild_base, str, unix
