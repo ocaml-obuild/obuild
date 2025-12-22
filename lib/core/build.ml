@@ -397,13 +397,35 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
   let destTime = Filesystem.get_modification_time dest in
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
+  (* Get C object files for checking *)
+  let c_obj_files = List.map (fun csrc ->
+      cstate.compilation_builddir_c </> o_from_cfile csrc)
+      cstate.compilation_csources in
+  (* Wait for C object files to be ready and their mtimes to be flushed
+     Filesystem buffering can cause stat() to return stale mtimes even after
+     the C compiler has finished. We need to ensure files exist AND have
+     fresh mtimes before checking them. *)
+  if List.length c_obj_files > 0 then (
+    (* First wait for files to exist *)
+    while not (wait_for_files c_obj_files) do
+      ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
+    done;
+    (* Then wait a bit more for filesystem to flush metadata *)
+    Unix.sleepf 0.05  (* 50ms should be enough for mtime to be visible *)
+  );
   let depsTime =
+    (* Check OCaml module files *)
     try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p)
                 (List.map (fun m ->
                      Hier.get_dest_file path ext m)
                     compiled))
-    with Not_found -> None
+    with Not_found ->
+      (* Also check C object files - if any C object is newer than executable, relink *)
+      try Some (List.find (fun p ->
+                 destTime < Filesystem.get_modification_time p) c_obj_files)
+      with Not_found -> None
   in
+
   if depsTime <> None then (
     let (nb_step,nb_step_len) = get_nb_step dag in
     let link_type = if plugin then LinkingPlugin else

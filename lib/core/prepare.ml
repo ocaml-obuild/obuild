@@ -486,7 +486,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
       let roots = Dag.get_roots stepsDag in
       List.iter (fun r ->
           match r with
-          | CompileModule _ | CompileDirectory _->
+          | CompileModule _ | CompileDirectory _ | CompileC _ ->
             Dag.add_edge (LinkTarget target) r stepsDag;
             Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag;
           | _ -> ()
