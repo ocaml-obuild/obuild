@@ -228,8 +228,12 @@ let dep_descs is_intf hdesc bstate cstate target h =
                 (* Add dependency on the module's own .cmi file *)
                 [(Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h)]) in
         let m_deps = own_cmi_dep @ (List.concat (List.map (fun module_dep ->
-            [(file_compile_ty, Hier.get_dest_file path ext module_dep);
-             (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep)]
+            (* In bytecode mode, .cmo files only depend on .cmi files of dependencies.
+               In native mode, .cmx files depend on both .cmx (for inlining) and .cmi *)
+            let compiled_file_dep = if compiled_ty = Native
+              then [(file_compile_ty, Hier.get_dest_file path ext module_dep)]
+              else [] in
+            compiled_file_dep @ [(Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep)]
           ) module_deps)) in
         let internal_deps = List.assoc (comp_opt,compiled_ty) internal_libs_paths_all_modes in
         (dest,Compiled compiled_ty,comp_opt,src @ internal_deps @ m_deps)

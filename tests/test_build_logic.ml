@@ -71,6 +71,7 @@ let test_ml_incremental_rebuild () =
   with_temp_build_project
     ~name:"ml_incremental"
     ~files:[
+      ("src/foo.mli", "val x : int\n");  (* Explicit interface prevents .cmi regeneration *)
       ("src/foo.ml", "let x = 42\n");
       ("src/bar.ml", "let y = Foo.x + 1\n");
       ("src/baz.ml", "let z = Bar.y * 2\n");
