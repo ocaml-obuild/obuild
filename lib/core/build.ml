@@ -407,15 +407,32 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       cstate.compilation_csources in
   (* Wait for C object files to be ready and their mtimes to be flushed
      Filesystem buffering can cause stat() to return stale mtimes even after
-     the C compiler has finished. We need to ensure files exist AND have
-     fresh mtimes before checking them. *)
+     the C compiler has finished. Poll until mtimes are fresh rather than
+     using an arbitrary fixed delay. *)
   if List.length c_obj_files > 0 then (
     (* First wait for files to exist *)
     while not (wait_for_files c_obj_files) do
       ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
     done;
-    (* Then wait a bit more for filesystem to flush metadata *)
-    Unix.sleepf 0.05  (* 50ms should be enough for mtime to be visible *)
+    (* Then poll until all files have mtimes newer than destTime
+       This ensures we don't read stale cached metadata *)
+    let max_wait_time = Unix.gettimeofday () +. 5.0 in  (* 5 second safety timeout *)
+    let rec poll_fresh () =
+      if Unix.gettimeofday () > max_wait_time then
+        verbose Debug "Warning: timeout waiting for C object mtimes to update\n"
+      else
+        let all_fresh = List.for_all (fun obj_file ->
+          try
+            let obj_mtime = Filesystem.get_modification_time obj_file in
+            obj_mtime > destTime
+          with _ -> false
+        ) c_obj_files in
+        if not all_fresh then (
+          Unix.sleepf 0.01;  (* 10ms between polls *)
+          poll_fresh ()
+        )
+    in
+    poll_fresh ()
   );
   let depsTime =
     (* Check OCaml module files *)
