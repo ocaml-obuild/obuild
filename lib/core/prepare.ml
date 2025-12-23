@@ -55,11 +55,6 @@ open Gconf
 open Target
 open Dependencies
 
-(* Mtime cache for DAG construction phase - reduces redundant stat() calls
-   when checking the same source files multiple times during dependency analysis.
-   Safe to use here because no files are modified during DAG construction. *)
-let mtime_cache = Mtimecache.create ()
-
 type use_thread_flag = NoThread | WithThread
 type thread_type = VMThread | PosixThread | DefaultThread | NoThreads
 type ocaml_file_type = GeneratedModule | SimpleModule
@@ -290,14 +285,14 @@ let get_modules_desc bstate target toplevelModules =
             let full_dest_file = actual_src_path </> generated in
             let intf_file = Hier.ml_to_ext full_dest_file Filetype.FileMLI in
             if not (Filesystem.exists full_dest_file) ||
-               ((Mtimecache.get_mtime mtime_cache full_dest_file) < (Mtimecache.get_mtime mtime_cache file))
+               ((Filesystem.get_modification_time full_dest_file) < (Filesystem.get_modification_time file))
             then
               Generators.run (actual_src_path </> (chop_extension src_file)) file moduleName;
             (actual_src_path, full_dest_file, intf_file)
         in
-        let modTime = Mtimecache.get_mtime mtime_cache srcFile in
+        let modTime = Filesystem.get_modification_time srcFile in
         let hasInterface = Filesystem.exists intfFile in
-        let intfModTime = Mtimecache.get_mtime mtime_cache intfFile in
+        let intfModTime = Filesystem.get_modification_time intfFile in
 
         (* augment pp if needed with per-file dependencies *)
         let per_settings = find_extra_matching target (Hier.to_string hier) in
@@ -652,16 +647,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   }
 
 let prepare_target bstate buildDir target toplevelModules =
-  (* Clear mtime cache at start of each target preparation to ensure fresh stat() results *)
-  Mtimecache.clear mtime_cache;
-  try
-    let result = prepare_target_ bstate buildDir target toplevelModules in
-    let (hits, misses) = Mtimecache.stats mtime_cache in
-    let total = hits + misses in
-    if total > 0 then
-      verbose Debug "  mtime cache: %d hits, %d misses (%.1f%% hit rate)\n"
-        hits misses (float_of_int hits *. 100.0 /. float_of_int total);
-    result
+  try prepare_target_ bstate buildDir target toplevelModules
   with exn ->
     verbose Verbose "Prepare.target : uncaught exception %s\n%!" (Printexc.to_string exn);
     raise exn
