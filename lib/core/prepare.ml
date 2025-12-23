@@ -1,6 +1,50 @@
-(*
- * gather dependencies in hashtable and DAGs
- * and create compilation state for one target
+(** Dependency Analysis and Compilation State Preparation
+
+    This module analyzes dependencies and creates the compilation state for build targets.
+    It constructs two separate DAG structures that serve different purposes in the build system.
+
+    = Two DAG Architecture =
+
+    Obuild uses two distinct Directed Acyclic Graphs for dependency tracking:
+
+    1. Files DAG (filesDag):
+       - Purpose: Track file-level dependencies for incremental builds
+       - Nodes: Individual files (.ml, .mli, .c, .h, .cmi, .cmo, .cmx, .o)
+       - Edges: "file A depends on file B" (based on content dependencies)
+       - Usage: Modification time checking to determine what needs rebuilding
+       - Example: bar.cmo → [bar.ml, bar.cmi, foo.cmi]
+                 (bar.cmo depends on these files; if any change, recompile)
+
+    2. Steps DAG (stepsDag / compilation_dag):
+       - Purpose: Define task execution order for parallel builds
+       - Nodes: Compilation tasks (CompileModule, CompileInterface, CompileC, LinkTarget)
+       - Edges: "task A must complete before task B" (ordering constraints)
+       - Usage: Topological sort for parallel scheduling, respecting dependencies
+       - Example: CompileModule(Bar) → CompileInterface(Foo)
+                 (must compile Foo's interface before Bar's implementation)
+
+    = Why Two DAGs? =
+
+    The separation serves distinct build system needs:
+    - Files DAG answers: "What changed?" (incremental build detection)
+    - Steps DAG answers: "What order?" (parallel execution scheduling)
+
+    Example: When foo.ml changes but foo.mli doesn't:
+    - Files DAG: bar.cmo doesn't depend on foo.cmo (in bytecode), so bar doesn't rebuild
+    - Steps DAG: CompileModule(Bar) still depends on CompileInterface(Foo) for ordering
+
+    = Key Implementation Notes =
+
+    - File dependencies are checked via mtime comparison (see build.ml:check_destination_valid)
+    - Step dependencies ensure parallel builds respect compilation order
+    - C object files are only in Files DAG (added in get_dags around line 518)
+    - OCaml module dependencies populate both DAGs (around lines 436-494)
+
+    = Historical Bug Fix =
+
+    Prior to Phase 4 debugging, bytecode .cmo files incorrectly depended on other .cmo files
+    in the Files DAG. This caused unnecessary rebuilds. Fixed in build.ml:230-237 to only
+    add .cmx dependencies in Native mode, while bytecode depends only on .cmi files.
  *)
 open Fugue
 open Filepath
