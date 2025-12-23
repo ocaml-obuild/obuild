@@ -13,18 +13,15 @@ exception CCompilationFailed of string
 exception CompilationFailed of string
 exception Internal_Inconsistancy of string * string
 
-(* Mtime cache to reduce redundant stat() calls during dependency checking *)
-let mtime_cache = Mtimecache.create ()
-
 (* check that destination is valid (mtime wise) against a list of srcs and
  * if not valid gives the filepath that has changed.
  * *)
 let check_destination_valid_with srcs (_, dest) =
   if Filesystem.exists dest
   then (
-    let dest_time = Mtimecache.get_mtime mtime_cache dest in
+    let dest_time = Filesystem.get_modification_time dest in
     try Some (List.find (fun (_,path) ->
-        let mtime = Mtimecache.get_mtime mtime_cache path in
+        let mtime = Filesystem.get_modification_time path in
         dest_time < mtime
       ) srcs)
     with Not_found -> None
@@ -401,7 +398,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
     | WithDebug -> cstate.compilation_linking_paths_d
     | WithProf  -> cstate.compilation_linking_paths_p
   in
-  let destTime = Mtimecache.get_mtime mtime_cache dest in
+  let destTime = Filesystem.get_modification_time dest in
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
   (* Get C object files for checking *)
@@ -439,14 +436,14 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
   );
   let depsTime =
     (* Check OCaml module files *)
-    try Some (List.find (fun p -> destTime < Mtimecache.get_mtime mtime_cache p)
+    try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p)
                 (List.map (fun m ->
                      Hier.get_dest_file path ext m)
                     compiled))
     with Not_found ->
       (* Also check C object files - if any C object is newer than executable, relink *)
       try Some (List.find (fun p ->
-                 destTime < Mtimecache.get_mtime mtime_cache p) c_obj_files)
+                 destTime < Filesystem.get_modification_time p) c_obj_files)
       with Not_found -> None
   in
 
