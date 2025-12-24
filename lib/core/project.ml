@@ -536,25 +536,30 @@ let parse strict lines =
   in
   process_chunk parse_root make lines
 
+(** Helper: Validate that files exist in target source directories *)
+let check_files_exists target names =
+  let srcdir = target.target_obits.target_srcdir in
+  List.iter (fun n -> ignore (Utils.find_in_paths srcdir n)) names
+
+(** Helper: Validate that modules exist in target source directories *)
+let check_modules_exists target modules =
+  let srcdir = target.target_obits.target_srcdir in
+  List.iter
+    (fun m ->
+      try ignore (Hier.get_file_entry m srcdir)
+      with Not_found -> raise (ModuleDoesntExist (target, m)))
+    modules
+
+(** Validate project configuration
+
+    Checks for required fields, file existence, module existence,
+    and OCaml version compatibility.
+ *)
 let check proj =
   if proj.name = "" then raise (MissingField "name");
   if proj.version = "" then raise (MissingField "version");
   if proj.obuild_ver = 0 then raise (MissingField "obuild-ver");
   if proj.obuild_ver > 1 then raise (UnsupportedFutureVersion proj.obuild_ver);
-
-  let check_files_exists target names =
-    let srcdir = target.target_obits.target_srcdir in
-    List.iter (fun n -> ignore (Utils.find_in_paths srcdir n)) names
-  in
-
-  let check_modules_exists target modules =
-    let srcdir = target.target_obits.target_srcdir in
-    List.iter
-      (fun m ->
-        try ignore (Hier.get_file_entry m srcdir)
-        with Not_found -> raise (ModuleDoesntExist (target, m)))
-      modules
-  in
 
   maybe_unit
     (fun x -> if not (Filesystem.exists x) then raise (LicenseFileDoesntExist x))

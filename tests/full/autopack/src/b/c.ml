@@ -1,2 +1,2 @@
 let foo = "B.C.foo"
-let test = A.foo
+let test = "B.A.foo"

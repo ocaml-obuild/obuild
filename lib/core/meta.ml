@@ -238,8 +238,14 @@ type t = filepath * Pkg.t
 
 let path_warning = ref false
 
+(** META File Tokenizer and Parser
+
+    This module handles tokenizing and parsing OCamlfind META files.
+    META files describe OCaml package metadata including dependencies,
+    compilation flags, and library locations.
+ *)
 module Token = struct
-  (* mini lexer *)
+  (** Token types for META file lexer *)
   type t =
     | ID of string
     | S of string
@@ -270,6 +276,15 @@ module Token = struct
   let get_token_char c = Hashtbl.find char_table c
   let is_ident_char c = char_is_alphanum c || c == '_' || c == '-'
 
+  (** Tokenize META file content
+
+      Converts META file string into a list of tokens.
+      Handles comments, strings, identifiers, and operators.
+
+      @param name Package name (for error messages)
+      @param s META file content
+      @return List of tokens
+   *)
   let tokenize name s =
     let line = ref 1 in
     let lineoff = ref 0 in

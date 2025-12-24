@@ -192,6 +192,51 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
   ) else
     Scheduler.FinishTask task
 
+(** Helper: Check if recompilation is needed and prepare compilation functions
+
+    Examines source files and dependencies to determine if recompilation is required.
+    Returns a pair of (compilation_reason option, list of compilation functions).
+ *)
+let check_compilation_needed is_intf dep_descs dir_spec use_thread annot_mode pack_opt use_pp oflags h cstate =
+  let rec check invalid descs = match descs with
+    | []                                  -> (None, [])
+    | (dest,build_mode,comp_opt,srcs) :: xs ->
+      let r_dir_spec = {
+        dir_spec with
+        dst_dir = cstate.compilation_builddir_ml comp_opt <//> Hier.to_dirpath h;
+        include_dirs = cstate.compilation_include_paths comp_opt h
+      } in
+      let fcompile =
+        (build_mode,(fun () -> run_ocaml_compile r_dir_spec use_thread annot_mode build_mode comp_opt
+                        pack_opt use_pp oflags h)) in
+      if invalid
+      then (
+        let (_, ys) = check invalid xs in
+        (Some "", fcompile :: ys)
+      ) else (
+        match check_destination_valid_with srcs dest with
+        | None            -> check false xs
+        | Some src_changed ->
+          let reason = reason_from_paths dest src_changed in
+          let (_, ys) = check true xs in
+          (Some reason, fcompile :: ys)
+      )
+  in
+  check false dep_descs
+
+(** Helper: Organize compilation functions based on build modes
+
+    Groups compilation functions appropriately:
+    - Interface compilations run in parallel
+    - Modules with interfaces run in parallel
+    - Modules without interfaces partition native/bytecode builds
+ *)
+let organize_compilation_functions is_intf check_fun_list hdesc =
+  if is_intf || Module.file_has_interface hdesc
+  then [List.map snd check_fun_list]
+  else let (l1,l2) = List.partition (fun (x,_) -> x = Compiled Native) check_fun_list in
+    List.filter (fun x -> List.length x > 0) [List.map snd l1; List.map snd l2]
+
 let dep_descs is_intf hdesc bstate cstate target h =
   let self_deps = Analyze.get_internal_library_deps bstate.bstate_config target in
   let internal_libs_paths_all_modes = internal_libs_paths self_deps in
@@ -262,31 +307,9 @@ let compile_module task_index task is_intf h bstate task_context dag =
     } in
     let dep_descs = dep_descs is_intf hdesc bstate cstate target h in
     let annot_mode = annot_mode () in
-    let rec check invalid descs = match descs with
-      | []                                  -> (None, [])
-      | (dest,build_mode,comp_opt,srcs) :: xs ->
-        let r_dir_spec = {
-          dir_spec with
-          dst_dir = cstate.compilation_builddir_ml comp_opt <//> Hier.to_dirpath h;
-          include_dirs = cstate.compilation_include_paths comp_opt h
-        } in
-        let fcompile =
-          (build_mode,(fun () -> run_ocaml_compile r_dir_spec use_thread annot_mode build_mode comp_opt
-                          pack_opt hdesc.Module.File.use_pp hdesc.Module.File.oflags h)) in
-        if invalid
-        then (
-          let (_, ys) = check invalid xs in
-          (Some "", fcompile :: ys)
-        ) else (
-          match check_destination_valid_with srcs dest with
-          | None            -> check false xs
-          | Some src_changed ->
-            let reason = reason_from_paths dest src_changed in
-            let (_, ys) = check true xs in
-            (Some reason, fcompile :: ys)
-        )
-    in
-    (check false dep_descs, hdesc)
+    let check_result = check_compilation_needed is_intf dep_descs dir_spec use_thread annot_mode
+                         pack_opt hdesc.Module.File.use_pp hdesc.Module.File.oflags h cstate in
+    (check_result, hdesc)
   in
   let all = List.map (fun (c,t) -> process_one_target c t) all in
   let ((compilation_reason, _), _) = List.hd all in
@@ -294,14 +317,8 @@ let compile_module task_index task is_intf h bstate task_context dag =
   | None        -> Scheduler.FinishTask task
   | Some reason -> (* if the module has an interface, we create one list, so everything can be run in parallel,
                       * otherwise we partition the build_mode functions in build_modes group. *)
-    let fun_lists check_fun_list hdesc =
-      if is_intf || Module.file_has_interface hdesc
-      then [List.map snd check_fun_list]
-      else let (l1,l2) = List.partition (fun (x,_) -> x = Compiled Native) check_fun_list in
-        List.filter (fun x -> List.length x > 0) [List.map snd l1; List.map snd l2]
-    in
     let all_fun_lists = List.fold_left  (fun l ((_,check), hdesc) ->
-        let funlist = fun_lists check hdesc in
+        let funlist = organize_compilation_functions is_intf check hdesc in
         l @ funlist) [] all in
 
     let verb = if is_intf then "Intfing" else "Compiling" in
@@ -349,73 +366,67 @@ let satisfy_preds dep preds =
   let (_,root_pkg) = Metacache.get dep.Libname.main_name in
   dep_is_satisfied root_pkg
 
-let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
+(** Helper: Resolve build dependencies to actual library file paths *)
+let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadLib is_lib_target =
   let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
-  let buildDeps =  if is_lib target then []
-    else List.flatten (List.map (fun dep ->
-        match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-        | Internal -> [(in_current_dir (Libname.to_cmca compiledType compileOpt dep))]
-        | System   ->
-          let (path, rootPkg) = Metacache.get_from_cache dep in
-          let libDir = Meta.get_include_dir_with_subpath (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config)) (path, rootPkg) dep.Libname.subnames in
-          let pred = match compiledType with
-            | Native    -> Meta.Predicate.Native
-            | ByteCode  -> Meta.Predicate.Byte
-          in
-          let preds = match useThreadLib with
-            | PosixThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_posix]
-            | VMThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_vm]
-            | DefaultThread ->
-              (if systhread = "true" then Meta.Predicate.Mt_posix else Meta.Predicate.Mt_vm) :: [ pred; Meta.Predicate.Mt]
-            | NoThreads -> [ pred ]
-          in
-          let preds = match compileOpt with
-            | WithProf -> Meta.Predicate.Gprof :: preds
-            | _ -> preds
-          in
-          if (satisfy_preds dep preds) then
-            let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
-            List.fold_left (fun acc (_,a) ->
-                let files = string_split ' ' a in
-                acc @ (List.map (fun f -> libDir </> fn f) files)
-              ) [] archives
-          else
-            []
-      ) pkgDeps)
-  in
-  let dest = match target.target_name with
-    | Name.Lib libname ->
-      if plugin then
-        cstate.compilation_builddir_ml Normal </> Libname.to_cmxs compileOpt libname
-      else
-        cstate.compilation_builddir_ml Normal </> Libname.to_cmca compiledType compileOpt libname
-    | _ ->
-      let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
-      cstate.compilation_builddir_ml Normal </> outputName
-  in
-  let linking_paths_of compileOpt = match compileOpt with
-    | Normal    -> cstate.compilation_linking_paths
-    | WithDebug -> cstate.compilation_linking_paths_d
-    | WithProf  -> cstate.compilation_linking_paths_p
-  in
-  let destTime = Filesystem.get_modification_time dest in
-  let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
-  let path = cstate.compilation_builddir_ml compileOpt in
-  (* Get C object files for checking *)
-  let c_obj_files = List.map (fun csrc ->
-      cstate.compilation_builddir_c </> o_from_cfile csrc)
-      cstate.compilation_csources in
-  (* Wait for C object files to be ready and their mtimes to be flushed
-     Filesystem buffering can cause stat() to return stale mtimes even after
-     the C compiler has finished. Poll until mtimes are fresh rather than
-     using an arbitrary fixed delay. *)
+  if is_lib_target then []
+  else List.flatten (List.map (fun dep ->
+      match Hashtbl.find bstate.bstate_config.project_dep_data dep with
+      | Internal -> [(in_current_dir (Libname.to_cmca compiledType compileOpt dep))]
+      | System   ->
+        let (path, rootPkg) = Metacache.get_from_cache dep in
+        let libDir = Meta.get_include_dir_with_subpath
+            (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config))
+            (path, rootPkg) dep.Libname.subnames in
+        let pred = match compiledType with
+          | Native    -> Meta.Predicate.Native
+          | ByteCode  -> Meta.Predicate.Byte
+        in
+        let preds = match useThreadLib with
+          | PosixThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_posix]
+          | VMThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_vm]
+          | DefaultThread ->
+            (if systhread = "true" then Meta.Predicate.Mt_posix else Meta.Predicate.Mt_vm) :: [ pred; Meta.Predicate.Mt]
+          | NoThreads -> [ pred ]
+        in
+        let preds = match compileOpt with
+          | WithProf -> Meta.Predicate.Gprof :: preds
+          | _ -> preds
+        in
+        if (satisfy_preds dep preds) then
+          let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
+          List.fold_left (fun acc (_,a) ->
+              let files = string_split ' ' a in
+              acc @ (List.map (fun f -> libDir </> fn f) files)
+            ) [] archives
+        else
+          []
+    ) pkgDeps)
+
+(** Helper: Calculate destination path for linked output *)
+let get_link_destination cstate target compiledType compileOpt plugin =
+  match target.target_name with
+  | Name.Lib libname ->
+    if plugin then
+      cstate.compilation_builddir_ml Normal </> Libname.to_cmxs compileOpt libname
+    else
+      cstate.compilation_builddir_ml Normal </> Libname.to_cmca compiledType compileOpt libname
+  | _ ->
+    let outputName = Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target) in
+    cstate.compilation_builddir_ml Normal </> outputName
+
+(** Helper: Wait for C object files to be ready with fresh modification times.
+
+    Filesystem buffering can cause stat() to return stale mtimes even after
+    the C compiler has finished. Poll until mtimes are fresh rather than
+    using an arbitrary fixed delay. This implements the Phase 4 bug fix. *)
+let wait_for_c_objects c_obj_files destTime =
   if List.length c_obj_files > 0 then (
     (* First wait for files to exist *)
     while not (wait_for_files c_obj_files) do
       ignore (Unix.select [] [] [] 0.02)  (* sleep 1/50 second *)
     done;
-    (* Then poll until all files have mtimes newer than destTime
-       This ensures we don't read stale cached metadata *)
+    (* Then poll until all files have mtimes newer than destTime *)
     let max_wait_time = Unix.gettimeofday () +. 5.0 in  (* 5 second safety timeout *)
     let rec poll_fresh () =
       if Unix.gettimeofday () > max_wait_time then
@@ -433,22 +444,44 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
         )
     in
     poll_fresh ()
-  );
-  let depsTime =
-    (* Check OCaml module files *)
-    try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p)
-                (List.map (fun m ->
-                     Hier.get_dest_file path ext m)
-                    compiled))
-    with Not_found ->
-      (* Also check C object files - if any C object is newer than executable, relink *)
-      try Some (List.find (fun p ->
-                 destTime < Filesystem.get_modification_time p) c_obj_files)
-      with Not_found -> None
+  )
+
+(** Helper: Check if relinking is needed by comparing modification times *)
+let check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt =
+  let destTime = Filesystem.get_modification_time dest in
+  let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
+  let path = cstate.compilation_builddir_ml compileOpt in
+
+  (* Wait for C objects to have fresh mtimes *)
+  wait_for_c_objects c_obj_files destTime;
+
+  (* Check OCaml module files *)
+  try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p)
+              (List.map (fun m -> Hier.get_dest_file path ext m) compiled))
+  with Not_found ->
+    (* Also check C object files *)
+    try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p) c_obj_files)
+    with Not_found -> None
+
+(** Main linking function - orchestrates dependency resolution, freshness checking, and linking *)
+let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType compileOpt plugin =
+  let buildDeps = resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadLib (is_lib target) in
+  let dest = get_link_destination cstate target compiledType compileOpt plugin in
+
+  let linking_paths_of compileOpt = match compileOpt with
+    | Normal    -> cstate.compilation_linking_paths
+    | WithDebug -> cstate.compilation_linking_paths_d
+    | WithProf  -> cstate.compilation_linking_paths_p
   in
+
+  let c_obj_files = List.map (fun csrc -> cstate.compilation_builddir_c </> o_from_cfile csrc)
+      cstate.compilation_csources in
+
+  let depsTime = check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt in
 
   if depsTime <> None then (
     let (nb_step,nb_step_len) = get_nb_step dag in
+    let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
     let link_type = if plugin then LinkingPlugin else
       if is_lib target then LinkingLibrary else LinkingExecutable in
     verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
