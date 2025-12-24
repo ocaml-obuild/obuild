@@ -83,3 +83,39 @@ let generateFile file f =
     f (Buffer.add_string buffer);
     Filesystem.write_file file (Buffer.contents buffer)
 
+let get_cpu_count () =
+  let read_command cmd =
+    try
+      let ic = Unix.open_process_in cmd in
+      let line = input_line ic in
+      let status = Unix.close_process_in ic in
+      match status with
+      | Unix.WEXITED 0 -> Some (int_of_string (String.trim line))
+      | _ -> None
+    with _ -> None
+  in
+
+  let detected =
+    match Sys.os_type with
+    | "Unix" | "Cygwin" ->
+        (* Try different commands in order of preference *)
+        (match read_command "nproc 2>/dev/null" with  (* Linux *)
+         | Some n -> Some n
+         | None ->
+             match read_command "sysctl -n hw.ncpu 2>/dev/null" with  (* macOS, BSD *)
+             | Some n -> Some n
+             | None ->
+                 match read_command "getconf _NPROCESSORS_ONLN 2>/dev/null" with  (* POSIX *)
+                 | Some n -> Some n
+                 | None -> None)
+    | "Win32" ->
+        (* Windows: use NUMBER_OF_PROCESSORS environment variable *)
+        (try Some (int_of_string (Sys.getenv "NUMBER_OF_PROCESSORS"))
+         with _ -> None)
+    | _ -> None  (* Unknown OS *)
+  in
+
+  match detected with
+  | Some n when n > 0 && n <= 128 -> n  (* Sanity check: reasonable CPU count *)
+  | _ -> 2  (* Default fallback *)
+

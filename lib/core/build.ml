@@ -568,7 +568,7 @@ let check task_index task task_context dag =
  * which will compile all C sources and OCaml modules.
 *)
 let compile (bstate: build_state) task_context dag =
-  let taskdep = Taskdep.init dag in
+  let taskdep = Helper.Timing.measure_time "Taskdep.init" (fun () -> Taskdep.init dag) in
   (* a compilation task has finished, terminate the process,
      * and process the result *)
   let schedule_finish (task, st) is_done =
@@ -594,7 +594,9 @@ let compile (bstate: build_state) task_context dag =
     | (CheckTarget _)      -> check task_index task task_context dag
   in
 
-  let stat = Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish in
+  let stat = Helper.Timing.measure_time "Scheduler.schedule" (fun () ->
+    Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish
+  ) in
   verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n" stat.Scheduler.nb_processes
     stat.Scheduler.max_runqueue;
   ()
@@ -622,53 +624,63 @@ let rec select_leaves children duplicate dag =
     good
 
 let build_dag bstate proj_file targets_dag =
-  let dag = Dag.init () in
-  let task_context = Hashtbl.create 64 in
-  let taskdep = Taskdep.init targets_dag in
-  let targets_deps = Hashtbl.create 64 in
-  let prepare_state target modules =
-    let build_dir = Dist.create_build (Dist.Target target.target_name) in
-    let cstate = prepare_target bstate build_dir target modules in
-    List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
-      (Dag.get_nodes cstate.compilation_dag);
-    let duplicate = Dag.merge dag cstate.compilation_dag in
-    (cstate.compilation_dag, duplicate)
-  in
-  while not (Taskdep.is_complete taskdep) do
-    (match Taskdep.get_next taskdep with
-     | None -> failwith "no free task in targets"
-     | Some (_,ntask) ->
-       verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
-       let (cur_dag,dups) = (match ntask with
-        | Name.Exe name   ->
-          let exe = Project.find_exe proj_file name in
-          prepare_state (Project.Executable.to_target exe) [Hier.of_filename exe.Project.Executable.main]
-        | Name.Lib name   ->
-          let lib = Project.find_lib proj_file name in
-          prepare_state (Project.Library.to_target lib) lib.Project.Library.modules
-        | Name.Bench name ->
-          let bench = Project.find_bench proj_file name in
-          prepare_state (Project.Bench.to_target bench) [Hier.of_filename bench.Project.Bench.main]
-        | Name.Test name  ->
-          let test = Project.find_test proj_file name in
-          prepare_state (Project.Test.to_target test) [Hier.of_filename test.Project.Test.main]
-        | Name.Example name ->
-          let example = Project.find_example proj_file name in
-          prepare_state (Project.Example.to_target example) [Hier.of_filename example.Project.Example.main]
-       ) in
-       if (Hashtbl.mem targets_deps ntask) then begin
-         let children = Dag.get_leaves cur_dag in
-         let children = select_leaves children dups cur_dag in
-         let roots = Hashtbl.find targets_deps ntask in
-         List.iter (fun child ->
-             List.iter (fun root ->
-                 Dag.add_edge child root dag
-             ) roots
-         ) children
-       end;
-       let roots = Dag.get_roots cur_dag in (* should be LinkTarget *)
-       List.iter (fun p -> Hashtbl.add targets_deps p roots) (Dag.get_parents targets_dag ntask);
-       Taskdep.mark_done taskdep ntask
+  Helper.Timing.measure_time "build_dag (total)" (fun () ->
+    let dag = Helper.Timing.measure_time "DAG initialization" (fun () -> Dag.init ()) in
+    let task_context = Hashtbl.create 64 in
+    let taskdep = Taskdep.init targets_dag in
+    let targets_deps = Hashtbl.create 64 in
+    let prepare_state target modules =
+      let build_dir = Dist.create_build (Dist.Target target.target_name) in
+      let cstate = Helper.Timing.measure_time "prepare_target" (fun () ->
+        prepare_target bstate build_dir target modules
+      ) in
+      List.iter (fun n -> Hashtbl.add task_context n (cstate,target))
+        (Dag.get_nodes cstate.compilation_dag);
+      let duplicate = Helper.Timing.measure_time "DAG merge" (fun () ->
+        Dag.merge dag cstate.compilation_dag
+      ) in
+      (cstate.compilation_dag, duplicate)
+    in
+    Helper.Timing.measure_time "target preparation loop" (fun () ->
+      while not (Taskdep.is_complete taskdep) do
+        (match Taskdep.get_next taskdep with
+         | None -> failwith "no free task in targets"
+         | Some (_,ntask) ->
+           verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
+           let (cur_dag,dups) = (match ntask with
+            | Name.Exe name   ->
+              let exe = Project.find_exe proj_file name in
+              prepare_state (Project.Executable.to_target exe) [Hier.of_filename exe.Project.Executable.main]
+            | Name.Lib name   ->
+              let lib = Project.find_lib proj_file name in
+              prepare_state (Project.Library.to_target lib) lib.Project.Library.modules
+            | Name.Bench name ->
+              let bench = Project.find_bench proj_file name in
+              prepare_state (Project.Bench.to_target bench) [Hier.of_filename bench.Project.Bench.main]
+            | Name.Test name  ->
+              let test = Project.find_test proj_file name in
+              prepare_state (Project.Test.to_target test) [Hier.of_filename test.Project.Test.main]
+            | Name.Example name ->
+              let example = Project.find_example proj_file name in
+              prepare_state (Project.Example.to_target example) [Hier.of_filename example.Project.Example.main]
+           ) in
+           if (Hashtbl.mem targets_deps ntask) then begin
+             let children = Dag.get_leaves cur_dag in
+             let children = select_leaves children dups cur_dag in
+             let roots = Hashtbl.find targets_deps ntask in
+             List.iter (fun child ->
+                 List.iter (fun root ->
+                     Dag.add_edge child root dag
+                 ) roots
+             ) children
+           end;
+           let roots = Dag.get_roots cur_dag in (* should be LinkTarget *)
+           List.iter (fun p -> Hashtbl.add targets_deps p roots) (Dag.get_parents targets_dag ntask);
+           Taskdep.mark_done taskdep ntask
+        )
+      done
+    );
+    Helper.Timing.measure_time "compilation phase" (fun () ->
+      compile bstate task_context dag
     )
-  done;
-  compile bstate task_context dag
+  )

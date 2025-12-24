@@ -158,6 +158,11 @@ let check_ocaml () =
 let run proj_file user_flags user_opts =
   Dist.create_maybe ();
   let _ = check_ocaml () in
+  (* Auto-detect CPU count and set default parallelism *)
+  let cpu_count = Utils.get_cpu_count () in
+  verbose Report "Detected %d CPU core%s, setting default parallelism to %d\n"
+    cpu_count (if cpu_count = 1 then "" else "s") cpu_count;
+  gconf.parallel_jobs <- cpu_count;
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
   let configure = try Some (Dist.read_configure ()) with _ -> None in

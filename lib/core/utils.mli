@@ -64,3 +64,9 @@ val generateFile : Filepath.filepath -> ((string -> unit) -> unit) -> unit
 (** Generate file using buffer-based writer
     @param file Output filepath
     @param f Function receiving string appender *)
+
+val get_cpu_count : unit -> int
+(** Detect number of CPU cores available on the system.
+    Uses platform-specific commands (nproc on Linux, sysctl on macOS/BSD,
+    NUMBER_OF_PROCESSORS on Windows). Returns 2 as safe default if detection fails.
+    @return Number of CPU cores (range: 1-128) *)

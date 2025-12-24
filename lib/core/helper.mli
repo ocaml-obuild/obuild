@@ -29,3 +29,12 @@ val color_blue : unit -> string
 
 val color_white : unit -> string
 (** Get ANSI white/reset color escape sequence (or empty if no color) *)
+
+(** Performance timing utilities *)
+module Timing : sig
+  val measure_time : string -> (unit -> 'a) -> 'a
+  (** [measure_time name f] executes [f ()] and prints timing info at DebugPlus level *)
+
+  val measure_time_verbose : string -> (unit -> 'a) -> 'a
+  (** [measure_time_verbose name f] executes [f ()] with start/end messages at Debug level *)
+end
