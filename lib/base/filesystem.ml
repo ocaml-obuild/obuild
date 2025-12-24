@@ -1,4 +1,3 @@
-open Printf
 open Fugue
 open Filepath
 open Compat

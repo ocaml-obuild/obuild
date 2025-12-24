@@ -686,4 +686,3 @@ let find_exe proj_file name = Executable.find proj_file.exes name
 let find_test proj_file name = Test.find proj_file.tests name
 let find_bench proj_file name = Bench.find proj_file.benchs name
 let find_example proj_file name = Example.find proj_file.examples name
-let find_flag name proj_file = Flag.find proj_file.flags name

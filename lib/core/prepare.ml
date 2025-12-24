@@ -536,8 +536,11 @@ let get_modules_desc bstate target toplevelModules =
           then Some (Module.Intf.make intfModTime intfFile)
           else None
         in 
-        Module.make_file use_thread srcFile modTime 
-          (match file_entry with Hier.FileEntry _ -> SimpleModule | Hier.GeneratedFileEntry _ -> GeneratedModule)
+        Module.make_file use_thread srcFile modTime
+          (match file_entry with
+           | Hier.FileEntry _ -> SimpleModule
+           | Hier.GeneratedFileEntry _ -> GeneratedModule
+           | Hier.DirectoryEntry _ -> failwith "unexpected DirectoryEntry in get_modules_desc")
           intfDesc pp
           ((target.target_obits.target_oflags @
            (List.concat (List.map (fun x -> x.target_extra_oflags) (find_extra_matching target (Hier.to_string hier))))) @ ppx)

@@ -4,15 +4,15 @@ open Filepath
 type t = {
   path : filepath list;
   destdir : filepath option;
-  all : (string * string option) list;
-  loaded : bool
+  _all : (string * string option) list; (* kept for potential future use *)
+  _loaded : bool (* kept for potential future use *)
 }
 
 let default = {
-  all     = [];
+  _all     = [];
   path    = [];
   destdir = None;
-  loaded  = false
+  _loaded  = false
 }
 
 let conf = ref default
@@ -27,10 +27,10 @@ let parse_file path =
   let paths = string_split ':' (unquote (List.assoc "path" kvs)) in
   let destdir = unquote (List.assoc "destdir" kvs) in
   {
-    all     = kvs;
+    _all     = kvs;
     path    = List.map fp paths;
     destdir = Some (fp destdir);
-    loaded  = true;
+    _loaded  = true;
   }
 
 let get_program_config () = match Process.run [ "ocamlfind"; "printconf"; "conf" ] with

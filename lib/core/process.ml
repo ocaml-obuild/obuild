@@ -15,7 +15,7 @@ let create_output fd = {
 }
 
 type t = {
-  args : string list; (* command args *)
+  _args : string list; (* command args - kept for documentation *)
   pid : int; (* process PID *)
   time : float; (* Process starting time *)
   out : output;
@@ -36,7 +36,7 @@ let make args =
   let pid = Unix.create_process argv.(0) argv Unix.stdin w1 w2 in
   List.iter Unix.close [w1;w2];
   {
-    args = args;
+    _args = args;
     out = create_output r1;
     err = create_output r2;
     pid    = pid;

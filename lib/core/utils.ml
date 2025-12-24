@@ -66,7 +66,7 @@ let find_in_paths paths name =
 
 let find_choice_in_paths paths names =
     try List.find (fun p ->
-           try let _ = List.find (fun n -> Filesystem.exists (n p)) names in true
+           try ignore (List.find (fun n -> Filesystem.exists (n p)) names); true
            with Not_found -> false
         ) paths
     with Not_found -> raise (FilesNotFoundInPaths (paths, (List.map (fun n -> n (List.hd paths)) names)))
@@ -77,12 +77,6 @@ let exist_choice_in_paths paths names =
 
 let find_in_system_path name =
     find_in_paths (get_system_paths ()) name
-
-let wrap_exn print fname f =
-    try f ()
-    with exn ->
-        print "%s: %s\n%!" fname (Printexc.to_string exn);
-        raise exn
 
 let generateFile file f =
     let buffer = Buffer.create 1024 in
