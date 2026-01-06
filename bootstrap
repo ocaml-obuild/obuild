@@ -1,25 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 libs="unix.cma"
 
 OCAMLC="ocamlc -g -I +unix"
 OCAMLVER=$($OCAMLC -version)
 echo "$OCAMLVER"
-
-rm -f lib/base/compat.ml
-if [[ $OCAMLVER < "4.02.0" ]] ; then
-    echo "Using compat401.ml"
-    cp -f compat401.ml lib/base/compat.ml
-else
-	if [[ $OCAMLVER < "4.03.0" ]] ; then
-		echo "Using compat402.ml"
-		cp -f compat402.ml lib/base/compat.ml
-	else
-		echo "Using compat403.ml"
-		cp -f compat403.ml lib/base/compat.ml
-	fi
-fi
-
 
 extmodules="compat fugue filepath filesystem"
 coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare_types ppx_resolver prepare buildprogs build exception"
@@ -93,13 +78,13 @@ let project_version = "0.0.0"
 
 EOF
 cd src
-FILES=()
+FILES=""
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
 	[ -f "${mod}.mli" ] && $OCAMLC -I ../ -c "${mod}.mli"
 	$OCAMLC -I ../ -c "${mod}.ml"
-	FILES+=("${mod}.cmo")
+	FILES="${FILES} ${mod}.cmo"
 done
 echo "LINKING obuild.bootstrap"
 # Link with all individual .cmo files for bootstrap
@@ -107,7 +92,9 @@ ALLCMO=""
 for mod in $extmodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
 for mod in $coremodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done  
 for mod in $commandmodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
-$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} $ALLCMO "${FILES[@]}"
+
+$OCAMLC -o ../obuild.bootstrap -I ../ $libs $ALLCMO $FILES
+
 cd ..
 
 rm -f lib/*.cmi lib/*.cmo lib/*.o
