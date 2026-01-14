@@ -33,31 +33,162 @@ Feature
 How to build a project using obuild
 -----------------------------------
 
-obuild supports a few sub commands:
+obuild supports a clean, user-friendly command-line interface with helpful error messages and automatic help generation.
+
+### Quick Start
+
+```bash
+# Get help
+obuild -h                    # Show all available commands
+obuild build -h              # Show build-specific options
+
+# Check version
+obuild --version
+
+# Typical workflow
+obuild configure --enable-tests
+obuild build
+obuild test
+```
+
+### Available Commands
 
 ```
-    obuild clean
-    obuild configure
-    obuild init
-    obuild build
-    obuild install
-    obuild doc
-    obuild test
-    obuild sdist
+obuild configure    Prepare to build the package
+obuild build        Make this package ready for installation
+obuild clean        Clean up after a build
+obuild install      Install this package
+obuild test         Run the tests
+obuild doc          Generate documentation
+obuild sdist        Generate a source distribution file (.tar.gz)
+obuild init         Initialize a new project
+obuild get          Get project metadata field
 ```
 
-* `clean`:  make sure there's no build by product in the current project
-* `configure`: prepare the project by checking dependencies and making sure
-             the environment is consistant. If any of the dependencies
-             changes, the user will have to re-run the configure step.
-             This also allow the user to change flags that impact the project.
-* `build`: build every buildable targets defined by the project.
-         This will usually build a library or executables.
-* `sdist`: create a compressed archive package with the pieces needed to
-         distribute it via source code.
-* `doc`: build the documentation associated with the sources
-* `test`: run unit tests
-* `install`: install the necessary files of a library or executable
+### Command Details
+
+**configure** - Prepare the project by checking dependencies and setting build options
+
+```bash
+obuild configure [OPTIONS]
+
+Options:
+  --enable-tests              Enable building tests
+  --enable-examples           Enable building examples
+  --enable-library-bytecode   Enable library bytecode compilation
+  --enable-library-native     Enable library native compilation
+  -g                          Enable debugging symbols
+  --annot                     Generate .annot files
+```
+
+**build** - Build every buildable target defined by the project
+
+```bash
+obuild build [OPTIONS] [TARGETS...]
+
+Options:
+  -j, --jobs N               Maximum number of parallel jobs (default: auto-detected)
+  --dot                      Dump dependency graphs as .dot files
+
+Examples:
+  obuild build                # Build everything
+  obuild build -j 4          # Build with 4 parallel jobs
+  obuild build mylib myexe   # Build specific targets only
+```
+
+**clean** - Remove all build artifacts
+
+**test** - Run all test targets
+
+```bash
+obuild test [OPTIONS]
+
+Options:
+  --output                   Show test output (default: only show failures)
+```
+
+**install** - Install libraries and executables
+
+```bash
+obuild install [OPTIONS]
+
+Options:
+  --destdir DIR              Override installation directory
+  --opam                     Generate .install file for OPAM
+```
+
+**get** - Retrieve project metadata
+
+```bash
+obuild get FIELD
+
+Fields: name, version, license
+
+Examples:
+  obuild get name            # Get project name
+  obuild get version         # Get project version
+```
+
+### Global Options
+
+These options work with any command:
+
+```bash
+-v, --verbose              Verbose output
+-q, --quiet                Quiet mode (errors only)
+--color                    Enable colored output
+--strict                   Enable strict mode
+```
+
+### Configuration Files
+
+Obuild supports configuration files for setting default values. Config files use a simple `key = value` format.
+
+**Config file locations** (in order of precedence):
+
+1. `./.obuildrc` - Project-specific settings
+2. `~/.obuildrc` - User-wide settings
+
+**Example config file:**
+
+```bash
+# ~/.obuildrc - User configuration for obuild
+
+# Set default number of parallel jobs
+jobs = 8
+
+# Enable colored output by default
+color = true
+
+# Verbose mode
+verbose = false
+```
+
+**Supported options:**
+
+- `jobs` - Default number of parallel build jobs (integer)
+- `color` - Enable colored output (true/false)
+- `verbose` - Verbose output mode (true/false)
+- `quiet` - Quiet mode (true/false)
+- `strict` - Strict mode (true/false)
+
+Command-line arguments always override config file values.
+
+### Shell Completion
+
+Obuild can generate shell completion scripts for bash, zsh, and fish:
+
+```bash
+# Generate and install bash completion
+obuild completion bash > ~/.bash_completion.d/obuild
+source ~/.bash_completion.d/obuild
+
+# Generate zsh completion
+obuild completion zsh > ~/.zsh/completions/_obuild
+
+# Generate fish completion
+obuild completion fish > ~/.config/fish/completions/obuild.fish
+```
 
 How to write a project file
 ---------------------------

@@ -21,7 +21,7 @@ else
 fi
 
 
-extmodules="compat fugue filepath filesystem"
+extmodules="compat fugue filepath filesystem cli"
 coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare_types ppx_resolver prepare buildprogs build exception"
 commandmodules="sdist doc init help install"
 mainmodules="path_generated main"
