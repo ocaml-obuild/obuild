@@ -9,7 +9,6 @@ type verbosity_t =
 
 type t = {
   mutable verbosity : verbosity_t;
-  mutable strict : bool;
   mutable parallel_jobs : int;
   mutable dump_dot : bool;
   mutable color : bool;
@@ -95,7 +94,6 @@ let get_target_option field =
 let defaults =
   {
     verbosity = Report;
-    strict = false;
     parallel_jobs = 2;
     dump_dot = false;
     color = false;

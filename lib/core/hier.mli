@@ -118,3 +118,8 @@ val get_dest_file_ext : Filepath.filepath -> t -> (Filetype.t -> Filetype.t) -> 
 (** [get_dest_file_ext dst_dir hier ext_fn] computes destination file path
     using [ext_fn] to transform the source file type.
     @raise Not_found if hierarchy not cached *)
+
+val register_synthetic_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
+(** [register_synthetic_entry hier root_path full_path] registers a synthetic file entry
+    for modules that will be generated during build (e.g., cstubs-generated modules).
+    This allows get_dest_file to work for these modules even before the source file exists. *)

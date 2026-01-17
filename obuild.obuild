@@ -52,7 +52,7 @@ library obuild_base
   build-deps: unix
 
 library obuild_core
-  modules: analyze, build, buildprogs, configure, dag, dagutils, dependencies, dist, exception, expr, filetype, findlibConf, gconf, generators, helper, hier, libname, meta, metacache, modname, pp, prepare_types, ppx_resolver, prepare, process, prog, project, scheduler, target, taskdep, types, utils
+  modules: analyze, build, buildprogs, configure, dag, dagutils, dependencies, dist, exception, expr, filetype, findlibConf, gconf, generators, helper, hier, libname, meta, metacache, modname, obuild_lexer, obuild_ast, obuild_parser, obuild_validate, pp, prepare_types, ppx_resolver, prepare, process, prog, project, project_read, scheduler, target, taskdep, types, utils
   src-dir: lib/core
   build-deps: unix, obuild_base
 
@@ -121,3 +121,13 @@ test build-debug
   src-dir: tests
   main-is: test_build_debug.ml
   build-deps: obuild, obuild_base, str, unix
+
+test new-parser
+  src-dir: tests
+  main-is: test_new_parser.ml
+  build-deps: obuild_core
+
+test validate
+  src-dir: tests
+  main-is: test_validate.ml
+  build-deps: obuild_core

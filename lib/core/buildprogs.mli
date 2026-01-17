@@ -98,3 +98,12 @@ val run_ocaml_linking :
   Filepath.filepath ->
   Process.t
 (** Link OCaml modules into library or executable *)
+
+(** {2 ctypes.cstubs support} *)
+
+exception CstubsGenerationFailed of string
+(** Exception raised when cstubs generation fails *)
+
+val get_cstubs_autogen_dir : Libname.t -> Filepath.filepath
+(** [get_cstubs_autogen_dir libname] returns the autogen directory for cstubs,
+    creating it if necessary *)

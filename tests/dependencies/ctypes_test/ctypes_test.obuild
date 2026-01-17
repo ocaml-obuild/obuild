@@ -1,0 +1,23 @@
+name: ctypes_test
+version: 0.1.0
+obuild-ver: 1
+
+library mylib
+  modules: Bindings
+  build-deps: ctypes, ctypes.stubs
+  src-dir: lib
+
+  cstubs
+    external-library-name: mylib
+    type-description: Bindings.Types -> Types_gen
+    function-description: Bindings.Functions -> Funcs_gen
+    generated-types: Types_generated
+    generated-entry-point: C
+    headers: string.h, time.h
+    concurrency: unlocked
+    errno: return
+
+executable test_mylib
+  main-is: main.ml
+  src-dir: bin
+  build-deps: mylib, integers, ctypes

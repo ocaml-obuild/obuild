@@ -205,9 +205,6 @@ module Flag : sig
     default : bool option;
   }
   (** Compile-time flag configuration *)
-
-  val make : string list -> t
-  (** Create new flag with name from args *)
 end
 
 (** {1 Main Project Type} *)
@@ -249,14 +246,17 @@ val findPath : unit -> Filepath.filepath
 val digest : unit -> Digest.t
 (** Compute digest of project configuration file *)
 
-val read : bool -> t
-(** [read strict] reads and parses the project file.
-    @param strict If true, raise exceptions on warnings
-    @raise NoConfFile if no .obuild file found
-    @raise MultipleConfFiles if multiple .obuild files found *)
-
 val write : Filepath.filepath -> t -> unit
 (** [write file proj] writes project configuration to file *)
+
+val check : t -> unit
+(** [check proj] validates the project configuration.
+    Checks that required files and modules exist on disk.
+    @raise ModuleDoesntExist if a declared module doesn't exist
+    @raise FileDoesntExist if a referenced file doesn't exist
+    @raise LicenseFileDoesntExist if license file is missing
+    @raise ExecutableWithNoMain if executable has no main file
+    @raise BadOcamlVersion if OCaml version constraint fails *)
 
 (** {1 Target Operations} *)
 

@@ -69,7 +69,9 @@ let rec idle_loop idle_fun on_task_finish_fun state =
   | AddProcess p   -> state.runqueue <- p :: state.runqueue
   | WaitingTask    -> state.waiting_task <- true
   | Terminate      -> state.terminate <- true
-  | FinishTask t   -> on_task_finish_fun t; (* retry *) idle_loop idle_fun on_task_finish_fun state
+  | FinishTask t   ->
+    on_task_finish_fun t;
+    (* retry *) idle_loop idle_fun on_task_finish_fun state
   | AddTask (t,ps) ->
     (match List.map (List.map (fun p -> (t, p))) ps with
      | []           -> failwith "internal error: empty task added to the scheduler"
@@ -93,9 +95,11 @@ let rec idle_loop idle_fun on_task_finish_fun state =
 let schedule_idle taskdep dispatch_fun () =
   if Taskdep.is_complete taskdep
   then Terminate
-  else match Taskdep.get_next taskdep with
+  else (
+    match Taskdep.get_next taskdep with
     | None      -> WaitingTask
     | Some task -> dispatch_fun task
+  )
     
 (* this is a simple one thread loop to schedule
  * multiple tasks (forked) until they terminate

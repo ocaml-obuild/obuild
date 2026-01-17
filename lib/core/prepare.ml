@@ -75,6 +75,9 @@ type compile_step = Prepare_types.compile_step =
   | CompileInterface of Hier.t
   | CompileDirectory of Hier.t
   | CompileC         of Filepath.filename
+  | GenerateCstubsTypes     of Libname.t
+  | GenerateCstubsFunctions of Libname.t
+  | CompileCstubsC          of Libname.t
   | LinkTarget       of Target.target
   | CheckTarget      of Target.target
 type compilation_state = Prepare_types.compilation_state = {
@@ -100,6 +103,7 @@ let init project = { bstate_config = project }
 let get_compilation_order cstate =
   let filter_modules t : Hier.t option = match t with
     | (CompileC _) | (CompileInterface _) | (LinkTarget _) | (CheckTarget _) -> None
+    | (GenerateCstubsTypes _) | (GenerateCstubsFunctions _) | (CompileCstubsC _) -> None
     | (CompileDirectory m) | (CompileModule m) -> if Hier.lvl m = 0 then Some m else None
   in
   list_filter_map filter_modules (Dagutils.linearize cstate.compilation_dag)
@@ -450,6 +454,94 @@ let add_c_compilation_tasks cbits buildDir stepsDag filesDag =
       ) cbits.target_csources;
   )
 
+(** Helper: Add cstubs generation tasks to the DAG
+
+    If the target has cstubs configuration, adds the generation tasks
+    with proper ordering:
+    1. GenerateCstubsTypes - generates types_generated.ml (runs first)
+    2. GenerateCstubsFunctions - generates C.ml and stubs.c (after bindings compile)
+    3. CompileCstubsC - compiles generated stubs.c
+    4. All must complete before LinkTarget
+*)
+let add_cstubs_tasks target stepsDag =
+  match target.target_cstubs with
+  | None -> ()
+  | Some cstubs ->
+    (* Get the library name from target *)
+    let libname = match target.target_name with
+      | Target.Name.Lib l -> l
+      | _ -> failwith "cstubs can only be used with libraries"
+    in
+
+    (* Add cstubs tasks to DAG *)
+    let types_task = GenerateCstubsTypes libname in
+    let funcs_task = GenerateCstubsFunctions libname in
+    let compile_task = CompileCstubsC libname in
+
+    Dag.add_node types_task stepsDag;
+    Dag.add_node funcs_task stepsDag;
+    Dag.add_node compile_task stepsDag;
+
+    (* Ordering: types -> funcs -> compile_c *)
+    Dag.add_edge funcs_task types_task stepsDag;
+    Dag.add_edge compile_task funcs_task stepsDag;
+
+    (* The generated_types module depends on GenerateCstubsTypes *)
+    let generated_types_hier = Hier.of_string cstubs.cstubs_generated_types in
+    (try
+       let _ = Dag.get_node stepsDag (CompileModule generated_types_hier) in
+       Dag.add_edge (CompileModule generated_types_hier) types_task stepsDag
+     with Dag.DagNode_Not_found -> ());
+
+    (* The entry point module depends on GenerateCstubsFunctions *)
+    let entry_point_hier = Hier.of_string cstubs.cstubs_generated_entry_point in
+    (try
+       let _ = Dag.get_node stepsDag (CompileModule entry_point_hier) in
+       Dag.add_edge (CompileModule entry_point_hier) funcs_task stepsDag
+     with Dag.DagNode_Not_found -> ());
+
+    (* The generated FOREIGN implementation module also depends on GenerateCstubsFunctions *)
+    let generated_foreign_name = cstubs.cstubs_external_library_name ^ "_generated" in
+    let generated_foreign_hier = Hier.of_string (String.capitalize_ascii generated_foreign_name) in
+    (try
+       let _ = Dag.get_node stepsDag (CompileModule generated_foreign_hier) in
+       Dag.add_edge (CompileModule generated_foreign_hier) funcs_task stepsDag
+     with Dag.DagNode_Not_found -> ());
+
+    (* Helper: extract the top-level module from a functor path like "Bindings.Types" -> "Bindings" *)
+    let get_module_from_functor_path hier =
+      Hier.of_modname (Hier.root hier)
+    in
+
+    (* If there's a type description functor, both types_task and funcs_task depend on its module.
+       types_task needs it to use Cstubs_structs.write_c with the Types functor for struct discovery.
+       funcs_task needs it to use Cstubs.write_c/write_ml with the Functions functor. *)
+    (match cstubs.cstubs_type_description with
+     | Some desc ->
+       let bindings_module = get_module_from_functor_path desc.cstubs_functor in
+       (try
+          let _ = Dag.get_node stepsDag (CompileModule bindings_module) in
+          (* types_task depends on Bindings for Cstubs_structs.write_c *)
+          Dag.add_edge types_task (CompileModule bindings_module) stepsDag;
+          (* funcs_task also depends on Bindings for Cstubs.write_c *)
+          Dag.add_edge funcs_task (CompileModule bindings_module) stepsDag
+        with Dag.DagNode_Not_found -> ())
+     | None -> ());
+
+    (* If there's a function description functor, funcs_task depends on its module *)
+    (match cstubs.cstubs_function_description with
+     | Some desc ->
+       let bindings_module = get_module_from_functor_path desc.cstubs_functor in
+       (try
+          let _ = Dag.get_node stepsDag (CompileModule bindings_module) in
+          Dag.add_edge funcs_task (CompileModule bindings_module) stepsDag
+        with Dag.DagNode_Not_found -> ())
+     | None -> ());
+
+    (* Link depends on CompileCstubsC *)
+    Dag.add_edge (LinkTarget target) compile_task stepsDag;
+    Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+
 (* get every module description
  * and their relationship with each other
 *)
@@ -458,11 +550,42 @@ let get_modules_desc bstate target toplevelModules =
   let modulesDeps = Hashtbl.create 64 in
   let file_search_paths hier = (List.map (fun dir -> dir <//> Hier.to_dirpath hier) target.target_obits.target_srcdir) @ [autogenDir] in
 
+  (* Check if a module is cstubs-generated (will be created during build) *)
+  let is_cstubs_generated_module hier =
+    match target.target_cstubs with
+    | Some cstubs ->
+      let module_name = Hier.to_string hier in
+      (* All three modules are generated from cstubs config:
+         - <lib>_generated: FOREIGN implementation
+         - generated-types: type bindings
+         - generated-entry-point: entry module *)
+      let foreign_name = String.capitalize_ascii (cstubs.Target.cstubs_external_library_name ^ "_generated") in
+      let types_name = String.capitalize_ascii cstubs.Target.cstubs_generated_types in
+      let entry_name = String.capitalize_ascii cstubs.Target.cstubs_generated_entry_point in
+      module_name = foreign_name || module_name = types_name || module_name = entry_name
+    | None -> false
+  in
+
   let targetPP = Ppx_resolver.get_target_pp bstate target target.target_obits.target_pp in
 
   let get_one hier =
     let moduleName = Hier.to_string hier in
     verbose Verbose "Analysing %s\n%!" moduleName;
+    (* For cstubs-generated modules, return a minimal description without file analysis *)
+    if is_cstubs_generated_module hier then (
+      (* Get library-specific autogen dir for cstubs generated files *)
+      let cstubs_autogen_dir = match target.target_name with
+        | Target.Name.Lib libname -> autogenDir </> fn (Libname.to_string libname)
+        | _ -> autogenDir
+      in
+      let ml_filename = fn (String.uncapitalize_ascii moduleName ^ ".ml") in
+      let target_path = cstubs_autogen_dir </> ml_filename in
+      verbose Verbose "  %s is cstubs-generated, using synthetic description at %s\n%!" moduleName (fp_to_string target_path);
+      (* Register the synthetic entry in Hier so get_dest_file can find it *)
+      Hier.register_synthetic_entry hier cstubs_autogen_dir target_path;
+      (* Return a minimal module description - the file will be created during build *)
+      Module.make_file NoThread target_path 0.0 SimpleModule None Pp.none [] [] []
+    ) else
     let file_entry =
       let paths = (file_search_paths hier) in
       try Hier.get_file_entry hier paths
@@ -595,6 +718,9 @@ let prepare_target_ bstate buildDir target toplevelModules =
     (* Add C compilation tasks *)
     add_c_compilation_tasks cbits buildDir stepsDag filesDag;
 
+    (* Add cstubs generation tasks if configured *)
+    add_cstubs_tasks target stepsDag;
+
     (stepsDag, filesDag)
   in
   let (dag, fdag) = get_dags () in
@@ -630,11 +756,16 @@ let prepare_target_ bstate buildDir target toplevelModules =
       | Normal    -> buildDir
       | WithDebug -> buildDirD
       | WithProf  -> buildDirP)
+  (* Add library-specific autogen dir for cstubs-generated modules *)
   ; compilation_include_paths = (fun m hier ->
+      let cstubs_autogen_dir = match target.target_cstubs, target.target_name with
+        | Some _, Target.Name.Lib libname -> [autogenDir </> fn (Libname.to_string libname)]
+        | _ -> []
+      in
       ((match m with
           | Normal    -> buildDir
           | WithDebug -> buildDirD
-          | WithProf  -> buildDirP) <//> Hier.to_dirpath hier) :: [autogenDir] @
+          | WithProf  -> buildDirP) <//> Hier.to_dirpath hier) :: cstubs_autogen_dir @ [autogenDir] @
       (List.map (fun dir -> dir <//> Hier.to_dirpath hier) obits.target_srcdir) @
       (match m with
        | Normal    -> depIncludePaths

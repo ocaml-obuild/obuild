@@ -100,7 +100,7 @@ let with_temp_project_file content test_func =
 let assert_project_parses ~content ~name =
   try
     with_temp_project_file content (fun () ->
-      let _ = Project.read false in
+      let _ = Project_read.read () in
       Success)
   with exn ->
     Failure (sprintf "Project parsing failed: %s\nInput:\n%s"
@@ -109,7 +109,7 @@ let assert_project_parses ~content ~name =
 let assert_project_parse_error ~content ~expected_msg ~name =
   try
     with_temp_project_file content (fun () ->
-      let _ = Project.read false in
+      let _ = Project_read.read () in
       Failure (sprintf "Expected project parse error, but parsing succeeded.\nInput:\n%s" content))
   with
   | Project.MissingField field ->

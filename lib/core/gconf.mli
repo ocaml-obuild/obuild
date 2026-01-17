@@ -2,16 +2,14 @@
 
 (** Verbosity levels *)
 type verbosity_t =
-  | Silent      (** No output *)
-  | Report      (** Normal output *)
-  | Verbose     (** Verbose output *)
-  | Debug       (** Debug output *)
-  | DebugPlus   (** Debug with command output *)
+  | Silent  (** No output *)
+  | Report  (** Normal output *)
+  | Verbose  (** Verbose output *)
+  | Debug  (** Debug output *)
+  | DebugPlus  (** Debug with command output *)
 
-(** Global configuration record *)
 type t = {
   mutable verbosity : verbosity_t;
-  mutable strict : bool;
   mutable parallel_jobs : int;
   mutable dump_dot : bool;
   mutable color : bool;
@@ -20,6 +18,7 @@ type t = {
   mutable ocamlmklib : bool;
   mutable ocaml_extra_args : string list;
 }
+(** Global configuration record *)
 
 exception UnknownOption of string
 

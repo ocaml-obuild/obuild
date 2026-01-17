@@ -205,6 +205,13 @@ let get_file_entry hier paths =
         with Not_found -> None)
       paths
 
+(* Register a synthetic file entry for modules that will be generated during build
+   (e.g., cstubs-generated modules). This allows get_dest_file to work for these
+   modules even before the source file exists. *)
+let register_synthetic_entry hier root_path full_path =
+  if SafeHashtbl.find_opt hiers hier = None then
+    Hashtbl.add hiers hier (FileEntry (root_path, full_path))
+
 let of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in
   let m =

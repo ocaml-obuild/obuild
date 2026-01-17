@@ -93,6 +93,9 @@ type compile_step =
   | CompileInterface of Hier.t
   | CompileDirectory of Hier.t
   | CompileC         of Filepath.filename
+  | GenerateCstubsTypes     of Libname.t  (** Generate types_generated.ml *)
+  | GenerateCstubsFunctions of Libname.t  (** Generate C.ml and stubs.c *)
+  | CompileCstubsC          of Libname.t  (** Compile generated C stubs *)
   | LinkTarget       of Target.target
   | CheckTarget      of Target.target
 

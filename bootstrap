@@ -22,7 +22,7 @@ fi
 
 
 extmodules="compat fugue filepath filesystem cli"
-coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache target dist project analyze configure prepare_types ppx_resolver prepare buildprogs build exception"
+coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache obuild_lexer obuild_ast obuild_parser target dist project obuild_validate project_read analyze configure prepare_types ppx_resolver prepare buildprogs build exception"
 commandmodules="sdist doc init help install"
 mainmodules="path_generated main"
 

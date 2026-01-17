@@ -1,0 +1,7 @@
+name: test_cohttp
+version: 1.0
+obuild-ver: 1
+
+executable test_cohttp_main
+  main: main.ml
+  build-deps: cohttp-lwt-unix

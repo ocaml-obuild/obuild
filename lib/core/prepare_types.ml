@@ -34,6 +34,9 @@ type compile_step =
   | CompileInterface of Hier.t
   | CompileDirectory of Hier.t
   | CompileC         of filename
+  | GenerateCstubsTypes     of Libname.t  (* Generate types_generated.ml *)
+  | GenerateCstubsFunctions of Libname.t  (* Generate C.ml and stubs.c *)
+  | CompileCstubsC          of Libname.t  (* Compile generated C stubs *)
   | LinkTarget       of Target.target
   | CheckTarget      of Target.target
 
@@ -115,5 +118,8 @@ let string_of_compile_step cs = match cs with
   | CompileModule x    -> "mod " ^ (Hier.to_string x)
   | CompileInterface x -> "intf " ^ (Hier.to_string x)
   | CompileC x         -> "C " ^ (Filepath.fn_to_string x)
+  | GenerateCstubsTypes x     -> "cstubs-types " ^ (Libname.to_string x)
+  | GenerateCstubsFunctions x -> "cstubs-funcs " ^ (Libname.to_string x)
+  | CompileCstubsC x          -> "cstubs-c " ^ (Libname.to_string x)
   | LinkTarget x       -> "link " ^ (Target.get_target_name x)
   | CheckTarget x      -> "check " ^ (Target.get_target_name x)

@@ -85,12 +85,43 @@ type target_extra = {
   target_extra_pp        : Pp.Type.t option;
 }
 
+(** Ctypes.cstubs description: pair of functor module -> generated instance name *)
+type cstubs_description = {
+  cstubs_functor  : Hier.t;   (** User's functor module, e.g., Bindings.Types *)
+  cstubs_instance : string;   (** Generated instance name, e.g., Types_gen *)
+}
+
+(** Ctypes.cstubs concurrency policy *)
+type cstubs_concurrency =
+  | Cstubs_sequential      (** Default: no special concurrency support *)
+  | Cstubs_unlocked        (** Release runtime lock during C calls *)
+  | Cstubs_lwt_jobs        (** Lwt jobs-based concurrency *)
+  | Cstubs_lwt_preemptive  (** Lwt preemptive threading *)
+
+(** Ctypes.cstubs errno policy *)
+type cstubs_errno =
+  | Cstubs_ignore_errno    (** Default: errno not accessed *)
+  | Cstubs_return_errno    (** Functions return (retval, errno) pairs *)
+
+(** Ctypes.cstubs configuration for a library *)
+type target_cstubs = {
+  cstubs_external_library_name : string;              (** Name for generated C library *)
+  cstubs_type_description      : cstubs_description option;  (** Types functor -> instance *)
+  cstubs_function_description  : cstubs_description option;  (** Functions functor -> instance *)
+  cstubs_generated_types       : string;              (** Intermediate types module name *)
+  cstubs_generated_entry_point : string;              (** Main entry module (e.g., "C") *)
+  cstubs_headers               : string list;         (** C headers to include *)
+  cstubs_concurrency           : cstubs_concurrency;  (** Concurrency policy *)
+  cstubs_errno                 : cstubs_errno;        (** Errno handling policy *)
+}
+
 (** Complete build target definition *)
 type target = {
   target_name        : Name.t;
   target_type        : Typ.t;
   target_cbits       : target_cbits;
   target_obits       : target_obits;
+  target_cstubs      : target_cstubs option;
   target_extras      : target_extra list;
   target_buildable   : runtime_bool;
   target_installable : runtime_bool;
@@ -101,6 +132,9 @@ val new_target_cbits : target_cbits
 
 val new_target_obits : target_obits
 (** Empty OCaml compilation bits with default values *)
+
+val new_target_cstubs : target_cstubs
+(** Default cstubs configuration with empty values *)
 
 val new_target : Name.t -> Typ.t -> bool -> bool -> target
 (** [new_target name typ buildable installable] creates a new target
