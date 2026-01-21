@@ -311,19 +311,6 @@ requires = unix str
   | Meta.MetaParseError _ -> Success
   | exn -> Failure ("Expected MetaParseError, got: " ^ Printexc.to_string exn)
 
-let test_findlib_paths () =
-  FindlibConf.load ();
-  let paths = FindlibConf.get_paths () in
-  printf "FindLib search paths:\n";
-  List.iter (fun p -> printf "  %s\n" (Filepath.fp_to_string p)) paths;
-  
-  let expected_path = "/home/jerome/.opam/default/lib" in
-  let has_expected = List.exists (fun p -> Filepath.fp_to_string p = expected_path) paths in
-  if has_expected then
-    Success
-  else
-    Failure (sprintf "Expected path %s not found in search paths" expected_path)
-
 let test_libname_parsing () =
   let libname_str = "ppx_stable_witness.stable_witness" in
   let libname = Libname.of_string libname_str in
@@ -331,8 +318,10 @@ let test_libname_parsing () =
   printf "  main_name: %s\n" libname.Libname.main_name;
   printf "  subnames: [%s]\n" (String.concat "; " libname.Libname.subnames);
   printf "  full string: %s\n" (Libname.to_string libname);
-  if libname.Libname.main_name = "ppx_stable_witness" && 
-     libname.Libname.subnames = ["stable_witness"] then
+  if
+    libname.Libname.main_name = "ppx_stable_witness"
+    && libname.Libname.subnames = [ "stable_witness" ]
+  then
     Success
   else
     Failure "Libname parsing incorrect"
@@ -340,7 +329,7 @@ let test_libname_parsing () =
 let test_ppx_stable_witness_findlib () =
   FindlibConf.load ();
   try
-    let (path, pkg) = Meta.find_lib "ppx_stable_witness" in
+    let path, pkg = Meta.find_lib "ppx_stable_witness" in
     let stable_witness_libname = Libname.of_string "ppx_stable_witness.stable_witness" in
     let resolved_pkg = Meta.Pkg.find stable_witness_libname.Libname.subnames pkg in
     if resolved_pkg.Meta.Pkg.name = "stable_witness" then
@@ -348,10 +337,8 @@ let test_ppx_stable_witness_findlib () =
     else
       Failure ("Expected stable_witness package, got: " ^ resolved_pkg.Meta.Pkg.name)
   with
-  | Meta.LibraryNotFound name -> 
-    Failure ("LibraryNotFound: " ^ name)
-  | exn -> 
-    Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.LibraryNotFound name -> Failure ("LibraryNotFound: " ^ name)
+  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_metacache_consistency () =
   FindlibConf.load ();
@@ -359,21 +346,18 @@ let test_metacache_consistency () =
     (* First populate cache using Metacache.get *)
     let libname = Libname.of_string "ppx_stable_witness.stable_witness" in
     let _, cached_meta = Metacache.get libname.Libname.main_name in
-    
+
     (* Then try to get subpackage *)
     let cached_pkg = Meta.Pkg.find libname.Libname.subnames cached_meta in
-    
+
     if cached_pkg.Meta.Pkg.name = "stable_witness" then
       Success
     else
       Failure ("Expected stable_witness from cache, got: " ^ cached_pkg.Meta.Pkg.name)
   with
-  | Meta.LibraryNotFound name -> 
-    Failure ("LibraryNotFound in cache test: " ^ name)
-  | Dependencies.DependencyMissing name ->
-    Failure ("DependencyMissing in cache test: " ^ name)
-  | exn -> 
-    Failure ("Cache test error: " ^ Printexc.to_string exn)
+  | Meta.LibraryNotFound name -> Failure ("LibraryNotFound in cache test: " ^ name)
+  | Dependencies.DependencyMissing name -> Failure ("DependencyMissing in cache test: " ^ name)
+  | exn -> Failure ("Cache test error: " ^ Printexc.to_string exn)
 
 (* Test suite *)
 
@@ -397,9 +381,7 @@ let all_tests =
     make_test "comments_and_whitespace" test_comments_and_whitespace;
     make_test "real_world_ppxlib" test_real_world_ppxlib;
     make_test "malformed_syntax" test_malformed_syntax;
-    
     (* Real library resolution *)
-    make_test "findlib_paths" test_findlib_paths;
     make_test "libname_parsing" test_libname_parsing;
     make_test "ppx_stable_witness_findlib" test_ppx_stable_witness_findlib;
     make_test "metacache_consistency" test_metacache_consistency;
