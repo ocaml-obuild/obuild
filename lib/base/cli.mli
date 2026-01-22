@@ -78,6 +78,19 @@ val option_int :
   doc:string ->
   command -> command
 
+(** Boolean option (requires true/false/yes/no/1/0 value) *)
+val option_bool :
+  string ->
+  ?short:char ->
+  ?env:string ->
+  ?default:bool ->
+  ?placeholder:string ->
+  doc:string ->
+  command -> command
+(** [option_bool name ~short ~env ~default ~placeholder ~doc cmd] adds a boolean option.
+    - Accepts values: true/false, yes/no, 1/0, on/off (case insensitive)
+    - [placeholder]: Shown in help (default: "true|false") *)
+
 (** String list option (can be specified multiple times) *)
 val option_strings :
   string ->
@@ -177,6 +190,12 @@ val get_int_opt : context -> string -> int option
 
 (** Get integer value with default *)
 val get_int : context -> string -> default:int -> int
+
+(** Get optional boolean value *)
+val get_bool_opt : context -> string -> bool option
+
+(** Get boolean value with default *)
+val get_bool : context -> string -> default:bool -> bool
 
 (** Get list of strings (from repeated options or positionals) *)
 val get_strings : context -> string -> string list

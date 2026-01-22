@@ -24,6 +24,7 @@ type arg_spec = {
     [ `Flag
     | `String of string option * string (* default, placeholder *)
     | `Int of int option * string
+    | `Bool of bool option * string (* default, placeholder *)
     | `Strings of string
     | `Positional of string
     | `Positionals of string
@@ -91,6 +92,18 @@ let get_int_opt ctx name =
 let get_int ctx name ~default =
   match get_int_opt ctx name with
   | Some i -> i
+  | None -> default
+
+let get_bool_opt ctx name =
+  try
+    match Hashtbl.find ctx.values name with
+    | VBool b -> Some b
+    | _ -> None
+  with Not_found -> None
+
+let get_bool ctx name ~default =
+  match get_bool_opt ctx name with
+  | Some b -> b
   | None -> default
 
 let get_strings ctx name =
@@ -187,6 +200,22 @@ let option_int name ?short ?env ?default ?placeholder ~doc cmd =
       arg_short = short;
       arg_env = env;
       arg_kind = `Int (default, ph);
+      arg_doc = doc;
+    }
+    cmd
+
+let option_bool name ?short ?env ?default ?placeholder ~doc cmd =
+  let ph =
+    match placeholder with
+    | Some p -> p
+    | None -> "true|false"
+  in
+  add_arg
+    {
+      arg_name = name;
+      arg_short = short;
+      arg_env = env;
+      arg_kind = `Bool (default, ph);
       arg_doc = doc;
     }
     cmd
@@ -451,7 +480,7 @@ let print_arg_help chan spec =
   let long_name = "--" ^ spec.arg_name in
   let placeholder =
     match spec.arg_kind with
-    | `String (_, ph) | `Int (_, ph) | `Strings ph | `Positional ph | `Positionals ph -> " " ^ ph
+    | `String (_, ph) | `Int (_, ph) | `Bool (_, ph) | `Strings ph | `Positional ph | `Positionals ph -> " " ^ ph
     | `Flag -> ""
   in
   Printf.fprintf chan "  %s%s%s\n" short_str long_name placeholder;
@@ -506,6 +535,7 @@ let parse_args ?(stop_at_positional = false) specs argv start_idx =
       match spec.arg_kind with
       | `String (Some def, _) -> Hashtbl.add values spec.arg_name (VString def)
       | `Int (Some def, _) -> Hashtbl.add values spec.arg_name (VInt def)
+      | `Bool (Some def, _) -> Hashtbl.add values spec.arg_name (VBool def)
       | `Flag -> Hashtbl.add values spec.arg_name (VBool false)
       | _ -> ())
     specs;
@@ -553,7 +583,7 @@ let parse_args ?(stop_at_positional = false) specs argv start_idx =
           | `Flag ->
               Hashtbl.replace values spec.arg_name (VBool true);
               incr idx
-          | `String _ | `Int _ ->
+          | `String _ | `Int _ | `Bool _ ->
               let value =
                 match opt_val with
                 | Some v -> v
@@ -567,6 +597,15 @@ let parse_args ?(stop_at_positional = false) specs argv start_idx =
               | `Int _ -> (
                   try Hashtbl.replace values spec.arg_name (VInt (int_of_string value))
                   with Failure _ -> raise (Parse_error (spec.arg_name ^ " requires an integer")))
+              | `Bool _ -> (
+                  try
+                    let bool_val = match String.lowercase_ascii value with
+                      | "true" | "yes" | "1" | "on" -> true
+                      | "false" | "no" | "0" | "off" -> false
+                      | _ -> raise (Parse_error (spec.arg_name ^ " requires true/false/yes/no/1/0"))
+                    in
+                    Hashtbl.replace values spec.arg_name (VBool bool_val)
+                  with Failure _ -> raise (Parse_error (spec.arg_name ^ " requires a boolean value")))
               | _ -> ());
               incr idx
           | `Strings _ ->
@@ -739,6 +778,10 @@ let apply_config_to_specs config specs =
       | `Int (_, ph) -> (
           match config_get_int config spec.arg_name with
           | Some value -> { spec with arg_kind = `Int (Some value, ph) }
+          | None -> spec)
+      | `Bool (_, ph) -> (
+          match config_get_bool config spec.arg_name with
+          | Some value -> { spec with arg_kind = `Bool (Some value, ph) }
           | None -> spec)
       | `Flag -> (
           match config_get_bool config spec.arg_name with

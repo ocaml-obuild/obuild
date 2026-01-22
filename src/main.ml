@@ -47,33 +47,26 @@ let cmd_configure =
             user_flags := tweak :: !user_flags)
           flags_str;
 
-        (* Process all enable/disable options *)
+        (* Process all boolean options *)
         let add_opt name value = user_opts := (name, value) :: !user_opts in
+        let add_bool_opt cli_name opt_name =
+          match Cli.get_bool_opt ctx cli_name with
+          | Some value -> add_opt opt_name value
+          | None -> ()
+        in
 
-        if Cli.get_flag ctx "enable-library-bytecode" then add_opt "library-bytecode" true;
-        if Cli.get_flag ctx "disable-library-bytecode" then add_opt "library-bytecode" false;
-        if Cli.get_flag ctx "enable-library-native" then add_opt "library-native" true;
-        if Cli.get_flag ctx "disable-library-native" then add_opt "library-native" false;
-        if Cli.get_flag ctx "enable-library-plugin" then add_opt "library-plugin" true;
-        if Cli.get_flag ctx "disable-library-plugin" then add_opt "library-plugin" false;
-        if Cli.get_flag ctx "enable-executable-bytecode" then add_opt "executable-bytecode" true;
-        if Cli.get_flag ctx "disable-executable-bytecode" then add_opt "executable-bytecode" false;
-        if Cli.get_flag ctx "enable-executable-native" then add_opt "executable-native" true;
-        if Cli.get_flag ctx "disable-executable-native" then add_opt "executable-native" false;
-        if Cli.get_flag ctx "enable-library-profiling" then add_opt "library-profiling" true;
-        if Cli.get_flag ctx "disable-library-profiling" then add_opt "library-profiling" false;
-        if Cli.get_flag ctx "enable-library-debugging" then add_opt "library-debugging" true;
-        if Cli.get_flag ctx "disable-library-debugging" then add_opt "library-debugging" false;
-        if Cli.get_flag ctx "enable-executable-profiling" then add_opt "executable-profiling" true;
-        if Cli.get_flag ctx "disable-executable-profiling" then add_opt "executable-profiling" false;
-        if Cli.get_flag ctx "enable-executable-debugging" then add_opt "executable-debugging" true;
-        if Cli.get_flag ctx "disable-executable-debugging" then add_opt "executable-debugging" false;
-        if Cli.get_flag ctx "enable-examples" then add_opt "build-examples" true;
-        if Cli.get_flag ctx "disable-examples" then add_opt "build-examples" false;
-        if Cli.get_flag ctx "enable-benchs" then add_opt "build-benchs" true;
-        if Cli.get_flag ctx "disable-benchs" then add_opt "build-benchs" false;
-        if Cli.get_flag ctx "enable-tests" then add_opt "build-tests" true;
-        if Cli.get_flag ctx "disable-tests" then add_opt "build-tests" false;
+        add_bool_opt "library-bytecode" "library-bytecode";
+        add_bool_opt "library-native" "library-native";
+        add_bool_opt "library-plugin" "library-plugin";
+        add_bool_opt "executable-bytecode" "executable-bytecode";
+        add_bool_opt "executable-native" "executable-native";
+        add_bool_opt "library-profiling" "library-profiling";
+        add_bool_opt "library-debugging" "library-debugging";
+        add_bool_opt "executable-profiling" "executable-profiling";
+        add_bool_opt "executable-debugging" "executable-debugging";
+        add_bool_opt "examples" "build-examples";
+        add_bool_opt "benchs" "build-benchs";
+        add_bool_opt "tests" "build-tests";
 
         (* Handle shorthand flags *)
         if Cli.get_flag ctx "executable-as-obj" then add_opt "executable-as-obj" true;
@@ -94,30 +87,18 @@ let cmd_configure =
   in
   cmd |> Cli.help_flag
   |> Cli.option_strings "flag" ~doc:"Enable or disable a project flag (can be repeated)"
-  |> Cli.flag "enable-library-bytecode" ~doc:"Enable library compilation as bytecode"
-  |> Cli.flag "disable-library-bytecode" ~doc:"Disable library compilation as bytecode"
-  |> Cli.flag "enable-library-native" ~doc:"Enable library compilation as native"
-  |> Cli.flag "disable-library-native" ~doc:"Disable library compilation as native"
-  |> Cli.flag "enable-library-plugin" ~doc:"Enable library compilation as native plugin"
-  |> Cli.flag "disable-library-plugin" ~doc:"Disable library compilation as native plugin"
-  |> Cli.flag "enable-executable-bytecode" ~doc:"Enable executable compilation as bytecode"
-  |> Cli.flag "disable-executable-bytecode" ~doc:"Disable executable compilation as bytecode"
-  |> Cli.flag "enable-executable-native" ~doc:"Enable executable compilation as native"
-  |> Cli.flag "disable-executable-native" ~doc:"Disable executable compilation as native"
-  |> Cli.flag "enable-library-profiling" ~doc:"Enable library profiling"
-  |> Cli.flag "disable-library-profiling" ~doc:"Disable library profiling"
-  |> Cli.flag "enable-library-debugging" ~doc:"Enable library debugging"
-  |> Cli.flag "disable-library-debugging" ~doc:"Disable library debugging"
-  |> Cli.flag "enable-executable-profiling" ~doc:"Enable executable profiling"
-  |> Cli.flag "disable-executable-profiling" ~doc:"Disable executable profiling"
-  |> Cli.flag "enable-executable-debugging" ~doc:"Enable executable debugging"
-  |> Cli.flag "disable-executable-debugging" ~doc:"Disable executable debugging"
-  |> Cli.flag "enable-examples" ~doc:"Enable building examples"
-  |> Cli.flag "disable-examples" ~doc:"Disable building examples"
-  |> Cli.flag "enable-benchs" ~doc:"Enable building benchmarks"
-  |> Cli.flag "disable-benchs" ~doc:"Disable building benchmarks"
-  |> Cli.flag "enable-tests" ~doc:"Enable building tests"
-  |> Cli.flag "disable-tests" ~doc:"Disable building tests"
+  |> Cli.option_bool "library-bytecode" ~doc:"Compile libraries as bytecode"
+  |> Cli.option_bool "library-native" ~doc:"Compile libraries as native"
+  |> Cli.option_bool "library-plugin" ~doc:"Compile libraries as native plugin"
+  |> Cli.option_bool "executable-bytecode" ~doc:"Compile executables as bytecode"
+  |> Cli.option_bool "executable-native" ~doc:"Compile executables as native"
+  |> Cli.option_bool "library-profiling" ~doc:"Enable library profiling"
+  |> Cli.option_bool "library-debugging" ~doc:"Enable library debugging"
+  |> Cli.option_bool "executable-profiling" ~doc:"Enable executable profiling"
+  |> Cli.option_bool "executable-debugging" ~doc:"Enable executable debugging"
+  |> Cli.option_bool "examples" ~doc:"Build examples"
+  |> Cli.option_bool "benchs" ~doc:"Build benchmarks"
+  |> Cli.option_bool "tests" ~doc:"Build tests"
   |> Cli.flag "executable-as-obj" ~doc:"Output executable as obj file"
   |> Cli.flag "annot" ~doc:"Generate .annot files"
   |> Cli.flag "g" ~short:'g' ~doc:"Compilation with debugging"
