@@ -329,6 +329,12 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         | Target.Cstubs_return_errno -> "Cstubs.return_errno"
       in
 
+      (* Generate header includes for C stubs *)
+      let headers_includes = String.concat ""
+        (List.map (fun h -> Printf.sprintf "  Format.fprintf c_fmt \"#include <%s>\\n\";\n" h)
+           cstubs.cstubs_headers)
+      in
+
       let stubgen_content = Printf.sprintf
         "(* Auto-generated stub generator for %s *)\n\
          let prefix = \"%s\"\n\
@@ -347,6 +353,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         \  Format.fprintf c_fmt \"#include <caml/callback.h>\\n\";\n\
         \  Format.fprintf c_fmt \"#include <caml/fail.h>\\n\";\n\
         \  Format.fprintf c_fmt \"#include <string.h>\\n\";\n\
+         %s\
         \  Format.fprintf c_fmt \"\\n\";\n\
         \  Cstubs.write_c c_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);\n\
         \  close_out c_file;\n\
@@ -374,6 +381,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         (fp_to_string autogen_dir)
         (fp_to_string ml_output_dir)
         stubs_file_name
+        headers_includes
         concurrency_str errno_str
         bindings_module functions_functor
         generated_foreign_file
