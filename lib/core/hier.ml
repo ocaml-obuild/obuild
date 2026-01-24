@@ -36,7 +36,7 @@ let lvl x = List.length x - 1
 let to_string x = String.concat "." (List.map Modname.to_string x)
 
 let of_string x =
-  let l = string_split '.' x in
+  let l = String_utils.split '.' x in
   make (List.map Modname.of_string l)
 
 let ml_to_ext path ext =
@@ -96,21 +96,21 @@ let check_modname path modname ext =
 let get_filepath root_path hier ext : file_entry option =
   match SafeHashtbl.find_opt hiers hier with
   | Some entry -> Some entry
-  | None ->
-    let path = add_prefix root_path hier in
-    let modname = Modname.to_string (leaf hier) in
-    let res = check_modname path modname ext in
-    match res with
-    | None -> None
-    | Some name ->
-        let entry =
-          if ext <> Filetype.FileOther "" then
-            FileEntry (root_path, path </> (fn name <.> Filetype.to_string ext))
-          else
-            DirectoryEntry (root_path, path </> fn name)
-        in
-        Hashtbl.add hiers hier entry;
-        Some entry
+  | None -> (
+      let path = add_prefix root_path hier in
+      let modname = Modname.to_string (leaf hier) in
+      let res = check_modname path modname ext in
+      match res with
+      | None -> None
+      | Some name ->
+          let entry =
+            if ext <> Filetype.FileOther "" then
+              FileEntry (root_path, path </> (fn name <.> Filetype.to_string ext))
+            else
+              DirectoryEntry (root_path, path </> fn name)
+          in
+          Hashtbl.add hiers hier entry;
+          Some entry)
 
 let to_filename hier prefix_path = get_filepath prefix_path hier Filetype.FileML
 let to_directory hier prefix_path = get_filepath prefix_path hier (Filetype.FileOther "")
@@ -118,29 +118,30 @@ let to_directory hier prefix_path = get_filepath prefix_path hier (Filetype.File
 let to_generators hier prefix_path =
   match SafeHashtbl.find_opt hiers hier with
   | Some entry -> Some entry
-  | None ->
-    try
-      Some
-        (list_find_map
-           (fun gen ->
-             let path = add_prefix prefix_path hier in
-             let modname_t = leaf hier in
-             let modname_t = gen.Generators.modname modname_t in
-             let modname_str = Modname.to_string modname_t in
-             let ext = Filetype.FileOther gen.Generators.suffix in
-             let res = check_modname path modname_str ext in
-             match res with
-             | None -> None
-             | Some name ->
-                 let filename = fn name <.> Filetype.to_string ext in
-                 let fullname = path </> filename in
-                 let generated_file =
-                   gen.Generators.generated_files filename (Modname.to_string (leaf hier))
-                 in
-                 Hashtbl.add hiers hier (GeneratedFileEntry (prefix_path, fullname, generated_file));
-                 Some (GeneratedFileEntry (prefix_path, fullname, generated_file)))
-           (Generators.get_all ()))
-    with Not_found -> None
+  | None -> (
+      try
+        Some
+          (list_find_map
+             (fun gen ->
+               let path = add_prefix prefix_path hier in
+               let modname_t = leaf hier in
+               let modname_t = gen.Generators.modname modname_t in
+               let modname_str = Modname.to_string modname_t in
+               let ext = Filetype.FileOther gen.Generators.suffix in
+               let res = check_modname path modname_str ext in
+               match res with
+               | None -> None
+               | Some name ->
+                   let filename = fn name <.> Filetype.to_string ext in
+                   let fullname = path </> filename in
+                   let generated_file =
+                     gen.Generators.generated_files filename (Modname.to_string (leaf hier))
+                   in
+                   Hashtbl.add hiers hier
+                     (GeneratedFileEntry (prefix_path, fullname, generated_file));
+                   Some (GeneratedFileEntry (prefix_path, fullname, generated_file)))
+             (Generators.get_all ()))
+      with Not_found -> None)
 
 let get_src_file dst_dir = function
   | FileEntry (_, f) -> f
@@ -148,7 +149,8 @@ let get_src_file dst_dir = function
   | DirectoryEntry (_, f) -> f
 
 let get_dest_file dst_dir ext hier =
-  let entry = match SafeHashtbl.find_opt hiers hier with
+  let entry =
+    match SafeHashtbl.find_opt hiers hier with
     | Some e -> e
     | None -> raise Not_found
   in
@@ -166,7 +168,8 @@ let get_dest_file dst_dir ext hier =
       path </> (filename <.> Filetype.to_string ext)
 
 let get_dest_file_ext dst_dir hier ext_f =
-  let entry = match SafeHashtbl.find_opt hiers hier with
+  let entry =
+    match SafeHashtbl.find_opt hiers hier with
     | Some e -> e
     | None -> raise Not_found
   in
@@ -187,23 +190,21 @@ let get_dest_file_ext dst_dir hier ext_f =
       path </> (filename <.> Filetype.to_string (ext_f filetype))
 
 let to_interface hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
-
-let get_file_entry_maybe hier =
-  SafeHashtbl.find_opt hiers hier
+let get_file_entry_maybe hier = SafeHashtbl.find_opt hiers hier
 
 let get_file_entry hier paths =
   match SafeHashtbl.find_opt hiers hier with
   | Some entry -> entry
   | None ->
-    list_find_map
-      (fun path ->
-        try
-          Some
-            (list_find_map
-               (fun lookup -> lookup hier path)
-               [ to_filename; to_directory; to_generators; to_interface ])
-        with Not_found -> None)
-      paths
+      list_find_map
+        (fun path ->
+          try
+            Some
+              (list_find_map
+                 (fun lookup -> lookup hier path)
+                 [ to_filename; to_directory; to_generators; to_interface ])
+          with Not_found -> None)
+        paths
 
 (* Register a synthetic file entry for modules that will be generated during build
    (e.g., cstubs-generated modules). This allows get_dest_file to work for these

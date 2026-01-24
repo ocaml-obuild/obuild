@@ -50,7 +50,9 @@ let read_file path =
   try
     let ic = open_in path in
     let len = in_channel_length ic in
-    let content = really_input_string ic len in
+    let buf = Compat.bytes_create len in
+    really_input ic buf 0 len;
+    let content = Compat.bytes_to_string buf in
     close_in ic;
     Some content
   with _ -> None

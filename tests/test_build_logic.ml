@@ -1,6 +1,9 @@
 open Test_framework
 open Test_build_helpers
 
+(* Pipe operator for OCaml < 4.01 compatibility *)
+let (|>) x f = f x
+
 (** Test 1: MLI change triggers CMI and ML rebuild *)
 let test_mli_triggers_rebuild () =
   with_temp_build_project
@@ -10,14 +13,13 @@ let test_mli_triggers_rebuild () =
       ("src/foo.ml", "let x = 42\n");
       ("src/bar.ml", "let y = Foo.x + 1\n");
     ]
-    ~obuild_content:{|name: mli-test
-version: 1.0
-obuild-ver: 1
-
-library foo
-  modules: Foo, Bar
-  src-dir: src
-|}
+    ~obuild_content:"name: mli-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+library foo\n\
+  modules: Foo, Bar\n\
+  src-dir: src\n"
     ~test_fn:(fun dir ->
       (* Initial build *)
       let (success, output) = run_obuild_command ~project_dir:dir ~command:"configure" ~args:[] in
@@ -76,14 +78,13 @@ let test_ml_incremental_rebuild () =
       ("src/bar.ml", "let y = Foo.x + 1\n");
       ("src/baz.ml", "let z = Bar.y * 2\n");
     ]
-    ~obuild_content:{|name: incremental-test
-version: 1.0
-obuild-ver: 1
-
-library test
-  modules: Foo, Bar, Baz
-  src-dir: src
-|}
+    ~obuild_content:"name: incremental-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+library test\n\
+  modules: Foo, Bar, Baz\n\
+  src-dir: src\n"
     ~test_fn:(fun dir ->
       (* Configure for bytecode only to test incremental compilation *)
       let (success, _) = run_obuild_command ~project_dir:dir ~command:"configure"
@@ -132,16 +133,15 @@ let test_c_file_rebuild () =
       ("src/cbits.h", "int add(int a, int b);\n");
       ("src/main.ml", "external add : int -> int -> int = \"add\"\nlet () = Printf.printf \"%d\\n\" (add 1 2)\n");
     ]
-    ~obuild_content:{|name: c-test
-version: 1.0
-obuild-ver: 1
-
-executable ctest
-  main-is: main.ml
-  src-dir: src
-  c-sources: cbits.c
-  c-dir: src
-|}
+    ~obuild_content:"name: c-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+executable ctest\n\
+  main-is: main.ml\n\
+  src-dir: src\n\
+  c-sources: cbits.c\n\
+  c-dir: src\n"
     ~test_fn:(fun dir ->
       (* Initial build *)
       let (success, _) = run_obuild_command ~project_dir:dir ~command:"configure" ~args:[] in
@@ -186,14 +186,13 @@ let test_clean_build () =
     ~files:[
       ("src/foo.ml", "let x = 42\n");
     ]
-    ~obuild_content:{|name: clean-test
-version: 1.0
-obuild-ver: 1
-
-library foo
-  modules: Foo
-  src-dir: src
-|}
+    ~obuild_content:"name: clean-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+library foo\n\
+  modules: Foo\n\
+  src-dir: src\n"
     ~test_fn:(fun dir ->
       (* Build *)
       let (success, _) = run_obuild_command ~project_dir:dir ~command:"configure" ~args:[] in
@@ -232,14 +231,13 @@ let test_configure_rebuild () =
     ~files:[
       ("src/foo.ml", "let x = 42\n");
     ]
-    ~obuild_content:{|name: config-test
-version: 1.0
-obuild-ver: 1
-
-library foo
-  modules: Foo
-  src-dir: src
-|}
+    ~obuild_content:"name: config-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+library foo\n\
+  modules: Foo\n\
+  src-dir: src\n"
     ~test_fn:(fun dir ->
       (* Initial build *)
       let (success, _) = run_obuild_command ~project_dir:dir ~command:"configure" ~args:[] in
@@ -276,14 +274,13 @@ let test_parallel_build () =
       ("src/b.ml", "let b = 2\n");
       ("src/c.ml", "let c = A.a + B.b\n");
     ]
-    ~obuild_content:{|name: parallel-test
-version: 1.0
-obuild-ver: 1
-
-library test
-  modules: A, B, C
-  src-dir: src
-|}
+    ~obuild_content:"name: parallel-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+library test\n\
+  modules: A, B, C\n\
+  src-dir: src\n"
     ~test_fn:(fun dir ->
       (* Build with parallelism *)
       let (success, _) = run_obuild_command ~project_dir:dir ~command:"configure" ~args:[] in

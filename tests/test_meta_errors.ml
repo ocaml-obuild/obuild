@@ -103,44 +103,40 @@ let test_empty_string () =
 let test_unclosed_package_block () =
   (* FIXED: Unclosed package blocks now detected *)
   assert_meta_parse_error
-    ~content:{|
-version = "1.0"
-package "sub" (
-  version = "1.1"
-|}
+    ~content:"\
+version = \"1.0\"\n\
+package \"sub\" (\n\
+  version = \"1.1\"\n"
     ~expected_msg:"unclosed package block"
     ~name:"unclosed package block"
 
 let test_package_without_name () =
   assert_meta_parse_error
-    ~content:{|
-package (
-  version = "1.0"
-)
-|}
+    ~content:"\
+package (\n\
+  version = \"1.0\"\n\
+)\n"
     ~expected_msg:"unknown token"
     ~name:"package without name"
 
 let test_package_without_paren () =
   assert_meta_parse_error
-    ~content:{|
-package "sub"
-  version = "1.0"
-|}
+    ~content:"\
+package \"sub\"\n\
+  version = \"1.0\"\n"
     ~expected_msg:"unknown token"
     ~name:"package without opening paren"
 
 let test_nested_package_error () =
   (* FIXED: Unclosed strings now detected even in nested packages *)
   assert_meta_parse_error
-    ~content:{|
-version = "1.0"
-package "outer" (
-  package "inner" (
-    version = "1.1
-  )
-)
-|}
+    ~content:"\
+version = \"1.0\"\n\
+package \"outer\" (\n\
+  package \"inner\" (\n\
+    version = \"1.1\n\
+  )\n\
+)\n"
     ~expected_msg:"unclosed string literal"
     ~name:"nested package with unclosed string"
 
@@ -190,20 +186,18 @@ let test_linkopts_invalid () =
 let test_multiple_errors () =
   (* Multiple errors - which one gets reported? *)
   assert_meta_parse_error
-    ~content:{|
-version = "1.0
-archive(byte = "foo.cma
-|}
+    ~content:"\
+version = \"1.0\n\
+archive(byte = \"foo.cma\n"
     ~expected_msg:"unknown token"
     ~name:"multiple syntax errors"
 
 let test_error_after_valid_content () =
   assert_meta_parse_error
-    ~content:{|
-version = "1.0"
-description = "Valid package"
-archive(byte "broken"
-|}
+    ~content:"\
+version = \"1.0\"\n\
+description = \"Valid package\"\n\
+archive(byte \"broken\"\n"
     ~expected_msg:"expecting ')'"
     ~name:"error after valid content"
 
@@ -218,11 +212,10 @@ let test_invalid_escape_sequence () =
 let test_location_tracking () =
   (* Comprehensive test: Lexer errors include line.column position *)
   assert_meta_parse_error
-    ~content:{|
-version = "1.0"
-requires = "unix"
-$invalid_token
-|}
+    ~content:"\
+version = \"1.0\"\n\
+requires = \"unix\"\n\
+$invalid_token\n"
     ~expected_msg:"4.0: meta lexing error: undefined character '$'"
     ~name:"location tracking in lexer errors"
 
@@ -249,10 +242,9 @@ let test_comment_in_string () =
 let test_unclosed_after_comment () =
   (* FIXED: Unclosed strings now detected after comments with position *)
   assert_meta_parse_error
-    ~content:{|
-# This is a comment
-version = "1.0
-|}
+    ~content:"\
+# This is a comment\n\
+version = \"1.0\n"
     ~expected_msg:"3.10: meta lexing error: unclosed string literal"
     ~name:"unclosed string after comment with position"
 

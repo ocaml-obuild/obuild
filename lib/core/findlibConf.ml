@@ -1,61 +1,51 @@
-open Fugue
 open Filepath
 
 type t = {
   path : filepath list;
   destdir : filepath option;
   _all : (string * string option) list; (* kept for potential future use *)
-  _loaded : bool (* kept for potential future use *)
+  _loaded : bool; (* kept for potential future use *)
 }
 
-let default = {
-  _all     = [];
-  path    = [];
-  destdir = None;
-  _loaded  = false
-}
-
+let default = { _all = []; path = []; destdir = None; _loaded = false }
 let conf = ref default
 
 let parse_file path =
   let content = Filesystem.read_file path in
-  let unquote s = match s with
-    | None   -> failwith ("unknown configuration key with no value")
-    | Some x -> string_init 1 (string_drop 1 x)
+  let unquote s =
+    match s with
+    | None -> failwith "unknown configuration key with no value"
+    | Some x -> String_utils.init 1 (String_utils.drop 1 x)
   in
-  let kvs = List.map Utils.toKVeq (string_lines_noempty content) in
-  let paths = string_split ':' (unquote (List.assoc "path" kvs)) in
+  let kvs = List.map Utils.toKVeq (String_utils.lines_noempty content) in
+  let paths = String_utils.split ':' (unquote (List.assoc "path" kvs)) in
   let destdir = unquote (List.assoc "destdir" kvs) in
-  {
-    _all     = kvs;
-    path    = List.map fp paths;
-    destdir = Some (fp destdir);
-    _loaded  = true;
-  }
+  { _all = kvs; path = List.map fp paths; destdir = Some (fp destdir); _loaded = true }
 
-let get_program_config () = match Process.run [ "ocamlfind"; "printconf"; "conf" ] with
-  | Process.Failure err     -> failwith ("ocamlfind printconf failed err " ^ err)
-  | Process.Success (out,_,_) -> match string_lines_noempty out with
-    | [x] -> [fp x]
-    | _   -> failwith ("ocamlfind printconf failed output: " ^ out)
-               
-let get_paths () = try [fp (Sys.getenv "OCAMLFIND_CONF")]
-  with Not_found ->
-    try get_program_config ()
-    with _ -> [
-        fp "/etc/findlib.conf";
-        fp "/etc/ocamlfind.conf"
-      ]
+let get_program_config () =
+  match Process.run [ "ocamlfind"; "printconf"; "conf" ] with
+  | Process.Failure err -> failwith ("ocamlfind printconf failed err " ^ err)
+  | Process.Success (out, _, _) -> (
+      match String_utils.lines_noempty out with
+      | [ x ] -> [ fp x ]
+      | _ -> failwith ("ocamlfind printconf failed output: " ^ out))
 
-let get_system () = let paths = get_paths () in
+let get_paths () =
+  try [ fp (Sys.getenv "OCAMLFIND_CONF") ]
+  with Not_found -> (
+    try get_program_config () with _ -> [ fp "/etc/findlib.conf"; fp "/etc/ocamlfind.conf" ])
+
+let get_system () =
+  let paths = get_paths () in
   try
     let found_path = List.find Filesystem.exists paths in
     parse_file found_path
   with Not_found -> default
 
-let load () = match Gconf.get_env ("findlib-path") with
-  | None   -> conf := get_system ()
+let load () =
+  match Gconf.get_env "findlib-path" with
+  | None -> conf := get_system ()
   | Some p -> conf := parse_file (fp p)
 
-let get_paths () = (!conf).path
-let get_destdir () = (!conf).destdir
+let get_paths () = !conf.path
+let get_destdir () = !conf.destdir

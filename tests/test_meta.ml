@@ -12,17 +12,19 @@ let archive_to_string (preds, archive) =
 
 let archives_to_string archives = String.concat "; " (List.map archive_to_string archives)
 
+(* Compat helpers for old OCaml *)
+let list_find_opt pred lst =
+  try Some (List.find pred lst) with Not_found -> None
+
 (* Easy test cases *)
 
 let test_basic_meta () =
-  let content =
-    {|
-version = "1.0.0"
-description = "A simple package"
-requires = "unix"
-archive(byte) = "simple.cma"
-archive(native) = "simple.cmxa"
-|}
+  let content = "\
+version = \"1.0.0\"\n\
+description = \"A simple package\"\n\
+requires = \"unix\"\n\
+archive(byte) = \"simple.cma\"\n\
+archive(native) = \"simple.cmxa\"\n"
   in
   let pkg = parse_meta_string content "simple" in
   let tests =
@@ -32,29 +34,27 @@ archive(native) = "simple.cmxa"
     ]
   in
   match
-    List.find_opt
+    list_find_opt
       (function
-        | Failure _ -> true
+        | TestFailure _ -> true
         | Success -> false)
       tests
   with
-  | Some (Failure msg) -> Failure msg
+  | Some (TestFailure msg) -> TestFailure msg
   | _ -> Success
 
 let test_empty_fields () =
-  let content = {|
-version = ""
-description = ""
-requires = ""
-|} in
+  let content = "\
+version = \"\"\n\
+description = \"\"\n\
+requires = \"\"\n" in
   let pkg = parse_meta_string content "empty" in
   assert_equal ~expected:"" ~actual:pkg.Meta.Pkg.version ~name:"empty version"
 
 let test_simple_archive () =
-  let content = {|
-archive(byte) = "test.cma"
-archive(native) = "test.cmxa"  
-|} in
+  let content = "\
+archive(byte) = \"test.cma\"\n\
+archive(native) = \"test.cmxa\"\n" in
   let pkg = parse_meta_string content "test" in
   let has_byte =
     List.exists (fun (preds, _) -> List.mem Meta.Predicate.Byte preds) pkg.Meta.Pkg.archives
@@ -65,71 +65,64 @@ archive(native) = "test.cmxa"
   if has_byte && has_native then
     Success
   else
-    Failure "Missing byte or native archives"
+    TestFailure "Missing byte or native archives"
 
 let test_basic_package () =
-  let content =
-    {|
-version = "1.0"
-package "sub" (
-  description = "Subpackage"
-  archive(byte) = "sub.cma"
-)
-|}
+  let content = "\
+version = \"1.0\"\n\
+package \"sub\" (\n\
+  description = \"Subpackage\"\n\
+  archive(byte) = \"sub.cma\"\n\
+)\n"
   in
   let pkg = parse_meta_string content "parent" in
   match pkg.Meta.Pkg.subs with
   | [ sub ] ->
       assert_equal ~expected:"Subpackage" ~actual:sub.Meta.Pkg.description
         ~name:"subpackage description"
-  | _ -> Failure "Expected exactly one subpackage"
+  | _ -> TestFailure "Expected exactly one subpackage"
 
 (* Difficult test cases *)
 
 let test_multiline_values () =
-  let content = {|
-requires =
-"unix
- str  
- bigarray"
-description = "Multi
-line
-description"
-|} in
+  let content = "\
+requires =\n\
+\"unix\n\
+ str  \n\
+ bigarray\"\n\
+description = \"Multi\n\
+line\n\
+description\"\n" in
   try
-    let pkg = parse_meta_string content "multiline" in
+    let _pkg = parse_meta_string content "multiline" in
     (* If parsing succeeds, check if requires were parsed *)
     Success
   with
   | Meta.MetaParseError _ ->
-      Failure "Failed to parse multiline values (expected to fail with current parser)"
-  | _ -> Failure "Unexpected error parsing multiline values"
+      TestFailure "Failed to parse multiline values (expected to fail with current parser)"
+  | _ -> TestFailure "Unexpected error parsing multiline values"
 
 let test_negated_predicates () =
-  let content =
-    {|
-requires(-mt) = "single_threaded_lib"
-requires(mt) = "threaded_lib"
-archive(byte,-debug) = "release.cma"
-archive(byte,debug) = "debug.cma"
-|}
+  let content = "\
+requires(-mt) = \"single_threaded_lib\"\n\
+requires(mt) = \"threaded_lib\"\n\
+archive(byte,-debug) = \"release.cma\"\n\
+archive(byte,debug) = \"debug.cma\"\n"
   in
   try
-    let pkg = parse_meta_string content "negated" in
+    let _pkg = parse_meta_string content "negated" in
     Success
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Negated predicates failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Negated predicates failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_unknown_fields () =
-  let content =
-    {|
-version = "1.0"
-library_kind = "ppx_rewriter"
-custom_field = "custom_value"
-xen_linkopts = "-lxen"
-browse_interfaces = "Unit name: Test"
-|}
+  let content = "\
+version = \"1.0\"\n\
+library_kind = \"ppx_rewriter\"\n\
+custom_field = \"custom_value\"\n\
+xen_linkopts = \"-lxen\"\n\
+browse_interfaces = \"Unit name: Test\"\n"
   in
   try
     let pkg = parse_meta_string content "unknown" in
@@ -143,72 +136,64 @@ browse_interfaces = "Unit name: Test"
     if has_library_kind || has_custom_field then
       Success
     else
-      Failure "Unknown fields not stored in assignments"
+      TestFailure "Unknown fields not stored in assignments"
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Unknown fields failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Unknown fields failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_complex_predicates () =
-  let content =
-    {|
-archive(byte,mt,mt_posix) = "threads_posix.cma"
-archive(native,mt,mt_vm) = "threads_vm.cmxa"
-requires(ppx_driver,byte) = "ppx_lib"
-warning(-mt,-debug) = "Missing thread support"
-|}
+  let content = "\
+archive(byte,mt,mt_posix) = \"threads_posix.cma\"\n\
+archive(native,mt,mt_vm) = \"threads_vm.cmxa\"\n\
+requires(ppx_driver,byte) = \"ppx_lib\"\n\
+warning(-mt,-debug) = \"Missing thread support\"\n"
   in
   try
-    let pkg = parse_meta_string content "complex" in
+    let _pkg = parse_meta_string content "complex" in
     Success
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Complex predicates failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Complex predicates failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_plugin_syntax () =
-  let content =
-    {|
-plugin(byte) = "test.cma"
-plugin(native) = "test.cmxs"
-archive(byte,plugin) = "test_plugin.cma"
-|}
+  let content = "\
+plugin(byte) = \"test.cma\"\n\
+plugin(native) = \"test.cmxs\"\n\
+archive(byte,plugin) = \"test_plugin.cma\"\n"
   in
   try
-    let pkg = parse_meta_string content "plugin" in
+    let _pkg = parse_meta_string content "plugin" in
     Success
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Plugin syntax failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Plugin syntax failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_ppx_syntax () =
-  let content =
-    {|
-ppx(-ppx_driver,-custom_ppx) = "./ppx.exe --as-ppx"
-ppx(ppx_driver) = "ppx_driver.exe"
-ppxopt(-ppx_driver) = "-package deriving"
-|}
+  let content = "\
+ppx(-ppx_driver,-custom_ppx) = \"./ppx.exe --as-ppx\"\n\
+ppx(ppx_driver) = \"ppx_driver.exe\"\n\
+ppxopt(-ppx_driver) = \"-package deriving\"\n"
   in
   try
-    let pkg = parse_meta_string content "ppx" in
+    let _pkg = parse_meta_string content "ppx" in
     Success
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("PPX syntax failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("PPX syntax failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_nested_packages () =
-  let content =
-    {|
-version = "1.0"
-package "level1" (
-  version = "1.1"
-  package "level2" (
-    version = "1.2" 
-    archive(byte) = "deep.cma"
-    package "level3" (
-      description = "Deep nesting"
-    )
-  )
-)
-|}
+  let content = "\
+version = \"1.0\"\n\
+package \"level1\" (\n\
+  version = \"1.1\"\n\
+  package \"level2\" (\n\
+    version = \"1.2\"\n\
+    archive(byte) = \"deep.cma\"\n\
+    package \"level3\" (\n\
+      description = \"Deep nesting\"\n\
+    )\n\
+  )\n\
+)\n"
   in
   try
     let pkg = parse_meta_string content "nested" in
@@ -221,23 +206,21 @@ package "level1" (
             | [ level3 ] ->
                 assert_equal ~expected:"Deep nesting" ~actual:level3.Meta.Pkg.description
                   ~name:"nested package"
-            | _ -> Failure "Expected level3 package")
-        | _ -> Failure "Expected level2 package")
-    | _ -> Failure "Expected level1 package"
+            | _ -> TestFailure "Expected level3 package")
+        | _ -> TestFailure "Expected level2 package")
+    | _ -> TestFailure "Expected level1 package"
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Nested packages failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Nested packages failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 (* Edge cases that should break current parser *)
 
 let test_append_operator () =
-  let content =
-    {|
-archive(byte) = "base.cma"
-archive(byte) += "extra.cma"
-requires = "unix"
-requires += "str"
-|}
+  let content = "\
+archive(byte) = \"base.cma\"\n\
+archive(byte) += \"extra.cma\"\n\
+requires = \"unix\"\n\
+requires += \"str\"\n"
   in
   try
     let pkg = parse_meta_string content "append" in
@@ -246,70 +229,64 @@ requires += "str"
     if has_append then
       Success
     else
-      Failure "Append operator not working correctly"
+      TestFailure "Append operator not working correctly"
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Append operator failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Append operator failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_comments_and_whitespace () =
-  let content =
-    {|
-# This is a comment
-version = "1.0"   # End of line comment
-
-# Empty lines and spacing
-description = "Test"
-
-    # Indented comment
-archive(byte) = "test.cma"
-|}
+  let content = "\
+# This is a comment\n\
+version = \"1.0\"   # End of line comment\n\
+\n\
+# Empty lines and spacing\n\
+description = \"Test\"\n\
+\n\
+    # Indented comment\n\
+archive(byte) = \"test.cma\"\n"
   in
   try
     let pkg = parse_meta_string content "comments" in
     assert_equal ~expected:"1.0" ~actual:pkg.Meta.Pkg.version ~name:"version with comments"
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Comments failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Comments failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_real_world_ppxlib () =
   (* Based on actual ppxlib META file *)
-  let content =
-    {|
-version = "0.36.0"
-description = ""
-requires =
-"compiler-libs.common
- ocaml-compiler-libs.shadow
- ppx_derivers"
-archive(byte) = "ppxlib.cma"
-archive(native) = "ppxlib.cmxa"
-plugin(byte) = "ppxlib.cma"
-plugin(native) = "ppxlib.cmxs"
-|}
+  let content = "\
+version = \"0.36.0\"\n\
+description = \"\"\n\
+requires =\n\
+\"compiler-libs.common\n\
+ ocaml-compiler-libs.shadow\n\
+ ppx_derivers\"\n\
+archive(byte) = \"ppxlib.cma\"\n\
+archive(native) = \"ppxlib.cmxa\"\n\
+plugin(byte) = \"ppxlib.cma\"\n\
+plugin(native) = \"ppxlib.cmxs\"\n"
   in
   try
-    let pkg = parse_meta_string content "ppxlib" in
+    let _pkg = parse_meta_string content "ppxlib" in
     Success
   with
-  | Meta.MetaParseError (_, msg) -> Failure ("Real ppxlib META failed: " ^ msg)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.MetaParseError (_, msg) -> TestFailure ("Real ppxlib META failed: " ^ msg)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_malformed_syntax () =
-  let content =
-    {|
-version = "1.0"
-broken_field_no_value =
-archive(byte) = 
-requires = unix str
-|}
+  let content = "\
+version = \"1.0\"\n\
+broken_field_no_value =\n\
+archive(byte) =\n\
+requires = unix str\n"
   in
   (* This should fail to parse *)
   try
     let _ = parse_meta_string content "malformed" in
-    Failure "Expected malformed syntax to fail, but it succeeded"
+    TestFailure "Expected malformed syntax to fail, but it succeeded"
   with
   | Meta.MetaParseError _ -> Success
-  | exn -> Failure ("Expected MetaParseError, got: " ^ Printexc.to_string exn)
+  | exn -> TestFailure ("Expected MetaParseError, got: " ^ Printexc.to_string exn)
 
 let test_libname_parsing () =
   let libname_str = "ppx_stable_witness.stable_witness" in
@@ -324,7 +301,7 @@ let test_libname_parsing () =
   then
     Success
   else
-    Failure "Libname parsing incorrect"
+    TestFailure "Libname parsing incorrect"
 
 let test_ppx_stable_witness_findlib () =
   FindlibConf.load ();
@@ -335,10 +312,10 @@ let test_ppx_stable_witness_findlib () =
     if resolved_pkg.Meta.Pkg.name = "stable_witness" then
       Success
     else
-      Failure ("Expected stable_witness package, got: " ^ resolved_pkg.Meta.Pkg.name)
+      TestFailure ("Expected stable_witness package, got: " ^ resolved_pkg.Meta.Pkg.name)
   with
-  | Meta.LibraryNotFound name -> Failure ("LibraryNotFound: " ^ name)
-  | exn -> Failure ("Unexpected error: " ^ Printexc.to_string exn)
+  | Meta.LibraryNotFound name -> TestFailure ("LibraryNotFound: " ^ name)
+  | exn -> TestFailure ("Unexpected error: " ^ Printexc.to_string exn)
 
 let test_metacache_consistency () =
   FindlibConf.load ();
@@ -353,11 +330,11 @@ let test_metacache_consistency () =
     if cached_pkg.Meta.Pkg.name = "stable_witness" then
       Success
     else
-      Failure ("Expected stable_witness from cache, got: " ^ cached_pkg.Meta.Pkg.name)
+      TestFailure ("Expected stable_witness from cache, got: " ^ cached_pkg.Meta.Pkg.name)
   with
-  | Meta.LibraryNotFound name -> Failure ("LibraryNotFound in cache test: " ^ name)
-  | Dependencies.DependencyMissing name -> Failure ("DependencyMissing in cache test: " ^ name)
-  | exn -> Failure ("Cache test error: " ^ Printexc.to_string exn)
+  | Meta.LibraryNotFound name -> TestFailure ("LibraryNotFound in cache test: " ^ name)
+  | Dependencies.DependencyMissing name -> TestFailure ("DependencyMissing in cache test: " ^ name)
+  | exn -> TestFailure ("Cache test error: " ^ Printexc.to_string exn)
 
 (* Test suite *)
 

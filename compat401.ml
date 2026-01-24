@@ -9,4 +9,10 @@ let bytes_index_from = String.index_from
 
 let buffer_add_subbytes = Buffer.add_substring
 
+let string_uncapitalize = String.uncapitalize
+let string_capitalize = String.capitalize
+let string_lowercase = String.lowercase
+let string_uppercase = String.uppercase
+let char_uppercase = Char.uppercase
+
 include Compat_common

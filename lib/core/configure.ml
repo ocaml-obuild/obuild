@@ -126,8 +126,8 @@ let check_extra_tools proj_file =
 let get_flags hash =
   Hashtbl.fold
     (fun k v acc ->
-      if string_startswith "flag-" k then
-        (string_drop 5 k, bool_of_string v) :: acc
+      if String_utils.startswith "flag-" k then
+        (String_utils.drop 5 k, bool_of_string v) :: acc
       else
         acc)
     hash []
@@ -147,7 +147,7 @@ let set_opts hashtable =
 let check_ocaml () =
   let ocamlCfg = Prog.get_ocaml_config () in
   let ocaml_ver = Hashtbl.find ocamlCfg "version" in
-  let ver = string_split '.' ocaml_ver in
+  let ver = String_utils.split '.' ocaml_ver in
   (match ver with
   | major :: minor :: _ ->
       if int_of_string major < 4 then gconf.bin_annot <- false;
@@ -160,8 +160,9 @@ let run proj_file user_flags user_opts =
   let _ = check_ocaml () in
   (* Auto-detect CPU count and set default parallelism *)
   let cpu_count = Utils.get_cpu_count () in
-  verbose Report "Detected %d CPU core%s, setting default parallelism to %d\n"
-    cpu_count (if cpu_count = 1 then "" else "s") cpu_count;
+  verbose Report "Detected %d CPU core%s, setting default parallelism to %d\n" cpu_count
+    (if cpu_count = 1 then "" else "s")
+    cpu_count;
   gconf.parallel_jobs <- cpu_count;
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
@@ -173,7 +174,7 @@ let run proj_file user_flags user_opts =
         (* set opts and return the flags *)
         Hashtbl.iter
           (fun k _ ->
-            if not (string_startswith "flag-" k) then
+            if not (String_utils.startswith "flag-" k) then
               Gconf.set_target_options k (bool_of_opt h k))
           h;
         get_flags h

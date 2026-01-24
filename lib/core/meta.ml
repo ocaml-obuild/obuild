@@ -45,7 +45,9 @@ module Predicate = struct
     if s.[0] = '-' then
       Neg (of_string (String.sub s 1 (String.length s - 1)))
     else
-      match s with
+      match
+        s
+      with
       | "byte" -> Byte
       | "native" -> Native
       | "toploop" -> Toploop
@@ -240,10 +242,8 @@ let path_warning = ref false
 
 (** META File Tokenizer and Parser
 
-    This module handles tokenizing and parsing OCamlfind META files.
-    META files describe OCaml package metadata including dependencies,
-    compilation flags, and library locations.
- *)
+    This module handles tokenizing and parsing OCamlfind META files. META files describe OCaml
+    package metadata including dependencies, compilation flags, and library locations. *)
 module Token = struct
   (** Token types for META file lexer *)
   type t =
@@ -278,13 +278,12 @@ module Token = struct
 
   (** Tokenize META file content
 
-      Converts META file string into a list of tokens.
-      Handles comments, strings, identifiers, and operators.
+      Converts META file string into a list of tokens. Handles comments, strings, identifiers, and
+      operators.
 
       @param name Package name (for error messages)
       @param s META file content
-      @return List of tokens
-   *)
+      @return List of tokens *)
   let tokenize name s =
     let line = ref 1 in
     let lineoff = ref 0 in
@@ -315,7 +314,9 @@ module Token = struct
          else
            let c =
              if !in_escape then
-               match s.[!i] with
+               match
+                 s.[!i]
+               with
                | '\\' -> '\\'
                | 'n' -> '\n'
                | 't' -> '\t'
@@ -331,9 +332,7 @@ module Token = struct
       done;
       (* Check if string was properly closed *)
       if !i >= len then
-        let s =
-          sprintf "%d.%d: meta lexing error: unclosed string literal" !line (o - !lineoff)
-        in
+        let s = sprintf "%d.%d: meta lexing error: unclosed string literal" !line (o - !lineoff) in
         raise (MetaParseError (name, s))
       else
         (Buffer.contents buf, !i + 1)
@@ -408,15 +407,22 @@ module Token = struct
             let deps =
               List.map (fun r -> Libname.of_string r)
               $ (List.filter (fun x -> x <> "")
-                $ string_split_pred (fun c -> List.mem c [ ','; ' '; '\n'; '\r'; '\t' ]) reqs)
+                $ String_utils.split_pred (fun c -> List.mem c [ ','; ' '; '\n'; '\r'; '\t' ]) reqs
+                )
             in
             parse pkg_name
               { acc with Pkg.requires = (preds, List.rev deps) :: acc.Pkg.requires }
-              expecting_rparen
-              xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing requires failed: expected '=' or '+=' followed by quoted dependency list")))
-    | ID "directory" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.directory = dir } expecting_rparen xs
-    | ID "description" :: EQ :: S dir :: xs -> parse pkg_name { acc with Pkg.description = dir } expecting_rparen xs
+              expecting_rparen xs3
+        | _ ->
+            raise
+              (MetaParseError
+                 ( pkg_name,
+                   "parsing requires failed: expected '=' or '+=' followed by quoted dependency \
+                    list" )))
+    | ID "directory" :: EQ :: S dir :: xs ->
+        parse pkg_name { acc with Pkg.directory = dir } expecting_rparen xs
+    | ID "description" :: EQ :: S dir :: xs ->
+        parse pkg_name { acc with Pkg.description = dir } expecting_rparen xs
     | ID "browse_interfaces" :: EQ :: S _ :: xs -> parse pkg_name acc expecting_rparen xs
     | ID "warning" :: xs -> (
         let preds, xs2 = parse_predicate_list pkg_name "archive" xs in
@@ -424,7 +430,10 @@ module Token = struct
         | EQ :: S v :: xs3 ->
             let nacc = { acc with Pkg.warning = acc.Pkg.warning @ [ (preds, v) ] } in
             parse pkg_name nacc expecting_rparen xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing warning failed: expected '=' followed by quoted string")))
+        | _ ->
+            raise
+              (MetaParseError
+                 (pkg_name, "parsing warning failed: expected '=' followed by quoted string")))
     | ID "archive" :: xs -> (
         let preds, xs2 = parse_predicate_list pkg_name "archive" xs in
         match xs2 with
@@ -436,7 +445,11 @@ module Token = struct
         | EQ :: S v :: xs3 ->
             let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [ (preds, v) ] } in
             parse pkg_name nacc expecting_rparen xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing archive failed: expected '=' or '+=' followed by quoted string")))
+        | _ ->
+            raise
+              (MetaParseError
+                 (pkg_name, "parsing archive failed: expected '=' or '+=' followed by quoted string"))
+        )
     | ID "plugin" :: xs -> (
         let preds, xs2 = parse_predicate_list pkg_name "plugin" xs in
         let preds = Predicate.Plugin :: preds in
@@ -449,30 +462,54 @@ module Token = struct
         | EQ :: S v :: xs3 ->
             let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [ (preds, v) ] } in
             parse pkg_name nacc expecting_rparen xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing plugin failed: expected '=' or '+=' followed by quoted plugin path")))
-    | ID "preprocessor" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.preprocessor = v } expecting_rparen xs
+        | _ ->
+            raise
+              (MetaParseError
+                 ( pkg_name,
+                   "parsing plugin failed: expected '=' or '+=' followed by quoted plugin path" )))
+    | ID "preprocessor" :: EQ :: S v :: xs ->
+        parse pkg_name { acc with Pkg.preprocessor = v } expecting_rparen xs
     | ID "ppx" :: xs -> (
         let preds, xs2 = parse_predicate_list pkg_name "ppx" xs in
         match xs2 with
-        | EQ :: S v :: xs3 -> parse pkg_name { acc with Pkg.ppx = Some (preds, v) } expecting_rparen xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing ppx failed: expected '=' followed by quoted preprocessor path")))
+        | EQ :: S v :: xs3 ->
+            parse pkg_name { acc with Pkg.ppx = Some (preds, v) } expecting_rparen xs3
+        | _ ->
+            raise
+              (MetaParseError
+                 (pkg_name, "parsing ppx failed: expected '=' followed by quoted preprocessor path"))
+        )
     | ID "ppxopt" :: xs -> (
         let preds, xs2 = parse_predicate_list pkg_name "ppxopt" xs in
         match xs2 with
         | PLUSEQ :: S v :: xs3 | EQ :: S v :: xs3 ->
-            parse pkg_name { acc with Pkg.ppxopt = acc.Pkg.ppxopt @ [ (preds, v) ] } expecting_rparen xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing ppxopt failed: expected '=' or '+=' followed by quoted options")))
-    | ID "version" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.version = v } expecting_rparen xs
-    | ID "exists_if" :: EQ :: S v :: xs -> parse pkg_name { acc with Pkg.exists_if = v } expecting_rparen xs
+            parse pkg_name
+              { acc with Pkg.ppxopt = acc.Pkg.ppxopt @ [ (preds, v) ] }
+              expecting_rparen xs3
+        | _ ->
+            raise
+              (MetaParseError
+                 (pkg_name, "parsing ppxopt failed: expected '=' or '+=' followed by quoted options"))
+        )
+    | ID "version" :: EQ :: S v :: xs ->
+        parse pkg_name { acc with Pkg.version = v } expecting_rparen xs
+    | ID "exists_if" :: EQ :: S v :: xs ->
+        parse pkg_name { acc with Pkg.exists_if = v } expecting_rparen xs
     | ID "error" :: LPAREN :: xs -> (
         let rec consume = function
           | RPAREN :: zs -> zs
           | _ :: zs -> consume zs
-          | [] -> raise (MetaParseError (pkg_name, "unexpected EOF in error field (missing closing parenthesis)"))
+          | [] ->
+              raise
+                (MetaParseError
+                   (pkg_name, "unexpected EOF in error field (missing closing parenthesis)"))
         in
         match consume xs with
         | EQ :: S _ :: xs2 -> parse pkg_name acc expecting_rparen xs2
-        | _ -> raise (MetaParseError (pkg_name, "parsing error field failed, expected '=' after closing parenthesis")))
+        | _ ->
+            raise
+              (MetaParseError
+                 (pkg_name, "parsing error field failed, expected '=' after closing parenthesis")))
     | ID "linkopts" :: xs -> (
         let preds, xs2 = parse_predicate_list pkg_name "linkopts" xs in
         match xs2 with
@@ -482,11 +519,14 @@ module Token = struct
                 acc with
                 Pkg.linkopts = ((if preds = [] then None else Some preds), s) :: acc.Pkg.linkopts;
               }
-              expecting_rparen
-              xs3
-        | _ -> raise (MetaParseError (pkg_name, "parsing linkopts failed, expected '=' after predicates")))
+              expecting_rparen xs3
+        | _ ->
+            raise
+              (MetaParseError (pkg_name, "parsing linkopts failed, expected '=' after predicates")))
     | ID stuff :: EQ :: S stuffVal :: xs ->
-        parse pkg_name { acc with Pkg.assignment = (stuff, stuffVal) :: acc.Pkg.assignment } expecting_rparen xs
+        parse pkg_name
+          { acc with Pkg.assignment = (stuff, stuffVal) :: acc.Pkg.assignment }
+          expecting_rparen xs
     | x :: xs ->
         raise
           (MetaParseError
@@ -548,8 +588,8 @@ let resolve_directory stdlib basePath directory =
   | "^" -> path_dirname basePath
   | o -> (
       match o.[0] with
-      | '^' -> path_dirname basePath <//> fp (string_drop 1 o)
-      | '+' -> stdlib <//> fp (string_drop 1 o)
+      | '^' -> path_dirname basePath <//> fp (String_utils.drop 1 o)
+      | '+' -> stdlib <//> fp (String_utils.drop 1 o)
       | _ ->
           let fpo = fp o in
           if Filepath.is_absolute fpo then
@@ -561,14 +601,13 @@ let get_include_dir_with_subpath stdlib ((path, pkg) : t) subnames : filepath =
   let basePath = path_dirname path in
   let rec buildPath currentPath remainingSubnames currentPkg =
     match remainingSubnames with
-    | [] -> 
-        currentPath
-    | subname :: rest ->
+    | [] -> currentPath
+    | subname :: rest -> (
         try
           let subpkg = List.find (fun spkg -> spkg.Pkg.name = subname) currentPkg.Pkg.subs in
           let newPath = resolve_directory stdlib currentPath subpkg.Pkg.directory in
           buildPath newPath rest subpkg
-        with Not_found -> raise (SubpackageNotFound subname)
+        with Not_found -> raise (SubpackageNotFound subname))
   in
   buildPath basePath subnames pkg
 

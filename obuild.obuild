@@ -47,7 +47,7 @@ extra-srcs: bootstrap
 
 
 library obuild_base
-  modules: compat_common, compat, filepath, filesystem, fugue, cli
+  modules: compat_common, compat, location, filepath, filesystem, fugue, string_utils, cli
   src-dir: lib/base
   build-deps: unix
 

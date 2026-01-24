@@ -299,7 +299,7 @@ let suggest_similar candidates target =
     | [] -> []
     | x :: xs -> if n <= 0 then [] else x :: take (n - 1) xs
   in
-  take 5 (List.filter (fun (_, d) -> d <= threshold) sorted |> List.map fst)
+  take 5 (List.map fst (List.filter (fun (_, d) -> d <= threshold) sorted))
 
 let suggest_command app name =
   suggest_similar (List.map (fun c -> c.cmd_name) app.app_commands) name
@@ -310,15 +310,15 @@ type config = (string, string) Hashtbl.t
 
 let parse_config_line line =
   (* Skip comments and empty lines *)
-  let trimmed = String.trim line in
+  let trimmed = String_utils.strip_spaces line in
   if String.length trimmed = 0 || trimmed.[0] = '#' then
     None
   else
     try
       let eq_pos = String.index trimmed '=' in
-      let key = String.trim (String.sub trimmed 0 eq_pos) in
+      let key = String_utils.strip_spaces (String.sub trimmed 0 eq_pos) in
       let value =
-        String.trim (String.sub trimmed (eq_pos + 1) (String.length trimmed - eq_pos - 1))
+        String_utils.strip_spaces (String.sub trimmed (eq_pos + 1) (String.length trimmed - eq_pos - 1))
       in
       Some (key, value)
     with Not_found -> None
@@ -368,7 +368,7 @@ let config_get_int config key =
 
 let config_get_bool config key =
   try
-    let value = String.lowercase_ascii (Hashtbl.find config key) in
+    let value = string_lowercase (Hashtbl.find config key) in
     match value with
     | "true" | "yes" | "1" | "on" -> Some true
     | "false" | "no" | "0" | "off" -> Some false
@@ -380,27 +380,26 @@ let config_get_bool config key =
 let generate_bash_completion app =
   let commands = String.concat " " (List.map (fun c -> c.cmd_name) app.app_commands) in
   Printf.sprintf
-    {|# Bash completion for %s
-_%s_completions() {
-    local cur prev
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-
-    # Complete commands
-    if [ $COMP_CWORD -eq 1 ]; then
-        COMPREPLY=( $(compgen -W "%s" -- "$cur") )
-        return 0
-    fi
-
-    # Complete global flags
-    local flags="--help --version --verbose --quiet --debug --color"
-    COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
-    return 0
-}
-
-complete -F _%s_completions %s
-|}
+    "# Bash completion for %s\n\
+     _%s_completions() {\n\
+    \    local cur prev\n\
+    \    COMPREPLY=()\n\
+    \    cur=\"${COMP_WORDS[COMP_CWORD]}\"\n\
+    \    prev=\"${COMP_WORDS[COMP_CWORD-1]}\"\n\
+     \n\
+    \    # Complete commands\n\
+    \    if [ $COMP_CWORD -eq 1 ]; then\n\
+    \        COMPREPLY=( $(compgen -W \"%s\" -- \"$cur\") )\n\
+    \        return 0\n\
+    \    fi\n\
+     \n\
+    \    # Complete global flags\n\
+    \    local flags=\"--help --version --verbose --quiet --debug --color\"\n\
+    \    COMPREPLY=( $(compgen -W \"$flags\" -- \"$cur\") )\n\
+    \    return 0\n\
+     }\n\
+     \n\
+     complete -F _%s_completions %s\n"
     app.app_name app.app_name commands app.app_name app.app_name
 
 let generate_zsh_completion app =
@@ -409,32 +408,31 @@ let generate_zsh_completion app =
       (List.map (fun c -> Printf.sprintf "'%s:%s'" c.cmd_name c.cmd_doc) app.app_commands)
   in
   Printf.sprintf
-    {|#compdef %s
-
-_%s() {
-  local -a commands
-  commands=(
-    %s
-  )
-
-  _arguments -C \
-    '(- 1 *)'{-h,--help}'[Show help message]' \
-    '(- 1 *)--version[Show version information]' \
-    {-v,--verbose}'[Verbose output]' \
-    {-q,--quiet}'[Quiet mode]' \
-    '--color[Enable colored output]' \
-    '1: :->cmds' \
-    '*:: :->args' && return 0
-
-  case "$state" in
-    cmds)
-      _describe -t commands 'command' commands
-      ;;
-  esac
-}
-
-_%s "$@"
-|}
+    "#compdef %s\n\
+     \n\
+     _%s() {\n\
+    \  local -a commands\n\
+    \  commands=(\n\
+    \    %s\n\
+    \  )\n\
+     \n\
+    \  _arguments -C \\\n\
+    \    '(- 1 *)'{-h,--help}'[Show help message]' \\\n\
+    \    '(- 1 *)--version[Show version information]' \\\n\
+    \    {-v,--verbose}'[Verbose output]' \\\n\
+    \    {-q,--quiet}'[Quiet mode]' \\\n\
+    \    '--color[Enable colored output]' \\\n\
+    \    '1: :->cmds' \\\n\
+    \    '*:: :->args' && return 0\n\
+     \n\
+    \  case \"$state\" in\n\
+    \    cmds)\n\
+    \      _describe -t commands 'command' commands\n\
+    \      ;;\n\
+    \  esac\n\
+     }\n\
+     \n\
+     _%s \"$@\"\n"
     app.app_name app.app_name cmd_list app.app_name
 
 let generate_fish_completion app =
@@ -447,18 +445,17 @@ let generate_fish_completion app =
          app.app_commands)
   in
   Printf.sprintf
-    {|# Fish completion for %s
-
-# Global options
-complete -c %s -s h -l help -d 'Show help message'
-complete -c %s -l version -d 'Show version information'
-complete -c %s -s v -l verbose -d 'Verbose output'
-complete -c %s -s q -l quiet -d 'Quiet mode'
-complete -c %s -l color -d 'Enable colored output'
-
-# Commands
-%s
-|}
+    "# Fish completion for %s\n\
+     \n\
+     # Global options\n\
+     complete -c %s -s h -l help -d 'Show help message'\n\
+     complete -c %s -l version -d 'Show version information'\n\
+     complete -c %s -s v -l verbose -d 'Verbose output'\n\
+     complete -c %s -s q -l quiet -d 'Quiet mode'\n\
+     complete -c %s -l color -d 'Enable colored output'\n\
+     \n\
+     # Commands\n\
+     %s\n"
     app.app_name app.app_name app.app_name app.app_name app.app_name app.app_name completions
 
 (* ===== Help Generation ===== *)
@@ -599,7 +596,7 @@ let parse_args ?(stop_at_positional = false) specs argv start_idx =
                   with Failure _ -> raise (Parse_error (spec.arg_name ^ " requires an integer")))
               | `Bool _ -> (
                   try
-                    let bool_val = match String.lowercase_ascii value with
+                    let bool_val = match string_lowercase value with
                       | "true" | "yes" | "1" | "on" -> true
                       | "false" | "no" | "0" | "off" -> false
                       | _ -> raise (Parse_error (spec.arg_name ^ " requires true/false/yes/no/1/0"))

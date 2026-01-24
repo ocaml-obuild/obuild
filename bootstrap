@@ -21,8 +21,8 @@ else
 fi
 
 
-extmodules="compat fugue filepath filesystem cli"
-coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache obuild_lexer obuild_ast obuild_parser target dist project obuild_validate project_read analyze configure prepare_types ppx_resolver prepare buildprogs build exception"
+extmodules="compat_common compat location fugue string_utils filepath filesystem cli"
+coremodules="types gconf filetype dag libname pp expr utils modname taskdep helper dagutils process findlibConf scheduler prog dependencies generators hier meta metacache obuild_lexer obuild_ast obuild_parser target dist project obuild_validate project_read analyze configure prepare_types ppx_resolver prepare buildprogs build_cstubs build exception"
 commandmodules="sdist doc init help install"
 mainmodules="path_generated main"
 
@@ -129,14 +129,13 @@ if [ -x "$(command -v ocamlopt)" ]; then
 	time ./obuild.bootstrap build
 else
 	./obuild.bootstrap configure \
-		--disable-executable-native \
-		--disable-library-native \
-		--disable-library-plugin \
-		--enable-executable-bytecode \
-		--enable-library-bytecode
+		--executable-native=false \
+		--library-native=false \
+		--library-plugin=false \
+		--executable-bytecode=true \
+		--library-bytecode=true
 	time ./obuild.bootstrap build
 	mv dist/build/obuild/obuild.byte dist/build/obuild/obuild
-	mv dist/build/obuild-simple/obuild-simple.byte dist/build/obuild-simple/obuild-simple
 fi
 if [ -x dist/build/obuild/obuild ]; then
 	rm obuild.bootstrap

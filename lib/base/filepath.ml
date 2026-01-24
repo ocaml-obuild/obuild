@@ -36,7 +36,7 @@ let got_dirsep x =
 (* this only strip the last / if it exists *)
 let fp x =
   (* TODO fix it properly, however separator is always a single char *)
-  match string_split Filename.dir_sep.[0] x with
+  match String_utils.split Filename.dir_sep.[0] x with
   | "" :: p -> { absolute = true; filepath = List.filter (fun x -> x <> "." && x <> "") p }
   | p -> { absolute = false; filepath = List.filter (fun x -> x <> "." && x <> "") p }
 

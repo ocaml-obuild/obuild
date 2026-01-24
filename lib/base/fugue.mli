@@ -47,52 +47,6 @@ val id : 'a -> 'a
 val char_is_alphanum : char -> bool
 (** Test if character is alphanumeric (a-z, A-Z, or 0-9) *)
 
-(** {1 String operations} *)
-
-val string_split : ?limit:int -> char -> string -> string list
-(** [string_split ?limit c s] splits string [s] on character [c]. [limit] controls maximum number of
-    splits (-1 for unlimited) *)
-
-val string_split_pred : ?limit:int -> (char -> bool) -> string -> string list
-(** [string_split_pred ?limit p s] splits string [s] at characters satisfying predicate [p]. [limit]
-    controls maximum number of splits (-1 for unlimited) *)
-
-val string_startswith : string -> string -> bool
-(** [string_startswith prefix s] tests if [s] starts with [prefix] *)
-
-val string_endswith : string -> string -> bool
-(** [string_endswith suffix s] tests if [s] ends with [suffix] *)
-
-val string_strip_spaces : string -> string
-(** Remove leading and trailing whitespace (space, tab, newline) *)
-
-val string_split_at : int -> string -> string * string
-(** [string_split_at pos s] splits [s] at position [pos] into [(left, right)].
-    @raise Invalid_argument if [pos] > length of [s] *)
-
-val string_drop : int -> string -> string
-(** [string_drop n s] returns [s] with first [n] characters removed.
-    @raise Invalid_argument if [n] > length of [s] *)
-
-val string_init : int -> string -> string
-(** [string_init n s] returns [s] with last [n] characters removed.
-    @raise Invalid_argument if [n] > length of [s] *)
-
-val string_all : (char -> bool) -> string -> bool
-(** [string_all p s] tests if all characters in [s] satisfy predicate [p] *)
-
-val string_lines : string -> string list
-(** Split string on newline characters *)
-
-val string_words : string -> string list
-(** Split string on whitespace (space, newline, tab) *)
-
-val string_words_noempty : string -> string list
-(** Like {!string_words} but filters out empty strings *)
-
-val string_lines_noempty : string -> string list
-(** Like {!string_lines} but filters out empty strings *)
-
 (** {1 List utilities} *)
 
 val no_empty : 'a -> 'a list -> 'a list

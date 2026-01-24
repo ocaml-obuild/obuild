@@ -4,11 +4,10 @@
     or file system checks. Validation happens in a separate pass.
 *)
 
-(** Location information for error reporting *)
-type loc = Obuild_lexer.loc
+open Location
 
 (** A located value - pairs a value with its source location *)
-type 'a located = {
+type 'a located = 'a Location.located = {
   value: 'a;
   loc: loc;
 }

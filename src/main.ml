@@ -7,6 +7,9 @@ open Gconf
 open Lib
 open Cli
 
+(* Pipe operator for OCaml < 4.01 compatibility *)
+let (|>) x f = f x
+
 (* ===== Helper Functions ===== *)
 
 let read_setup () =
@@ -39,8 +42,8 @@ let cmd_configure =
         List.iter
           (fun s ->
             let tweak =
-              if string_startswith "-" s then
-                Configure.ClearFlag (string_drop 1 s)
+              if String_utils.startswith "-" s then
+                Configure.ClearFlag (String_utils.drop 1 s)
               else
                 Configure.SetFlag s
             in
@@ -440,7 +443,7 @@ let cmd_generate_merlin =
               test.Project.Test.target.Target.target_obits.Target.target_builddeps @ !all_deps)
           proj_file.Project.tests;
 
-        let unique_deps = List.sort_uniq compare !all_deps in
+        let unique_deps = list_uniq (List.sort compare !all_deps) in
         List.iter
           (fun (libname, _) ->
             Buffer.add_string merlin_content (Printf.sprintf "PKG %s\n" (Libname.to_string libname)))
@@ -528,7 +531,7 @@ let cmd_generate_opam =
               example.Project.Example.target.Target.target_obits.Target.target_builddeps @ !all_deps)
           proj_file.Project.examples;
 
-        let unique_deps = List.sort_uniq compare !all_deps in
+        let unique_deps = list_uniq (List.sort compare !all_deps) in
         if unique_deps <> [] then (
           Buffer.add_string opam_content "depends: [\n";
           Buffer.add_string opam_content "  \"ocaml\"\n";

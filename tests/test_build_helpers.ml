@@ -5,7 +5,7 @@ open Filesystem
 
 (** Create a temporary directory for testing *)
 let create_temp_dir prefix =
-  let temp_base = Filename.get_temp_dir_name () in
+  let temp_base = try Sys.getenv "TMPDIR" with Not_found -> "/tmp" in
   let rec try_create n =
     if n > 100 then
       failwith "Could not create temporary directory after 100 attempts"
@@ -129,9 +129,9 @@ let touch_file filepath =
   Unix.utimes filepath now now
 
 (** Sleep for a short duration (for mtime differences) *)
-(** Use 1.1 seconds to ensure filesystem mtime resolution *)
+(** Use 2 seconds to ensure filesystem mtime resolution *)
 let short_sleep () =
-  Unix.sleepf 1.1
+  ignore (Unix.select [] [] [] 1.1)
 
 (** Assert that file exists *)
 let assert_file_exists filepath =

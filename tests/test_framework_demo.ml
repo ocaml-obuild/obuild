@@ -15,8 +15,8 @@ let test_string_contains_failure () =
     ~needle:"Missing"
     ~name:"string missing" in
   match result with
-  | Failure _ -> Success  (* We expect this to fail *)
-  | Success -> Failure "Should have failed"
+  | TestFailure _ -> Success  (* We expect this to fail *)
+  | Success -> TestFailure "Should have failed"
 
 let test_no_exception_success () =
   assert_no_exception

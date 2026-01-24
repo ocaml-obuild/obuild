@@ -11,14 +11,13 @@ let test_ml_incremental_debug () =
       ("src/bar.ml", "let y = Foo.x + 1\n");
       ("src/baz.ml", "let z = Bar.y * 2\n");
     ]
-    ~obuild_content:{|name: incremental-test
-version: 1.0
-obuild-ver: 1
-
-library test
-  modules: Foo, Bar, Baz
-  src-dir: src
-|}
+    ~obuild_content:"name: incremental-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+library test\n\
+  modules: Foo, Bar, Baz\n\
+  src-dir: src\n"
     ~test_fn:(fun dir ->
       Printf.printf "Project directory: %s\n" dir;
 
@@ -102,16 +101,15 @@ let test_c_file_rebuild_debug () =
       ("src/cbits.h", "int add(int a, int b);\n");
       ("src/main.ml", "external add : int -> int -> int = \"add\"\nlet () = Printf.printf \"%d\\n\" (add 1 2)\n");
     ]
-    ~obuild_content:{|name: c-test
-version: 1.0
-obuild-ver: 1
-
-executable ctest
-  main-is: main.ml
-  src-dir: src
-  c-sources: cbits.c
-  c-dir: src
-|}
+    ~obuild_content:"name: c-test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+executable ctest\n\
+  main-is: main.ml\n\
+  src-dir: src\n\
+  c-sources: cbits.c\n\
+  c-dir: src\n"
     ~test_fn:(fun dir ->
       Printf.printf "Project directory: %s\n" dir;
 
@@ -146,7 +144,7 @@ executable ctest
         dir ^ "/dist/build/lib-test/cbits.c.o";
       ] in
 
-      let c_obj = List.find_opt Sys.file_exists possible_c_obj_paths in
+      let c_obj = Compat_common.SafeList.find_opt Sys.file_exists possible_c_obj_paths in
       let exe = dir ^ "/dist/build/ctest/ctest" in
 
       Printf.printf "\nC object file: %s\n"

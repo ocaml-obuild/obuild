@@ -80,16 +80,15 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
     Filesystem.mkdir_safe autogen_dir 0o755;
     let generated_types_name = cstubs.cstubs_generated_types in
     (* Write generated files to autogen directory - no placeholders needed *)
-    let target_file = autogen_dir </> fn (String.uncapitalize_ascii generated_types_name ^ ".ml") in
+    let target_file = autogen_dir </> fn (Compat.string_uncapitalize generated_types_name ^ ".ml") in
 
     (* Check if we have type description *)
     match cstubs.cstubs_type_description with
     | None ->
       (* No type description - generate empty types module *)
       let content = Printf.sprintf
-{|(* Auto-generated type bindings for %s *)
-(* No type description specified *)
-|}
+        "(* Auto-generated type bindings for %s *)\n\
+         (* No type description specified *)\n"
         (Libname.to_string lib)
       in
       Filesystem.write_file target_file content;
@@ -100,7 +99,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
       let bindings_hier = type_desc.Target.cstubs_functor in
       let bindings_parts = Hier.to_string bindings_hier in
       (* Split "Bindings.Types" into module "Bindings" and functor "Types" *)
-      let parts = String.split_on_char '.' bindings_parts in
+      let parts = String_utils.split '.' bindings_parts in
       let (bindings_module, types_functor) = match parts with
         | [m; f] -> (m, f)
         | [m] -> (m, "Types")
@@ -116,18 +115,17 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
          This properly handles structs defined in the user's Types functor. *)
       let discover_ml = autogen_dir </> fn "discover.ml" in
       let headers_str = String.concat "; "
-        (List.map (fun h -> Printf.sprintf {|"#include <%s>\n"|} h) cstubs.cstubs_headers) in
+        (List.map (fun h -> Printf.sprintf "\"#include <%s>\\n\"" h) cstubs.cstubs_headers) in
       let headers_list = if headers_str = "" then "[]" else Printf.sprintf "[%s]" headers_str in
       let discover_content = Printf.sprintf
-{|(* Auto-generated type discovery for %s using Cstubs_structs *)
-let () =
-  let headers = String.concat "" %s in
-  let fmt = Format.std_formatter in
-  Format.fprintf fmt "#include <stddef.h>@.";
-  Format.fprintf fmt "#include <stdint.h>@.";
-  Format.fprintf fmt "%%s" headers;
-  Cstubs_structs.write_c fmt (module %s.%s)
-|}
+        "(* Auto-generated type discovery for %s using Cstubs_structs *)\n\
+         let () =\n\
+        \  let headers = String.concat \"\" %s in\n\
+        \  let fmt = Format.std_formatter in\n\
+        \  Format.fprintf fmt \"#include <stddef.h>@.\";\n\
+        \  Format.fprintf fmt \"#include <stdint.h>@.\";\n\
+        \  Format.fprintf fmt \"%%s\" headers;\n\
+        \  Cstubs_structs.write_c fmt (module %s.%s)\n"
         (Libname.to_string lib)
         headers_list
         bindings_module
@@ -140,7 +138,7 @@ let () =
       let discover_exe = autogen_dir </> fn "discover.byte" in
       let ocamlc = Prog.get_ocamlc () in
       let ctypes_libs = get_ctypes_libs bstate in
-      let bindings_cmo = build_dir </> fn (String.uncapitalize_ascii bindings_module ^ ".cmo") in
+      let bindings_cmo = build_dir </> fn (Compat.string_uncapitalize bindings_module ^ ".cmo") in
       let include_args = List.concat [
         Utils.to_include_path_options ctypes_includes;
         Utils.to_include_path_options [build_dir];
@@ -162,11 +160,10 @@ let () =
         verbose Report "  Falling back to static type sizes\n%!";
         (* Fallback: generate static content *)
         let content = Printf.sprintf
-{|(* Auto-generated type bindings for %s *)
-(* Generated statically - type discovery compilation failed *)
-
-let size_t_size = %d
-|}
+          "(* Auto-generated type bindings for %s *)\n\
+           (* Generated statically - type discovery compilation failed *)\n\
+           \n\
+           let size_t_size = %d\n"
           (Libname.to_string lib)
           (Sys.word_size / 8)
         in
@@ -179,9 +176,8 @@ let size_t_size = %d
         | Process.Failure err ->
           verbose Report "  Warning: Failed to run discover: %s\n%!" err;
           let content = Printf.sprintf
-{|(* Auto-generated type bindings for %s *)
-let size_t_size = %d
-|}
+            "(* Auto-generated type bindings for %s *)\n\
+             let size_t_size = %d\n"
             (Libname.to_string lib)
             (Sys.word_size / 8)
           in
@@ -198,9 +194,9 @@ let size_t_size = %d
           let cc = Prog.get_cc () in
           let ocaml_include = Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config in
           (* Get ctypes include paths for ctypes_cstubs_internals.h *)
-          let ctypes_c_includes = List.concat_map
+          let ctypes_c_includes = List.concat (List.map
             (fun p -> ["-I"; fp_to_string p])
-            ctypes_includes in
+            ctypes_includes) in
           let compile_c_args = [cc; "-I"; ocaml_include] @ ctypes_c_includes @
             ["-o"; fp_to_string discover_c_exe; fp_to_string discover_c] in
 
@@ -209,9 +205,8 @@ let size_t_size = %d
           | Process.Failure err ->
             verbose Report "  Warning: Failed to compile discover.c: %s\n%!" err;
             let content = Printf.sprintf
-{|(* Auto-generated type bindings for %s *)
-let size_t_size = %d
-|}
+              "(* Auto-generated type bindings for %s *)\n\
+               let size_t_size = %d\n"
               (Libname.to_string lib)
               (Sys.word_size / 8)
             in
@@ -224,9 +219,8 @@ let size_t_size = %d
             | Process.Failure err ->
               verbose Report "  Warning: Failed to run C discover: %s\n%!" err;
               let content = Printf.sprintf
-{|(* Auto-generated type bindings for %s *)
-let size_t_size = %d
-|}
+                "(* Auto-generated type bindings for %s *)\n\
+                 let size_t_size = %d\n"
                 (Libname.to_string lib)
                 (Sys.word_size / 8)
               in
@@ -262,12 +256,11 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
     match cstubs.cstubs_function_description with
     | None ->
       (* No function description - generate minimal entry point *)
-      let entry_file = autogen_dir </> fn (String.uncapitalize_ascii entry_point_name ^ ".ml") in
+      let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
       let entry_content = Printf.sprintf
-{|(* Auto-generated entry point for %s *)
-module Types = %s
-module Functions = struct end
-|}
+        "(* Auto-generated entry point for %s *)\n\
+         module Types = %s\n\
+         module Functions = struct end\n"
         (Libname.to_string lib)
         generated_types
       in
@@ -275,15 +268,14 @@ module Functions = struct end
       (* Generate empty C stubs *)
       let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
       Filesystem.write_file c_stubs_file
-{|/* Auto-generated C stubs - no functions bound */
-#include <caml/mlvalues.h>
-|};
+        "/* Auto-generated C stubs - no functions bound */\n\
+         #include <caml/mlvalues.h>\n";
       verbose Report "  Generated %s (no functions)\n%!" (fp_to_string entry_file);
       Scheduler.FinishTask task
     | Some func_desc ->
       let bindings_hier = func_desc.Target.cstubs_functor in
       let bindings_parts = Hier.to_string bindings_hier in
-      let parts = String.split_on_char '.' bindings_parts in
+      let parts = String_utils.split '.' bindings_parts in
       let (bindings_module, functions_functor) = match parts with
         | [m; f] -> (m, f)
         | [m] -> (m, "Functions")
@@ -293,7 +285,7 @@ module Functions = struct end
       (* Get types functor name from type description *)
       let types_functor = match cstubs.cstubs_type_description with
         | Some type_desc ->
-          let type_parts = String.split_on_char '.' (Hier.to_string type_desc.Target.cstubs_functor) in
+          let type_parts = String_utils.split '.' (Hier.to_string type_desc.Target.cstubs_functor) in
           (match type_parts with
            | [_; f] -> f
            | [_] -> "Types"
@@ -311,17 +303,17 @@ module Functions = struct end
       ignore src_dirs;
 
       (* Path to compiled bindings module *)
-      let bindings_cmo = build_dir </> fn (String.uncapitalize_ascii bindings_module ^ ".cmo") in
+      let bindings_cmo = build_dir </> fn (Compat.string_uncapitalize bindings_module ^ ".cmo") in
 
       (* Generate stubgen.ml *)
       let stubgen_ml = autogen_dir </> fn "stubgen.ml" in
       let prefix = c_lib_name in
-      let entry_file_name = String.uncapitalize_ascii entry_point_name ^ ".ml" in
+      let entry_file_name = Compat.string_uncapitalize entry_point_name ^ ".ml" in
       let stubs_file_name = c_lib_name ^ "_stubs.c" in
 
       (* Generate a module name for the generated FOREIGN implementation *)
       let generated_foreign_name = c_lib_name ^ "_generated" in
-      let generated_foreign_file = String.uncapitalize_ascii generated_foreign_name ^ ".ml" in
+      let generated_foreign_file = Compat.string_uncapitalize generated_foreign_name ^ ".ml" in
 
       (* Convert concurrency policy to Cstubs module value string *)
       let concurrency_str = match cstubs.cstubs_concurrency with
@@ -338,46 +330,45 @@ module Functions = struct end
       in
 
       let stubgen_content = Printf.sprintf
-{|(* Auto-generated stub generator for %s *)
-let prefix = "%s"
-let autogen_dir = "%s"
-let ml_output_dir = "%s"
-
-let () =
-  (* Generate C stubs to autogen directory *)
-  let c_file = open_out (Filename.concat autogen_dir "%s") in
-  let c_fmt = Format.formatter_of_out_channel c_file in
-  Format.fprintf c_fmt "/* Auto-generated by ctypes.cstubs */\n";
-  Format.fprintf c_fmt "#include <caml/mlvalues.h>\n";
-  Format.fprintf c_fmt "#include <caml/memory.h>\n";
-  Format.fprintf c_fmt "#include <caml/alloc.h>\n";
-  Format.fprintf c_fmt "#include <caml/custom.h>\n";
-  Format.fprintf c_fmt "#include <caml/callback.h>\n";
-  Format.fprintf c_fmt "#include <caml/fail.h>\n";
-  Format.fprintf c_fmt "#include <string.h>\n";
-  Format.fprintf c_fmt "\n";
-  Cstubs.write_c c_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);
-  close_out c_file;
-
-  (* Generate FOREIGN implementation module to source directory *)
-  let foreign_file = open_out (Filename.concat ml_output_dir "%s") in
-  let foreign_fmt = Format.formatter_of_out_channel foreign_file in
-  Format.fprintf foreign_fmt "(* Auto-generated FOREIGN implementation for %s *)\n";
-  Cstubs.write_ml foreign_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);
-  close_out foreign_file;
-
-  (* Generate entry point that applies user's functor to generated module *)
-  let entry_file = open_out (Filename.concat ml_output_dir "%s") in
-  let entry_fmt = Format.formatter_of_out_channel entry_file in
-  Format.fprintf entry_fmt "(* Auto-generated entry point for %s *)\n";
-  Format.fprintf entry_fmt "(* Apply user's Types functor to generated TYPE implementation for struct layouts *)\n";
-  Format.fprintf entry_fmt "module Types = %s.%s(%s)\n\n";
-  Format.fprintf entry_fmt "(* Apply user's Functions functor to generated FOREIGN implementation *)\n";
-  Format.fprintf entry_fmt "module C_Functions = %s.%s(%s)\n";
-  close_out entry_file;
-
-  print_endline "Stub generation complete"
-|}
+        "(* Auto-generated stub generator for %s *)\n\
+         let prefix = \"%s\"\n\
+         let autogen_dir = \"%s\"\n\
+         let ml_output_dir = \"%s\"\n\
+         \n\
+         let () =\n\
+        \  (* Generate C stubs to autogen directory *)\n\
+        \  let c_file = open_out (Filename.concat autogen_dir \"%s\") in\n\
+        \  let c_fmt = Format.formatter_of_out_channel c_file in\n\
+        \  Format.fprintf c_fmt \"/* Auto-generated by ctypes.cstubs */\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <caml/mlvalues.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <caml/memory.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <caml/alloc.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <caml/custom.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <caml/callback.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <caml/fail.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"#include <string.h>\\n\";\n\
+        \  Format.fprintf c_fmt \"\\n\";\n\
+        \  Cstubs.write_c c_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);\n\
+        \  close_out c_file;\n\
+         \n\
+        \  (* Generate FOREIGN implementation module to source directory *)\n\
+        \  let foreign_file = open_out (Filename.concat ml_output_dir \"%s\") in\n\
+        \  let foreign_fmt = Format.formatter_of_out_channel foreign_file in\n\
+        \  Format.fprintf foreign_fmt \"(* Auto-generated FOREIGN implementation for %s *)\\n\";\n\
+        \  Cstubs.write_ml foreign_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);\n\
+        \  close_out foreign_file;\n\
+         \n\
+        \  (* Generate entry point that applies user's functor to generated module *)\n\
+        \  let entry_file = open_out (Filename.concat ml_output_dir \"%s\") in\n\
+        \  let entry_fmt = Format.formatter_of_out_channel entry_file in\n\
+        \  Format.fprintf entry_fmt \"(* Auto-generated entry point for %s *)\\n\";\n\
+        \  Format.fprintf entry_fmt \"(* Apply user's Types functor to generated TYPE implementation for struct layouts *)\\n\";\n\
+        \  Format.fprintf entry_fmt \"module Types = %s.%s(%s)\\n\\n\";\n\
+        \  Format.fprintf entry_fmt \"(* Apply user's Functions functor to generated FOREIGN implementation *)\\n\";\n\
+        \  Format.fprintf entry_fmt \"module C_Functions = %s.%s(%s)\\n\";\n\
+        \  close_out entry_file;\n\
+         \n\
+        \  print_endline \"Stub generation complete\"\n"
         (Libname.to_string lib)
         prefix
         (fp_to_string autogen_dir)
@@ -393,7 +384,7 @@ let () =
         (Libname.to_string lib)
         bindings_module types_functor generated_types
         bindings_module functions_functor
-        (String.capitalize_ascii generated_foreign_name)
+        (Compat.string_capitalize generated_foreign_name)
       in
       Filesystem.write_file stubgen_ml stubgen_content;
       verbose Report "  Generated %s\n%!" (fp_to_string stubgen_ml);
@@ -424,28 +415,26 @@ let () =
         verbose Report "  Warning: Failed to compile stubgen.ml: %s\n%!" err;
         verbose Report "  Falling back to placeholder stubs\n%!";
         (* Fallback: generate placeholder content *)
-        let entry_file = autogen_dir </> fn (String.uncapitalize_ascii entry_point_name ^ ".ml") in
+        let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
         let entry_content = Printf.sprintf
-{|(* Auto-generated entry point for %s *)
-(* Stub generation failed - placeholder *)
-
-module Types = %s
-
-module Functions = struct
-  (* Function stubs would be here *)
-end
-|}
+          "(* Auto-generated entry point for %s *)\n\
+           (* Stub generation failed - placeholder *)\n\
+           \n\
+           module Types = %s\n\
+           \n\
+           module Functions = struct\n\
+          \  (* Function stubs would be here *)\n\
+           end\n"
           (Libname.to_string lib)
           generated_types
         in
         Filesystem.write_file entry_file entry_content;
         let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
         Filesystem.write_file c_stubs_file
-{|/* Auto-generated C stubs - placeholder */
-#include <caml/mlvalues.h>
-#include <caml/memory.h>
-#include <caml/alloc.h>
-|};
+          "/* Auto-generated C stubs - placeholder */\n\
+           #include <caml/mlvalues.h>\n\
+           #include <caml/memory.h>\n\
+           #include <caml/alloc.h>\n";
         verbose Report "  Generated placeholder stubs\n%!";
         Scheduler.FinishTask task
       | Process.Success _ ->
@@ -455,21 +444,19 @@ end
         | Process.Failure err ->
           verbose Report "  Warning: Failed to run stubgen: %s\n%!" err;
           (* Fallback *)
-          let entry_file = autogen_dir </> fn (String.uncapitalize_ascii entry_point_name ^ ".ml") in
+          let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
           let entry_content = Printf.sprintf
-{|(* Auto-generated entry point for %s *)
-module Types = %s
-module Functions = struct end
-|}
+            "(* Auto-generated entry point for %s *)\n\
+             module Types = %s\n\
+             module Functions = struct end\n"
             (Libname.to_string lib)
             generated_types
           in
           Filesystem.write_file entry_file entry_content;
           let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
           Filesystem.write_file c_stubs_file
-{|/* Auto-generated C stubs */
-#include <caml/mlvalues.h>
-|};
+            "/* Auto-generated C stubs */\n\
+             #include <caml/mlvalues.h>\n";
           Scheduler.FinishTask task
         | Process.Success (output, _, _) ->
           verbose Report "  %s\n%!" output;

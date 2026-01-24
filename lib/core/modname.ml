@@ -40,7 +40,7 @@ let to_lexer = to_x ".mll"
 
 let atd_modname modname =
   if String.length modname > 2 then
-    let b, e = string_split_at (String.length modname - 2) modname in
+    let b, e = String_utils.split_at (String.length modname - 2) modname in
     match e with
     | "_t" | "_v" | "_j" -> b
     | _ -> modname

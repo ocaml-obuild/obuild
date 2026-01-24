@@ -4,7 +4,7 @@ open Printf
 
 type test_result = 
   | Success
-  | Failure of string
+  | TestFailure of string
 
 type test_case = {
   name: string;
@@ -19,28 +19,28 @@ let assert_equal ~expected ~actual ~name =
   if expected = actual then
     Success
   else
-    Failure (sprintf "Expected: %s, Got: %s" expected actual)
+    TestFailure (sprintf "Expected: %s, Got: %s" expected actual)
 
 let assert_true ~actual ~name =
   if actual then
     Success
   else  
-    Failure "Expected true, got false"
+    TestFailure "Expected true, got false"
 
 let assert_false ~actual ~name =
   if actual then
-    Failure "Expected false, got true"
+    TestFailure "Expected false, got true"
   else
     Success
 
 let assert_raises ~expected_exn ~test_func ~name =
   try
     let _ = test_func () in
-    Failure (sprintf "Expected exception %s, but no exception was raised"
+    TestFailure (sprintf "Expected exception %s, but no exception was raised"
              (Printexc.to_string expected_exn))
   with
   | exn when exn = expected_exn -> Success
-  | exn -> Failure (sprintf "Expected exception %s, got %s"
+  | exn -> TestFailure (sprintf "Expected exception %s, got %s"
                     (Printexc.to_string expected_exn)
                     (Printexc.to_string exn))
 
@@ -49,7 +49,7 @@ let assert_string_contains ~haystack ~needle ~name =
     let _ = Str.search_forward (Str.regexp_string needle) haystack 0 in
     Success
   with Not_found ->
-    Failure (sprintf "Expected string to contain '%s', but it didn't.\nActual: %s"
+    TestFailure (sprintf "Expected string to contain '%s', but it didn't.\nActual: %s"
              needle haystack)
 
 let assert_no_exception ~test_func ~name =
@@ -57,19 +57,19 @@ let assert_no_exception ~test_func ~name =
     let _ = test_func () in
     Success
   with exn ->
-    Failure (sprintf "Expected no exception, but got: %s" (Printexc.to_string exn))
+    TestFailure (sprintf "Expected no exception, but got: %s" (Printexc.to_string exn))
 
 let assert_exception_message ~test_func ~expected_substring ~name =
   try
     let _ = test_func () in
-    Failure "Expected exception to be raised, but no exception was raised"
+    TestFailure "Expected exception to be raised, but no exception was raised"
   with exn ->
     let msg = Printexc.to_string exn in
     try
       let _ = Str.search_forward (Str.regexp_string expected_substring) msg 0 in
       Success
     with Not_found ->
-      Failure (sprintf "Expected exception message to contain '%s', but got: %s"
+      TestFailure (sprintf "Expected exception message to contain '%s', but got: %s"
                expected_substring msg)
 
 let run_test test_case =
@@ -80,7 +80,7 @@ let run_test test_case =
     match test_case.test_func () with
     | Success -> 
         printf "PASS\n"
-    | Failure msg ->
+    | TestFailure msg ->
         printf "FAIL: %s\n" msg;
         incr failed_count;
         failed_tests := test_case.name :: !failed_tests

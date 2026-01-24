@@ -5,8 +5,9 @@
 *)
 
 open Filepath
-open Obuild_ast
 open Obuild_lexer
+open Obuild_ast
+open Location
 
 (** Validation error with location *)
 exception Validation_error of loc * string
@@ -59,7 +60,7 @@ let convert_extra_dep (ed : extra_dep) : (Hier.t * Hier.t) =
 
 (** Convert module name string to Hier.t *)
 let module_name_to_hier s =
-  Hier.make [Modname.wrap (String.capitalize_ascii s)]
+  Hier.make [Modname.wrap (Compat.string_capitalize s)]
 
 (* ============================================================ *)
 (* Convert C settings *)
@@ -120,8 +121,8 @@ let convert_cstubs_errno = function
 let convert_cstubs (cs : cstubs) : Target.target_cstubs =
   {
     Target.cstubs_external_library_name = cs.cstubs_external_lib_name;
-    cstubs_type_description = Option.map convert_cstubs_desc cs.cstubs_type_desc;
-    cstubs_function_description = Option.map convert_cstubs_desc cs.cstubs_func_desc;
+    cstubs_type_description = Compat.Option.map convert_cstubs_desc cs.cstubs_type_desc;
+    cstubs_function_description = Compat.Option.map convert_cstubs_desc cs.cstubs_func_desc;
     cstubs_generated_types = cs.cstubs_generated_types;
     cstubs_generated_entry_point = cs.cstubs_generated_entry;
     cstubs_headers = cs.cstubs_headers;
@@ -139,7 +140,7 @@ let convert_per (per : per_settings) : Target.target_extra =
     target_extra_builddeps = List.map convert_dependency per.per_build_deps;
     target_extra_oflags = per.per_oflags;
     target_extra_cflags = [];  (* per blocks don't have cflags in AST *)
-    target_extra_pp = Option.map Pp.Type.of_string per.per_pp;
+    target_extra_pp = Compat.Option.map Pp.Type.of_string per.per_pp;
   }
 
 (* ============================================================ *)
@@ -152,7 +153,7 @@ let convert_target_common name typ ?cstubs (tc : target_common) : Target.target 
     target_type = typ;
     target_cbits = convert_c_settings tc.c;
     target_obits = convert_ocaml_settings tc.ocaml;
-    target_cstubs = Option.map convert_cstubs cstubs;
+    target_cstubs = Compat.Option.map convert_cstubs cstubs;
     target_extras = List.map convert_per tc.per;
     target_buildable = convert_runtime_bool tc.buildable;
     target_installable = convert_runtime_bool tc.installable;
@@ -178,9 +179,9 @@ let rec convert_library (lib : library) : Project.Library.t =
          - generated-entry-point: entry module (e.g., C) *)
       let foreign_name = cs.cstubs_external_lib_name ^ "_generated" in
       let generated_modules = [
-        Hier.of_string (String.capitalize_ascii foreign_name);
-        Hier.of_string (String.capitalize_ascii cs.cstubs_generated_types);
-        Hier.of_string (String.capitalize_ascii cs.cstubs_generated_entry);
+        Hier.of_string (Compat.string_capitalize foreign_name);
+        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_types);
+        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_entry);
       ] in
       (* Add any that aren't already in the list *)
       List.fold_left (fun acc m ->
@@ -210,9 +211,9 @@ and convert_sublibrary parent_name (lib : library) : Project.Library.t =
     | Some cs ->
       let foreign_name = cs.cstubs_external_lib_name ^ "_generated" in
       let generated_modules = [
-        Hier.of_string (String.capitalize_ascii foreign_name);
-        Hier.of_string (String.capitalize_ascii cs.cstubs_generated_types);
-        Hier.of_string (String.capitalize_ascii cs.cstubs_generated_entry);
+        Hier.of_string (Compat.string_capitalize foreign_name);
+        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_types);
+        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_entry);
       ] in
       List.fold_left (fun acc m ->
         if List.mem m acc then acc else m :: acc
@@ -263,7 +264,7 @@ let convert_test (t : test) : Project.Test.t =
     Project.Test.name = t.test_name;
     main = fn t.test_main;
     target;
-    rundir = Option.map fp t.test_rundir;
+    rundir = Compat.Option.map fp t.test_rundir;
     runopt = t.test_run_params;
     type_ = Project.Test.ExitCode;
   }
@@ -358,14 +359,14 @@ let convert (proj : project) : Project.t =
   {
     Project.name = proj.project_name.value;
     version = proj.project_version.value;
-    synopsis = Option.value ~default:"" proj.project_synopsis;
-    description = Option.value ~default:"" proj.project_description;
-    license = Option.value ~default:"" proj.project_license;
-    license_file = Option.map fp proj.project_license_file;
+    synopsis = Compat.Option.value ~default:"" proj.project_synopsis;
+    description = Compat.Option.value ~default:"" proj.project_description;
+    license = Compat.Option.value ~default:"" proj.project_license;
+    license_file = Compat.Option.map fp proj.project_license_file;
     authors = proj.project_authors;
     obuild_ver = proj.project_obuild_ver.value;
-    ocaml_ver = Option.bind proj.project_ocaml_ver (fun s -> Expr.parse "ocaml-version" s);
-    homepage = Option.value ~default:"" proj.project_homepage;
+    ocaml_ver = Compat.Option.bind proj.project_ocaml_ver (fun s -> Expr.parse "ocaml-version" s);
+    homepage = Compat.Option.value ~default:"" proj.project_homepage;
     flags = List.map convert_flag proj.project_flags;
     libs = List.map convert_library proj.project_libs;
     exes = List.map convert_executable proj.project_exes;
@@ -374,7 +375,7 @@ let convert (proj : project) : Project.t =
     examples = List.map convert_example proj.project_examples;
     extra_srcs = List.map fp proj.project_extra_srcs;
     extra_tools = List.map fn proj.project_extra_tools;
-    configure_script = Option.map fp proj.project_configure_script;
+    configure_script = Compat.Option.map fp proj.project_configure_script;
     ocaml_extra_args = (match proj.project_ocaml_extra_args with
       | [] -> None
       | args -> Some args);
