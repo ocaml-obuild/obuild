@@ -8,7 +8,7 @@ open Lib
 open Cli
 
 (* Pipe operator for OCaml < 4.01 compatibility *)
-let (|>) x f = f x
+let ( |> ) x f = f x
 
 (* ===== Helper Functions ===== *)
 
@@ -224,7 +224,7 @@ let cmd_test =
         let _ = Configure.check proj_file false setup in
 
         if not (Gconf.get_target_option "build-tests") then (
-          eprintf "error: building tests are disabled, re-configure with --enable-tests\n";
+          eprintf "error: building tests are disabled, re-configure with --tests=true\n";
           exit 1);
 
         let test_targets = List.map Project.Test.to_target proj_file.Project.tests in

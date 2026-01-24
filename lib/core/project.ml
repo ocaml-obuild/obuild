@@ -102,13 +102,18 @@ module Test = struct
     type_ : test_type;
   }
 
-  let make name =
+  let make ~name ~main ~target ~rundir ~runopt =
+    (* For tests, buildable defaults to CLI option "build-tests" *)
+    let buildable = match target.target_buildable with
+      | BoolConst true -> BoolConst (Gconf.get_target_option "build-tests")
+      | other -> other
+    in
     {
       name;
-      main = empty_fn;
-      target = new_target (Name.Test name) Typ.Test (Gconf.get_target_option "build-tests") false;
-      rundir = None;
-      runopt = [];
+      main;
+      target = { target with target_buildable = buildable; target_installable = BoolConst false };
+      rundir;
+      runopt;
       type_ = ExitCode;
     }
 
@@ -125,6 +130,18 @@ module Bench = struct
     target : target;
   }
 
+  let make ~name ~main ~target =
+    (* For benchmarks, buildable defaults to CLI option "build-benchs" *)
+    let buildable = match target.target_buildable with
+      | BoolConst true -> BoolConst (Gconf.get_target_option "build-benchs")
+      | other -> other
+    in
+    {
+      name;
+      main;
+      target = { target with target_buildable = buildable; target_installable = BoolConst false };
+    }
+
   let to_target obj = obj.target
 
   let find benchs name =
@@ -140,12 +157,16 @@ module Example = struct
 
   let to_target obj = obj.target
 
-  let make name =
+  let make ~name ~main ~target =
+    (* For examples, buildable defaults to CLI option "build-examples" *)
+    let buildable = match target.target_buildable with
+      | BoolConst true -> BoolConst (Gconf.get_target_option "build-examples")
+      | other -> other
+    in
     {
       name;
-      main = empty_fn;
-      target =
-        new_target (Name.Example name) Typ.Test (Gconf.get_target_option "build-examples") false;
+      main;
+      target = { target with target_buildable = buildable; target_installable = BoolConst false };
     }
 
   let find examples name =
@@ -353,8 +374,12 @@ let get_val_const_or_var user_flags = function
   | BoolVariable v -> ( try List.assoc v user_flags with Not_found -> raise (UnknownFlag v))
 
 let get_all_buildable_targets proj_file user_flags =
+  Printf.printf "user_flags %d\n" (List.length user_flags);
+  List.iter (fun (s, b) -> Printf.printf "%s:%b\n" s b) user_flags;
   get_all_targets_filter proj_file (fun target ->
-      get_val_const_or_var user_flags target.target_buildable)
+      let build = get_val_const_or_var user_flags target.target_buildable in
+      Printf.printf "Debug buildable: %s %b\n" (Target.Name.to_string target.target_name) build;
+      build)
 
 let get_all_installable_targets proj_file user_flags =
   get_all_targets_filter proj_file (fun target ->

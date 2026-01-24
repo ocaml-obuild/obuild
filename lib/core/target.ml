@@ -177,6 +177,7 @@ let new_target_cstubs =
   }
 
 let new_target n ty buildable installable =
+  Printf.printf "Debug_new_target %s build %b install %b\n" (Name.to_string n) buildable installable;
   {
     target_name = n;
     target_buildable = runtime_def buildable;

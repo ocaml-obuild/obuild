@@ -146,8 +146,14 @@ module Test : sig
   }
   (** Test configuration *)
 
-  val make : string -> t
-  (** Create new test with default settings *)
+  val make :
+    name:string ->
+    main:Filepath.filename ->
+    target:Target.target ->
+    rundir:Filepath.filepath option ->
+    runopt:string list ->
+    t
+  (** Create test from parameters. Buildable defaults to CLI option "build-tests". *)
 
   val to_target : t -> Target.target
   (** Extract target from test *)
@@ -167,6 +173,13 @@ module Bench : sig
   }
   (** Benchmark configuration *)
 
+  val make :
+    name:string ->
+    main:Filepath.filename ->
+    target:Target.target ->
+    t
+  (** Create benchmark from parameters. Buildable defaults to CLI option "build-benchs". *)
+
   val to_target : t -> Target.target
   (** Extract target from benchmark *)
 
@@ -185,8 +198,12 @@ module Example : sig
   }
   (** Example executable configuration *)
 
-  val make : string -> t
-  (** Create new example with default settings *)
+  val make :
+    name:string ->
+    main:Filepath.filename ->
+    target:Target.target ->
+    t
+  (** Create example from parameters. Buildable defaults to CLI option "build-examples". *)
 
   val to_target : t -> Target.target
   (** Extract target from example *)

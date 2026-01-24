@@ -1,16 +1,15 @@
 (** Validation and transformation from AST to Project types
 
-    Converts the pure AST from the parser into the existing internal
-    types (Project.t, Target.t, etc.) with validation.
-*)
+    Converts the pure AST from the parser into the existing internal types (Project.t, Target.t,
+    etc.) with validation. *)
 
 open Filepath
 open Obuild_lexer
 open Obuild_ast
 open Location
 
-(** Validation error with location *)
 exception Validation_error of loc * string
+(** Validation error with location *)
 
 (** Raise a validation error *)
 let error loc msg = raise (Validation_error (loc, msg))
@@ -19,8 +18,7 @@ let error loc msg = raise (Validation_error (loc, msg))
 let loc_to_string loc = Printf.sprintf "%d:%d" loc.line loc.col
 
 (** Format validation error *)
-let error_to_string loc msg =
-  Printf.sprintf "%s: %s" (loc_to_string loc) msg
+let error_to_string loc msg = Printf.sprintf "%s: %s" (loc_to_string loc) msg
 
 (* ============================================================ *)
 (* Helper conversions *)
@@ -40,7 +38,8 @@ let convert_runtime_bool = function
 (** Convert AST dependency to Dependencies.dependency *)
 let convert_dependency (dep : dependency) : Dependencies.dependency =
   let libname = Libname.of_string dep.dep_name in
-  let constraint_expr = match dep.dep_constraint with
+  let constraint_expr =
+    match dep.dep_constraint with
     | None -> None
     | Some s -> Expr.parse dep.dep_name s
   in
@@ -48,19 +47,19 @@ let convert_dependency (dep : dependency) : Dependencies.dependency =
 
 (** Convert AST dependency to C dependency (just string, constraint) *)
 let convert_cdependency (dep : dependency) : Dependencies.cdependency =
-  let constraint_expr = match dep.dep_constraint with
+  let constraint_expr =
+    match dep.dep_constraint with
     | None -> None
     | Some s -> Expr.parse dep.dep_name s
   in
   (dep.dep_name, constraint_expr)
 
 (** Convert AST extra_dep to (Hier.t * Hier.t) *)
-let convert_extra_dep (ed : extra_dep) : (Hier.t * Hier.t) =
+let convert_extra_dep (ed : extra_dep) : Hier.t * Hier.t =
   (Hier.of_string ed.before, Hier.of_string ed.after)
 
 (** Convert module name string to Hier.t *)
-let module_name_to_hier s =
-  Hier.make [Modname.wrap (Compat.string_capitalize s)]
+let module_name_to_hier s = Hier.make [ Modname.wrap (Compat.string_capitalize s) ]
 
 (* ============================================================ *)
 (* Convert C settings *)
@@ -68,7 +67,8 @@ let module_name_to_hier s =
 
 let convert_c_settings (c : c_settings) : Target.target_cbits =
   {
-    Target.target_cdir = (match c.c_dir with
+    Target.target_cdir =
+      (match c.c_dir with
       | None -> Filepath.current_dir
       | Some s -> fp s);
     target_csources = List.map fn c.c_sources;
@@ -84,16 +84,19 @@ let convert_c_settings (c : c_settings) : Target.target_cbits =
 
 let convert_ocaml_settings (o : ocaml_settings) : Target.target_obits =
   {
-    Target.target_srcdir = (match o.src_dir with
-      | [] -> [Filepath.current_dir]
+    Target.target_srcdir =
+      (match o.src_dir with
+      | [] -> [ Filepath.current_dir ]
       | dirs -> List.map fp dirs);
     target_builddeps = List.map convert_dependency o.build_deps;
     target_oflags = o.oflags;
-    target_pp = (match o.pp with
+    target_pp =
+      (match o.pp with
       | None -> None
       | Some s -> Some (Pp.Type.of_string s));
     target_extradeps = List.map convert_extra_dep o.extra_deps;
-    target_stdlib = (match o.stdlib with
+    target_stdlib =
+      (match o.stdlib with
       | None -> Target.Stdlib_Standard
       | Some s -> convert_stdlib s);
   }
@@ -139,7 +142,8 @@ let convert_per (per : per_settings) : Target.target_extra =
     Target.target_extra_objects = per.per_files;
     target_extra_builddeps = List.map convert_dependency per.per_build_deps;
     target_extra_oflags = per.per_oflags;
-    target_extra_cflags = [];  (* per blocks don't have cflags in AST *)
+    target_extra_cflags = [];
+    (* per blocks don't have cflags in AST *)
     target_extra_pp = Compat.Option.map Pp.Type.of_string per.per_pp;
   }
 
@@ -166,27 +170,32 @@ let convert_target_common name typ ?cstubs (tc : target_common) : Target.target 
 let rec convert_library (lib : library) : Project.Library.t =
   let libname = Libname.of_string lib.lib_name in
   let target_name = Target.Name.Lib libname in
-  let target = convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target in
+  let target =
+    convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target
+  in
 
   (* Auto-add cstubs generated modules if present *)
   let base_modules = List.map module_name_to_hier lib.lib_modules in
-  let modules = match lib.lib_cstubs with
+  let modules =
+    match lib.lib_cstubs with
     | None -> base_modules
     | Some cs ->
-      (* All three modules are derived from cstubs config:
+        (* All three modules are derived from cstubs config:
          - <lib>_generated: the FOREIGN implementation
          - generated-types: type bindings (e.g., Types_generated)
          - generated-entry-point: entry module (e.g., C) *)
-      let foreign_name = cs.cstubs_external_lib_name ^ "_generated" in
-      let generated_modules = [
-        Hier.of_string (Compat.string_capitalize foreign_name);
-        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_types);
-        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_entry);
-      ] in
-      (* Add any that aren't already in the list *)
-      List.fold_left (fun acc m ->
-        if List.mem m acc then acc else m :: acc
-      ) base_modules generated_modules
+        let foreign_name = cs.cstubs_external_lib_name ^ "_generated" in
+        let generated_modules =
+          [
+            Hier.of_string (Compat.string_capitalize foreign_name);
+            Hier.of_string (Compat.string_capitalize cs.cstubs_generated_types);
+            Hier.of_string (Compat.string_capitalize cs.cstubs_generated_entry);
+          ]
+        in
+        (* Add any that aren't already in the list *)
+        List.fold_left
+          (fun acc m -> if List.mem m acc then acc else m :: acc)
+          base_modules generated_modules
   in
 
   {
@@ -202,22 +211,27 @@ let rec convert_library (lib : library) : Project.Library.t =
 and convert_sublibrary parent_name (lib : library) : Project.Library.t =
   let libname = Libname.append parent_name lib.lib_name in
   let target_name = Target.Name.Lib libname in
-  let target = convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target in
+  let target =
+    convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target
+  in
 
   (* Auto-add cstubs generated modules if present *)
   let base_modules = List.map module_name_to_hier lib.lib_modules in
-  let modules = match lib.lib_cstubs with
+  let modules =
+    match lib.lib_cstubs with
     | None -> base_modules
     | Some cs ->
-      let foreign_name = cs.cstubs_external_lib_name ^ "_generated" in
-      let generated_modules = [
-        Hier.of_string (Compat.string_capitalize foreign_name);
-        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_types);
-        Hier.of_string (Compat.string_capitalize cs.cstubs_generated_entry);
-      ] in
-      List.fold_left (fun acc m ->
-        if List.mem m acc then acc else m :: acc
-      ) base_modules generated_modules
+        let foreign_name = cs.cstubs_external_lib_name ^ "_generated" in
+        let generated_modules =
+          [
+            Hier.of_string (Compat.string_capitalize foreign_name);
+            Hier.of_string (Compat.string_capitalize cs.cstubs_generated_types);
+            Hier.of_string (Compat.string_capitalize cs.cstubs_generated_entry);
+          ]
+        in
+        List.fold_left
+          (fun acc m -> if List.mem m acc then acc else m :: acc)
+          base_modules generated_modules
   in
 
   {
@@ -237,11 +251,7 @@ and convert_sublibrary parent_name (lib : library) : Project.Library.t =
 let convert_executable (exe : executable) : Project.Executable.t =
   let target_name = Target.Name.Exe exe.exe_name in
   let target = convert_target_common target_name Target.Typ.Exe exe.exe_target in
-  {
-    Project.Executable.name = exe.exe_name;
-    main = fn exe.exe_main;
-    target;
-  }
+  { Project.Executable.name = exe.exe_name; main = fn exe.exe_main; target }
 
 (* ============================================================ *)
 (* Convert test *)
@@ -249,25 +259,13 @@ let convert_executable (exe : executable) : Project.Executable.t =
 
 let convert_test (t : test) : Project.Test.t =
   let target_name = Target.Name.Test t.test_name in
-  (* Tests use build-tests option for buildable default *)
-  let tc = t.test_target in
-  let buildable = match tc.buildable with
-    | Bool_const b -> Target.BoolConst b
-    | Bool_var v -> Target.BoolVariable v
-  in
-  let target = {
-    (convert_target_common target_name Target.Typ.Test tc) with
-    Target.target_buildable = buildable;
-    target_installable = Target.BoolConst false;
-  } in
-  {
-    Project.Test.name = t.test_name;
-    main = fn t.test_main;
-    target;
-    rundir = Compat.Option.map fp t.test_rundir;
-    runopt = t.test_run_params;
-    type_ = Project.Test.ExitCode;
-  }
+  let target = convert_target_common target_name Target.Typ.Test t.test_target in
+  Project.Test.make
+    ~name:t.test_name
+    ~main:(fn t.test_main)
+    ~target
+    ~rundir:(Compat.Option.map fp t.test_rundir)
+    ~runopt:t.test_run_params
 
 (* ============================================================ *)
 (* Convert benchmark *)
@@ -276,11 +274,7 @@ let convert_test (t : test) : Project.Test.t =
 let convert_benchmark (b : benchmark) : Project.Bench.t =
   let target_name = Target.Name.Bench b.bench_name in
   let target = convert_target_common target_name Target.Typ.Bench b.bench_target in
-  {
-    Project.Bench.name = b.bench_name;
-    main = fn b.bench_main;
-    target;
-  }
+  Project.Bench.make ~name:b.bench_name ~main:(fn b.bench_main) ~target
 
 (* ============================================================ *)
 (* Convert example *)
@@ -289,11 +283,7 @@ let convert_benchmark (b : benchmark) : Project.Bench.t =
 let convert_example (ex : example) : Project.Example.t =
   let target_name = Target.Name.Example ex.example_name in
   let target = convert_target_common target_name Target.Typ.Test ex.example_target in
-  {
-    Project.Example.name = ex.example_name;
-    main = fn ex.example_main;
-    target;
-  }
+  Project.Example.make ~name:ex.example_name ~main:(fn ex.example_main) ~target
 
 (* ============================================================ *)
 (* Convert flag *)
@@ -303,7 +293,7 @@ let convert_flag (f : flag) : Project.Flag.t =
   {
     Project.Flag.name = f.flag_name;
     description = f.flag_description;
-    default = if f.flag_default then Some true else Some false;
+    default = (if f.flag_default then Some true else Some false);
   }
 
 (* ============================================================ *)
@@ -376,7 +366,8 @@ let convert (proj : project) : Project.t =
     extra_srcs = List.map fp proj.project_extra_srcs;
     extra_tools = List.map fn proj.project_extra_tools;
     configure_script = Compat.Option.map fp proj.project_configure_script;
-    ocaml_extra_args = (match proj.project_ocaml_extra_args with
+    ocaml_extra_args =
+      (match proj.project_ocaml_extra_args with
       | [] -> None
       | args -> Some args);
   }
