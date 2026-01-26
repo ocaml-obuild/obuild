@@ -196,7 +196,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
           (* Get ctypes include paths for ctypes_cstubs_internals.h *)
           let ctypes_c_includes = List.concat (List.map
             (fun p -> ["-I"; fp_to_string p])
-            ctypes_includes) in
+            (ctypes_includes @ src_dirs)) in
           let compile_c_args = [cc; "-I"; ocaml_include] @ ctypes_c_includes @
             ["-o"; fp_to_string discover_c_exe; fp_to_string discover_c] in
 
@@ -302,8 +302,9 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
       let ml_output_dir = autogen_dir in
       ignore src_dirs;
 
-      (* Path to compiled bindings module *)
+      (* Path to compiled bindings module and generated types module *)
       let bindings_cmo = build_dir </> fn (Compat.string_uncapitalize bindings_module ^ ".cmo") in
+      let types_cmo = build_dir </> fn (Compat.string_uncapitalize generated_types ^ ".cmo") in
 
       (* Generate stubgen.ml *)
       let stubgen_ml = autogen_dir </> fn "stubgen.ml" in
@@ -335,6 +336,12 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
            cstubs.cstubs_headers)
       in
 
+      let has_types = match cstubs.cstubs_type_description with Some _ -> true | None -> false in
+      let apply_types = if has_types then "(Types)" else "" in
+      let types_def = if has_types then
+        Printf.sprintf "  let module Types = %s.%s(%s) in\n" bindings_module types_functor (Compat.string_capitalize generated_types)
+      else "" in
+
       let stubgen_content = Printf.sprintf
         "(* Auto-generated stub generator for %s *)\n\
          let prefix = \"%s\"\n\
@@ -355,14 +362,17 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         \  Format.fprintf c_fmt \"#include <string.h>\\n\";\n\
          %s\
         \  Format.fprintf c_fmt \"\\n\";\n\
-        \  Cstubs.write_c c_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);\n\
+        \  (* Apply user's Functions functor to both FOREIGN and discovered TYPES *)\n\
+        \  %s\
+        \  let module M (F : Ctypes.FOREIGN) = %s.%s(F)%s in\n\
+        \  Cstubs.write_c c_fmt ~concurrency:%s ~errno:%s ~prefix (module M);\n\
         \  close_out c_file;\n\
          \n\
         \  (* Generate FOREIGN implementation module to source directory *)\n\
         \  let foreign_file = open_out (Filename.concat ml_output_dir \"%s\") in\n\
         \  let foreign_fmt = Format.formatter_of_out_channel foreign_file in\n\
         \  Format.fprintf foreign_fmt \"(* Auto-generated FOREIGN implementation for %s *)\\n\";\n\
-        \  Cstubs.write_ml foreign_fmt ~concurrency:%s ~errno:%s ~prefix (module %s.%s);\n\
+        \  Cstubs.write_ml foreign_fmt ~concurrency:%s ~errno:%s ~prefix (module M);\n\
         \  close_out foreign_file;\n\
          \n\
         \  (* Generate entry point that applies user's functor to generated module *)\n\
@@ -372,27 +382,21 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         \  Format.fprintf entry_fmt \"(* Apply user's Types functor to generated TYPE implementation for struct layouts *)\\n\";\n\
         \  Format.fprintf entry_fmt \"module Types = %s.%s(%s)\\n\\n\";\n\
         \  Format.fprintf entry_fmt \"(* Apply user's Functions functor to generated FOREIGN implementation *)\\n\";\n\
-        \  Format.fprintf entry_fmt \"module C_Functions = %s.%s(%s)\\n\";\n\
+        \  Format.fprintf entry_fmt \"module C_Functions = %s.%s(%s)%s\\n\";\n\
         \  close_out entry_file;\n\
          \n\
         \  print_endline \"Stub generation complete\"\n"
-        (Libname.to_string lib)
-        prefix
-        (fp_to_string autogen_dir)
-        (fp_to_string ml_output_dir)
-        stubs_file_name
-        headers_includes
+        (Libname.to_string lib) prefix (fp_to_string autogen_dir) (fp_to_string ml_output_dir)
+        stubs_file_name headers_includes
+        types_def bindings_module functions_functor apply_types
         concurrency_str errno_str
-        bindings_module functions_functor
-        generated_foreign_file
-        (Libname.to_string lib)
+        generated_foreign_file (Libname.to_string lib)
         concurrency_str errno_str
-        bindings_module functions_functor
-        entry_file_name
-        (Libname.to_string lib)
-        bindings_module types_functor generated_types
+        entry_file_name (Libname.to_string lib)
+        bindings_module types_functor (Compat.string_capitalize generated_types)
         bindings_module functions_functor
         (Compat.string_capitalize generated_foreign_name)
+        (if has_types then "(Types)" else "")
       in
       Filesystem.write_file stubgen_ml stubgen_content;
       verbose Report "  Generated %s\n%!" (fp_to_string stubgen_ml);
@@ -403,18 +407,37 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
       let include_args = List.concat [
         Utils.to_include_path_options ctypes_includes;
         Utils.to_include_path_options [build_dir];
-        Utils.to_include_path_options [autogen_dir];
         Utils.to_include_path_options src_dirs;
       ] in
       let lib_args = List.map fp_to_string ctypes_libs in
 
-      (* Check if bindings.cmo exists *)
+      (* Check if bindings and types modules exist *)
       let bindings_exists = Filesystem.exists bindings_cmo in
+      let types_exists = Filesystem.exists types_cmo in
       verbose Report "  Bindings module at %s: %s\n%!"
         (fp_to_string bindings_cmo) (if bindings_exists then "found" else "not found");
+      verbose Report "  Types generated module at %s: %s\n%!"
+        (fp_to_string types_cmo) (if types_exists then "found" else "not found");
+
+      (* Compile and link user provided C sources *)
+      let c_objs = List.map (fun c_fn ->
+        let c_src = fn_to_string c_fn in
+        let dst_file = autogen_dir </> o_from_cfile c_fn in
+        let src_file = target.target_cbits.target_cdir </> c_fn in
+        let cc = Prog.get_cc () in
+        let include_args = Utils.to_include_path_options (cstate.compilation_c_include_paths @ ctypes_includes @ src_dirs) in
+        let args = [cc] @ include_args @ ["-o"; fp_to_string dst_file; "-c"; fp_to_string src_file] in
+        verbose Report "  Compiling C source %s for stubgen...\n%!" c_src;
+        (match Process.run args with
+         | Process.Failure err -> failwith ("Failed to compile C source " ^ c_src ^ ": " ^ err)
+         | Process.Success _ -> ());
+        fp_to_string dst_file
+      ) target.target_cbits.target_csources in
 
       let compile_args = [ocamlc] @ include_args @ lib_args @
         (if bindings_exists then [fp_to_string bindings_cmo] else []) @
+        (if types_exists then [fp_to_string types_cmo] else []) @
+        c_objs @
         ["-o"; fp_to_string stubgen_exe; fp_to_string stubgen_ml] in
 
       verbose Report "  Compiling stub generator...\n%!";
@@ -489,8 +512,9 @@ let compile_cstubs_c task_index task lib bstate task_context dag =
     let c_stubs_file = fn (c_lib_name ^ "_stubs.c") in
     (* Add ctypes include paths for C headers like ctypes_cstubs_internals.h *)
     let ctypes_c_includes = get_ctypes_includes bstate in
+    let src_dirs = target.target_obits.target_srcdir in
     let c_dir_spec = {
-      include_dirs = cstate.compilation_c_include_paths @ ctypes_c_includes;
+      include_dirs = cstate.compilation_c_include_paths @ ctypes_c_includes @ src_dirs;
       dst_dir      = autogen_dir;
       src_dir      = autogen_dir
     } in

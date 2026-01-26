@@ -65,11 +65,11 @@ let module_name_to_hier s = Hier.make [ Modname.wrap (Compat.string_capitalize s
 (* Convert C settings *)
 (* ============================================================ *)
 
-let convert_c_settings (c : c_settings) : Target.target_cbits =
+let convert_c_settings ?(default_cdir=Filepath.current_dir) (c : c_settings) : Target.target_cbits =
   {
     Target.target_cdir =
       (match c.c_dir with
-      | None -> Filepath.current_dir
+      | None -> default_cdir
       | Some s -> fp s);
     target_csources = List.map fn c.c_sources;
     target_cflags = c.c_flags;
@@ -152,10 +152,15 @@ let convert_per (per : per_settings) : Target.target_extra =
 (* ============================================================ *)
 
 let convert_target_common name typ ?cstubs (tc : target_common) : Target.target =
+  (* Use src-dir as default for c-dir if c-dir is not specified *)
+  let default_cdir = match tc.ocaml.src_dir with
+    | [] -> Filepath.current_dir
+    | dir :: _ -> fp dir
+  in
   {
     Target.target_name = name;
     target_type = typ;
-    target_cbits = convert_c_settings tc.c;
+    target_cbits = convert_c_settings ~default_cdir tc.c;
     target_obits = convert_ocaml_settings tc.ocaml;
     target_cstubs = Compat.Option.map convert_cstubs cstubs;
     target_extras = List.map convert_per tc.per;

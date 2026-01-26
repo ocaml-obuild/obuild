@@ -561,6 +561,12 @@ let add_cstubs_tasks target stepsDag =
          Dag.add_edge (CompileModule generated_types_hier) types_task stepsDag
        with Dag.DagNode_Not_found -> ());
 
+      (* GenerateCstubsFunctions needs the compiled types_generated.cmo for stubgen *)
+      (try
+         let _ = Dag.get_node stepsDag (CompileModule generated_types_hier) in
+         Dag.add_edge funcs_task (CompileModule generated_types_hier) stepsDag
+       with Dag.DagNode_Not_found -> ());
+
       (* The entry point module depends on GenerateCstubsFunctions *)
       let entry_point_hier = Hier.of_string cstubs.cstubs_generated_entry_point in
       (try

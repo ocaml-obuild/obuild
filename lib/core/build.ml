@@ -632,6 +632,37 @@ let link task_index task bstate task_context dag =
   let selfLibDirs =
     List.map (fun dep -> Dist.get_build_exn (Dist.Target (Name.Lib dep))) selfDeps
   in
+  (* Helper: find library by name in project *)
+  let find_lib_by_name libname =
+    try
+      Some (List.find (fun lib -> lib.Project.Library.name = libname)
+              bstate.bstate_config.Analyze.project_file.Project.libs)
+    with Not_found -> None
+  in
+  (* Collect cstubs info and internal C library info from dependencies *)
+  let deps_cstubs_info =
+    List.filter_map (fun dep_name ->
+      match find_lib_by_name dep_name with
+      | Some lib ->
+          (match lib.Project.Library.target.Target.target_cstubs with
+           | Some cstubs ->
+               Some (dep_name, cstubs.Target.cstubs_external_library_name)
+           | None -> None)
+      | None -> None
+    ) selfDeps
+  in
+  (* Collect internal C library names from dependencies that have csources *)
+  let deps_internal_cclibs =
+    List.filter_map (fun dep_name ->
+      match find_lib_by_name dep_name with
+      | Some lib ->
+          if lib.Project.Library.target.Target.target_cbits.Target.target_csources <> [] then
+            Some (Target.Name.get_clibname (Name.Lib dep_name))
+          else
+            None
+      | None -> None
+    ) selfDeps
+  in
   (* Check for cstubs - if present, add the cstubs library *)
   let cstubs_cclibs =
     match target.target_cstubs with
@@ -651,6 +682,13 @@ let link task_index task bstate task_context dag =
         [ get_cstubs_autogen_dir libname ]
     | None -> []
   in
+  (* Get cstubs libs and dirs from dependencies *)
+  let deps_cstubs_cclibs =
+    List.map (fun (_, c_lib_name) -> c_lib_name ^ "_stubs") deps_cstubs_info
+  in
+  let deps_cstubs_lib_dirs =
+    List.map (fun (dep_name, _) -> get_cstubs_autogen_dir dep_name) deps_cstubs_info
+  in
   let internal_cclibs =
     if cstate.compilation_csources <> [] then
       [ Target.get_target_clibname target ]
@@ -665,7 +703,8 @@ let link task_index task bstate task_context dag =
          cbits.target_cpkgs)
     @ List.map (fun x -> "-L" ^ fp_to_string x) selfLibDirs
     @ List.map (fun x -> "-L" ^ fp_to_string x) cstubs_lib_dirs
-    @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ internal_cclibs @ cstubs_cclibs)
+    @ List.map (fun x -> "-L" ^ fp_to_string x) deps_cstubs_lib_dirs
+    @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ cstubs_cclibs @ deps_cstubs_cclibs @ internal_cclibs @ deps_internal_cclibs)
   in
   let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
   verbose Verbose "package deps: [%s]\n" (Utils.showList "," Libname.to_string pkgDeps);
