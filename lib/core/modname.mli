@@ -65,19 +65,3 @@ val to_directory : t -> Filepath.filename
 val to_filename : t -> Filepath.filename
 (** [to_filename m] converts module name to source file (.ml) *)
 
-val to_parser : t -> Filepath.filename
-(** [to_parser m] converts module name to parser file (.mly) *)
-
-val to_lexer : t -> Filepath.filename
-(** [to_lexer m] converts module name to lexer file (.mll) *)
-
-val atd_modname : string -> string
-(** [atd_modname s] strips ATD-specific suffixes from module names.
-    Removes "_t", "_v", "_j" suffixes if present. *)
-
-val to_atd : t -> Filepath.filename
-(** [to_atd m] converts module name to ATD file (.atd),
-    handling special suffixes (_t, _v, _j) *)
-
-val module_lookup_methods : (t -> Filepath.filename) list
-(** List of functions to try when looking up a module file *)

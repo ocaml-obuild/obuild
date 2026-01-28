@@ -641,7 +641,7 @@ let link task_index task bstate task_context dag =
   in
   (* Collect cstubs info and internal C library info from dependencies *)
   let deps_cstubs_info =
-    List.filter_map (fun dep_name ->
+    list_filter_map (fun dep_name ->
       match find_lib_by_name dep_name with
       | Some lib ->
           (match lib.Project.Library.target.Target.target_cstubs with
@@ -653,7 +653,7 @@ let link task_index task bstate task_context dag =
   in
   (* Collect internal C library names from dependencies that have csources *)
   let deps_internal_cclibs =
-    List.filter_map (fun dep_name ->
+    list_filter_map (fun dep_name ->
       match find_lib_by_name dep_name with
       | Some lib ->
           if lib.Project.Library.target.Target.target_cbits.Target.target_csources <> [] then

@@ -2,5 +2,17 @@ name: parser
 version: 1.0
 obuild-ver: 1
 
+# Port ocamllex to custom generator
+generator ocamllex
+  suffix: mll
+  command: ocamllex -o ${dest}.ml ${src}
+  outputs: ${base}.ml
+
+# Port ocamlyacc to custom generator
+generator ocamlyacc
+  suffix: mly
+  command: ocamlyacc -b ${dest} ${src}
+  outputs: ${base}.ml, ${base}.mli
+
 executable main
   main-is: main.ml

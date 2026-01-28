@@ -38,8 +38,6 @@ let get_ocamlopt () = get_cache "ocamlopt" [ "ocamlopt.opt"; "ocamlopt" ]
 let get_ocamlc () = get_cache "ocamlc" [ "ocamlc.opt"; "ocamlc" ]
 let get_ocamldep () = get_cache "ocamldep" [ "ocamldep.opt"; "ocamldep" ]
 let get_ocamldoc () = get_cache "ocamldoc" [ "ocamldoc.opt"; "ocamldoc" ]
-let get_ocamlyacc () = get_cache "ocamlyacc" [ "ocamlyacc" ]
-let get_ocamllex () = get_cache "ocamllex" [ "ocamllex.opt"; "ocamllex" ]
 let get_ocamlmklib () = get_cache "ocamlmklib" [ "ocamlmklib" ]
 let get_camlp4 () = get_cache "camlp4" [ "camlp4" ]
 let get_cc () = get_cache "cc" [ "gcc" ]
@@ -49,7 +47,6 @@ let get_ld () = get_cache "ld" [ "ld" ]
 let get_pkg_config () = get_cache "pkg-config" [ "pkg-config" ]
 let get_ocaml () = get_cache "ocaml" [ "ocaml" ]
 let get_ocamlmktop () = get_cache "ocamlmktop" [ "ocamlmktop" ]
-let get_atdgen () = get_cache "atdgen" [ "atdgen"; "atdgen.run" ]
 
 let get_ocaml_version cfg =
   let ver = Hashtbl.find cfg "version" in

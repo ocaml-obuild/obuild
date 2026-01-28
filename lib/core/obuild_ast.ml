@@ -93,6 +93,31 @@ type ocaml_settings = {
   stdlib: stdlib option;
 }
 
+(** Generator match type - how to identify files for this generator *)
+type generator_match =
+  | Match_suffix of string      (** Match by file extension (e.g., "mly") *)
+  | Match_filename of string    (** Match by exact filename (e.g., "VERSION") *)
+  | Match_pattern of string     (** Match by glob pattern (e.g., "*.txt") *)
+  | Match_directory             (** Match directories *)
+
+(** Custom generator definition *)
+type generator = {
+  gen_name: string;                   (** Generator name for reference *)
+  gen_match: generator_match;         (** How to match source files *)
+  gen_command: string;                (** Command template with variables *)
+  gen_outputs: string list;           (** Output file patterns (e.g., ["${base}.ml", "${base}.mli"]) *)
+  gen_module_name: string option;     (** Module name pattern if different from base (e.g., "${base}_t") *)
+  gen_multi_input: bool;              (** Whether this generator can take multiple inputs *)
+}
+
+(** Explicit generate block for multi-input generators or overrides *)
+type generate_block = {
+  generate_module: string;            (** Output module name *)
+  generate_from: string list;         (** Input file(s) *)
+  generate_using: string;             (** Generator name to use *)
+  generate_args: string option;       (** Additional command-line arguments *)
+}
+
 (** Common target settings *)
 type target_common = {
   buildable: runtime_bool;
@@ -100,6 +125,7 @@ type target_common = {
   ocaml: ocaml_settings;
   c: c_settings;
   per: per_settings list;
+  generates: generate_block list;     (** Explicit generate blocks *)
 }
 
 (** Library-specific settings *)
@@ -173,8 +199,9 @@ type project = {
   project_ocaml_ver: string option;      (* version constraint expr *)
   project_ocaml_extra_args: string list;
 
-  (* Flags and targets *)
+  (* Flags, generators, and targets *)
   project_flags: flag list;
+  project_generators: generator list;    (* Custom code generators *)
   project_libs: library list;
   project_exes: executable list;
   project_tests: test list;
@@ -208,6 +235,7 @@ let default_target_common = {
   ocaml = default_ocaml_settings;
   c = default_c_settings;
   per = [];
+  generates = [];
 }
 
 let default_cstubs = {
@@ -219,4 +247,20 @@ let default_cstubs = {
   cstubs_headers = [];
   cstubs_concurrency = Cstubs_sequential;
   cstubs_errno = Cstubs_ignore_errno;
+}
+
+let default_generator = {
+  gen_name = "";
+  gen_match = Match_suffix "";
+  gen_command = "";
+  gen_outputs = [];
+  gen_module_name = None;
+  gen_multi_input = false;
+}
+
+let default_generate_block = {
+  generate_module = "";
+  generate_from = [];
+  generate_using = "";
+  generate_args = None;
 }

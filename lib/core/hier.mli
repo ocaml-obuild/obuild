@@ -91,7 +91,7 @@ val to_directory : t -> Filepath.filepath -> file_entry option
 (** [to_directory hier root] finds the directory for hierarchy *)
 
 val to_generators : t -> Filepath.filepath -> file_entry option
-(** [to_generators hier root] finds generated source files (e.g., .mll, .mly, .atd) *)
+(** [to_generators hier root] finds source files matching custom generators defined in .obuild *)
 
 val get_file_entry : t -> Filepath.filepath list -> file_entry
 (** [get_file_entry hier paths] searches for hierarchy across multiple root paths,

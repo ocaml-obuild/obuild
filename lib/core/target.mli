@@ -115,6 +115,14 @@ type target_cstubs = {
   cstubs_errno                 : cstubs_errno;        (** Errno handling policy *)
 }
 
+(** Explicit generate block for multi-input generators or overrides *)
+type target_generate = {
+  generate_module : Hier.t;             (** Output module name *)
+  generate_from   : Filepath.filepath list;  (** Input file(s) *)
+  generate_using  : string;             (** Generator name to use *)
+  generate_args   : string option;      (** Additional command-line arguments *)
+}
+
 (** Complete build target definition *)
 type target = {
   target_name        : Name.t;
@@ -122,6 +130,7 @@ type target = {
   target_cbits       : target_cbits;
   target_obits       : target_obits;
   target_cstubs      : target_cstubs option;
+  target_generates   : target_generate list;
   target_extras      : target_extra list;
   target_buildable   : runtime_bool;
   target_installable : runtime_bool;

@@ -134,6 +134,34 @@ let convert_cstubs (cs : cstubs) : Target.target_cstubs =
   }
 
 (* ============================================================ *)
+(* Convert generator types *)
+(* ============================================================ *)
+
+let convert_generator_match = function
+  | Obuild_ast.Match_suffix s -> Project.Generator.Match_suffix s
+  | Obuild_ast.Match_filename s -> Project.Generator.Match_filename s
+  | Obuild_ast.Match_pattern s -> Project.Generator.Match_pattern s
+  | Obuild_ast.Match_directory -> Project.Generator.Match_directory
+
+let convert_generator (gen : Obuild_ast.generator) : Project.Generator.t =
+  {
+    Project.Generator.name = gen.gen_name;
+    match_type = convert_generator_match gen.gen_match;
+    command = gen.gen_command;
+    outputs = gen.gen_outputs;
+    module_name = gen.gen_module_name;
+    multi_input = gen.gen_multi_input;
+  }
+
+let convert_generate_block (gen : Obuild_ast.generate_block) : Target.target_generate =
+  {
+    Target.generate_module = Hier.of_string gen.generate_module;
+    generate_from = List.map fp gen.generate_from;
+    generate_using = gen.generate_using;
+    generate_args = gen.generate_args;
+  }
+
+(* ============================================================ *)
 (* Convert per block (target_extra) *)
 (* ============================================================ *)
 
@@ -163,6 +191,7 @@ let convert_target_common name typ ?cstubs (tc : target_common) : Target.target 
     target_cbits = convert_c_settings ~default_cdir tc.c;
     target_obits = convert_ocaml_settings tc.ocaml;
     target_cstubs = Compat.Option.map convert_cstubs cstubs;
+    target_generates = List.map convert_generate_block tc.generates;
     target_extras = List.map convert_per tc.per;
     target_buildable = convert_runtime_bool tc.buildable;
     target_installable = convert_runtime_bool tc.installable;
@@ -363,6 +392,7 @@ let convert (proj : project) : Project.t =
     ocaml_ver = Compat.Option.bind proj.project_ocaml_ver (fun s -> Expr.parse "ocaml-version" s);
     homepage = Compat.Option.value ~default:"" proj.project_homepage;
     flags = List.map convert_flag proj.project_flags;
+    generators = List.map convert_generator proj.project_generators;
     libs = List.map convert_library proj.project_libs;
     exes = List.map convert_executable proj.project_exes;
     tests = List.map convert_test proj.project_tests;

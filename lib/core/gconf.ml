@@ -27,8 +27,6 @@ let env_variables =
     "ocaml";
     "ocamldep";
     "ocamldoc";
-    "ocamlyacc";
-    "ocamllex";
     "ocamlmklib";
     "ocamlmktop";
     "cc";
@@ -38,7 +36,6 @@ let env_variables =
     "pkg-config";
     "camlp4";
     "findlib-path";
-    "atdgen";
   ]
 
 let env_ =

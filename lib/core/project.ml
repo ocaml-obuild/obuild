@@ -184,6 +184,34 @@ module Flag = struct
   }
 end
 
+module Generator = struct
+  (** How to match source files for this generator *)
+  type match_type =
+    | Match_suffix of string      (** Match by file extension (e.g., "mly") *)
+    | Match_filename of string    (** Match by exact filename (e.g., "VERSION") *)
+    | Match_pattern of string     (** Match by glob pattern (e.g., "*.txt") *)
+    | Match_directory             (** Match directories *)
+
+  type t = {
+    name : string;                    (** Generator name for reference *)
+    match_type : match_type;          (** How to match source files *)
+    command : string;                 (** Command template with variables *)
+    outputs : string list;            (** Output file patterns *)
+    module_name : string option;      (** Module name pattern if different from base *)
+    multi_input : bool;               (** Whether this generator can take multiple inputs *)
+  }
+
+  let make name =
+    {
+      name;
+      match_type = Match_suffix "";
+      command = "";
+      outputs = [];
+      module_name = None;
+      multi_input = false;
+    }
+end
+
 type t = {
   name : string;
   version : string;
@@ -196,6 +224,7 @@ type t = {
   ocaml_ver : Expr.t option;
   homepage : string;
   flags : Flag.t list;
+  generators : Generator.t list;
   libs : Library.t list;
   exes : Executable.t list;
   tests : Test.t list;
@@ -221,6 +250,7 @@ let make =
     homepage = "";
     extra_tools = [];
     flags = [];
+    generators = [];
     libs = [];
     exes = [];
     tests = [];

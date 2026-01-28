@@ -32,12 +32,6 @@ val get_ocamldep : unit -> string
 val get_ocamldoc : unit -> string
 (** Get path to ocamldoc (documentation generator) *)
 
-val get_ocamlyacc : unit -> string
-(** Get path to ocamlyacc (parser generator) *)
-
-val get_ocamllex : unit -> string
-(** Get path to ocamllex (lexer generator) *)
-
 val get_ocamlmklib : unit -> string
 (** Get path to ocamlmklib (library linker) *)
 
@@ -64,9 +58,6 @@ val get_ocaml : unit -> string
 
 val get_ocamlmktop : unit -> string
 (** Get path to ocamlmktop (custom toplevel builder) *)
-
-val get_atdgen : unit -> string
-(** Get path to atdgen (ATD code generator) *)
 
 (** OCaml configuration *)
 

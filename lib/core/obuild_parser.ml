@@ -197,6 +197,60 @@ let parse_target_setting target key value =
       let c' = parse_c_setting target.c key value in
       { target with ocaml = ocaml'; c = c' }
 
+(** Parse generator match type from key-value *)
+let parse_generator_match key value =
+  match Compat.string_lowercase key with
+  | "suffix" -> Some (Obuild_ast.Match_suffix value)
+  | "filename" -> Some (Obuild_ast.Match_filename value)
+  | "pattern" -> Some (Obuild_ast.Match_pattern value)
+  | "dir" when Compat.string_lowercase value = "true" -> Some Obuild_ast.Match_directory
+  | _ -> None
+
+(** Parse generator block *)
+let parse_generator_block name tokens =
+  let gen = { Obuild_ast.default_generator with gen_name = name } in
+  let rec loop gen = function
+    | [] -> gen
+    | t :: rest -> (
+        match t.tok with
+        | KEY_VALUE (key, value) ->
+            let gen' =
+              match parse_generator_match key value with
+              | Some m -> { gen with gen_match = m }
+              | None ->
+                  match Compat.string_lowercase key with
+                  | "command" -> { gen with gen_command = value }
+                  | "outputs" -> { gen with gen_outputs = gen.gen_outputs @ parse_list value }
+                  | "module-name" -> { gen with gen_module_name = Some value }
+                  | "multi-input" ->
+                      { gen with gen_multi_input = Compat.string_lowercase value = "true" }
+                  | _ -> gen
+            in
+            loop gen' rest
+        | _ -> loop gen rest)
+  in
+  loop gen tokens
+
+(** Parse generate block (explicit generation for multi-input or overrides) *)
+let parse_generate_block module_name tokens =
+  let gen = { Obuild_ast.default_generate_block with generate_module = module_name } in
+  let rec loop gen = function
+    | [] -> gen
+    | t :: rest -> (
+        match t.tok with
+        | KEY_VALUE (key, value) ->
+            let gen' =
+              match Compat.string_lowercase key with
+              | "from" -> { gen with generate_from = gen.generate_from @ parse_list value }
+              | "using" -> { gen with generate_using = value }
+              | "args" | "arguments" | "command-args" -> { gen with generate_args = Some value }
+              | _ -> gen
+            in
+            loop gen' rest
+        | _ -> loop gen rest)
+  in
+  loop gen tokens
+
 (** Parse cstubs block *)
 let parse_cstubs_block tokens =
   let rec loop cstubs = function
@@ -316,6 +370,14 @@ and parse_library_tokens lib tokens =
                 in
                 let sublib = parse_library_block subname nested in
                 { lib with lib_subs = lib.lib_subs @ [ sublib ] }
+            | "generate" ->
+                let module_name =
+                  match args with
+                  | [ n ] -> n
+                  | _ -> ""
+                in
+                let gen_block = parse_generate_block module_name nested in
+                { lib with lib_target = { lib.lib_target with generates = lib.lib_target.generates @ [ gen_block ] } }
             | _ -> lib
           in
           parse_library_tokens lib' remaining
@@ -358,6 +420,14 @@ let parse_executable_block name tokens =
                     exe with
                     exe_target = { exe.exe_target with per = exe.exe_target.per @ [ per ] };
                   }
+              | "generate" ->
+                  let module_name =
+                    match args with
+                    | [ n ] -> n
+                    | _ -> ""
+                  in
+                  let gen_block = parse_generate_block module_name nested in
+                  { exe with exe_target = { exe.exe_target with generates = exe.exe_target.generates @ [ gen_block ] } }
               | _ -> exe
             in
             loop exe' remaining
@@ -400,6 +470,14 @@ let parse_test_block name tokens =
                     test with
                     test_target = { test.test_target with per = test.test_target.per @ [ per ] };
                   }
+              | "generate" ->
+                  let module_name =
+                    match args with
+                    | [ n ] -> n
+                    | _ -> ""
+                  in
+                  let gen_block = parse_generate_block module_name nested in
+                  { test with test_target = { test.test_target with generates = test.test_target.generates @ [ gen_block ] } }
               | _ -> test
             in
             loop test' remaining
@@ -439,6 +517,14 @@ let parse_example_block name tokens =
                     example_target =
                       { example.example_target with per = example.example_target.per @ [ per ] };
                   }
+              | "generate" ->
+                  let module_name =
+                    match args with
+                    | [ n ] -> n
+                    | _ -> ""
+                  in
+                  let gen_block = parse_generate_block module_name nested in
+                  { example with example_target = { example.example_target with generates = example.example_target.generates @ [ gen_block ] } }
               | _ -> example
             in
             loop example' remaining
@@ -472,6 +558,14 @@ let parse_benchmark_block name tokens =
                     bench_target =
                       { bench.bench_target with per = bench.bench_target.per @ [ per ] };
                   }
+              | "generate" ->
+                  let module_name =
+                    match args with
+                    | [ n ] -> n
+                    | _ -> ""
+                  in
+                  let gen_block = parse_generate_block module_name nested in
+                  { bench with bench_target = { bench.bench_target with generates = bench.bench_target.generates @ [ gen_block ] } }
               | _ -> bench
             in
             loop bench' remaining
@@ -516,6 +610,7 @@ let empty_project loc =
     project_ocaml_ver = None;
     project_ocaml_extra_args = [];
     project_flags = [];
+    project_generators = [];
     project_libs = [];
     project_exes = [];
     project_tests = [];
@@ -587,6 +682,9 @@ let parse_project tokens =
           | "flag" ->
               let flag = parse_flag_block block_name block_tokens in
               { p with project_flags = p.project_flags @ [ flag ] }
+          | "generator" ->
+              let gen = parse_generator_block block_name block_tokens in
+              { p with project_generators = p.project_generators @ [ gen ] }
           | _ -> p)
     | _ -> ()
   done;
