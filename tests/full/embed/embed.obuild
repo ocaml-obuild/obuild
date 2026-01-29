@@ -1,0 +1,16 @@
+name: embed-test
+version: 1.0
+obuild-ver: 1
+
+# Generator for embedding files - no suffix means it must be used via generate block
+generator embed
+  command: sh ./embed.sh -o ${dest}.ml ${sources}
+  outputs: ${base}.ml
+
+executable main
+  main-is: main.ml
+
+  # Generate Assets module from all .txt files in assets/
+  generate Assets
+    from: assets/*.txt
+    using: embed

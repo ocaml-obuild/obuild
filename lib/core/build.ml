@@ -154,6 +154,65 @@ let generate_cstubs_functions = Build_cstubs.generate_cstubs_functions
 (* Compile generated ctypes.cstubs C code *)
 let compile_cstubs_c = Build_cstubs.compile_cstubs_c
 
+(* Run explicit generate block *)
+let run_generate_block _task_index task (gen_block : Target.target_generate) _bstate task_context dag =
+  let _cstate, _target = Hashtbl.find task_context task in
+  let autogenDir = Dist.get_build_exn Dist.Autogen in
+
+  (* Expand glob patterns in generate_from *)
+  let expand_pattern pattern =
+    let pattern_str = fp_to_string pattern in
+    if String.contains pattern_str '*' then
+      (* Use Filesystem.list_dir_pred to get matching files *)
+      let dir = path_dirname pattern in
+      let pattern_base = fn_to_string (path_basename pattern) in
+      (* Simple glob: only handle *.ext patterns *)
+      if String.length pattern_base > 1 && pattern_base.[0] = '*' then
+        let ext = String.sub pattern_base 1 (String.length pattern_base - 1) in
+        try
+          let entries = Filesystem.list_dir_pred (fun entry ->
+            let entry_str = fn_to_string entry in
+            String_utils.endswith ext entry_str
+          ) dir in
+          List.map (fun entry -> dir </> entry) entries
+        with _ -> [pattern]  (* If directory doesn't exist, return original *)
+      else
+        [pattern]
+    else
+      [pattern]
+  in
+
+  let sources = List.concat (List.map expand_pattern gen_block.generate_from) in
+
+  (* Check if any source is newer than output *)
+  let output_module = gen_block.generate_module in
+  let output_file = autogenDir </> fn (Compat.string_lowercase (Hier.to_string output_module) ^ ".ml") in
+
+  let needs_rebuild =
+    if not (Filesystem.exists output_file) then true
+    else
+      let output_mtime = Filesystem.get_modification_time output_file in
+      List.exists (fun src ->
+        Filesystem.exists src &&
+        Filesystem.get_modification_time src > output_mtime
+      ) sources
+  in
+
+  if needs_rebuild then begin
+    let nb_step, nb_step_len = get_nb_step dag in
+    let task_index = 0 in  (* TODO: get actual task index *)
+    verbose Report "[%*d of %d] Generating %-30s\n%!" nb_step_len task_index nb_step
+      (Hier.to_string output_module);
+    let dest = autogenDir </> fn (Compat.string_lowercase (Hier.to_string output_module)) in
+    Generators.run_custom_multi
+      ~generator_name:gen_block.generate_using
+      ~dest
+      ~sources
+      ~extra_args:gen_block.generate_args
+  end;
+
+  Scheduler.FinishTask task
+
 (* compile C files *)
 let compile_c task_index task c_file bstate task_context dag =
   let cstate, target = Hashtbl.find task_context task in
@@ -186,7 +245,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
   let filter_modules t : Hier.t option =
     match t with
     | CompileC _ | LinkTarget _ | CheckTarget _ -> None
-    | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ -> None
+    | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ | RunGenerateBlock _ -> None
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = Hier.lvl h + 1 then Some m else None
     | CompileInterface m ->
         if Hier.lvl m = Hier.lvl h + 1 then begin
@@ -825,6 +884,7 @@ let compile (bstate : build_state) task_context dag =
     | GenerateCstubsFunctions lib ->
         generate_cstubs_functions task_index task lib bstate task_context dag
     | CompileCstubsC lib -> compile_cstubs_c task_index task lib bstate task_context dag
+    | RunGenerateBlock gen_block -> run_generate_block task_index task gen_block bstate task_context dag
     | LinkTarget _ -> link task_index task bstate task_context dag
     | CheckTarget _ -> check task_index task task_context dag
   in

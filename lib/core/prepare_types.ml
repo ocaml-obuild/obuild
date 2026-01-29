@@ -43,6 +43,7 @@ type compile_step =
   | GenerateCstubsTypes of Libname.t (* Generate types_generated.ml *)
   | GenerateCstubsFunctions of Libname.t (* Generate C.ml and stubs.c *)
   | CompileCstubsC of Libname.t (* Compile generated C stubs *)
+  | RunGenerateBlock of Target.target_generate (* Run explicit generate block *)
   | LinkTarget of Target.target
   | CheckTarget of Target.target
 
@@ -145,5 +146,6 @@ let string_of_compile_step cs =
   | GenerateCstubsTypes x -> "cstubs-types " ^ Libname.to_string x
   | GenerateCstubsFunctions x -> "cstubs-funcs " ^ Libname.to_string x
   | CompileCstubsC x -> "cstubs-c " ^ Libname.to_string x
+  | RunGenerateBlock x -> "generate " ^ Hier.to_string x.Target.generate_module
   | LinkTarget x -> "link " ^ Target.get_target_name x
   | CheckTarget x -> "check " ^ Target.get_target_name x

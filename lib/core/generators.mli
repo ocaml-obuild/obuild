@@ -1,19 +1,17 @@
-(** Code generators for OCaml sources *)
+(** Code generators for OCaml sources
+
+    Generators transform source files (e.g., .mly, .mll) into OCaml code.
+
+    Generators with a suffix are automatically triggered during module discovery.
+    Generators without a suffix must be used via explicit generate blocks. *)
 
 exception GeneratorFailed of string
 exception GeneratorNotFound of string
 
-(** Generator match type - how to identify files for this generator *)
-type match_type =
-  | Match_suffix of string      (** Match by file extension (e.g., "mly") *)
-  | Match_filename of string    (** Match by exact filename (e.g., "VERSION") *)
-  | Match_pattern of string     (** Match by glob pattern (e.g., "*.txt") *)
-  | Match_directory             (** Match directories *)
-
-(** Built-in generator configuration *)
+(** Internal generator representation for build system integration *)
 type t = {
   suffix : string;
-  (** File extension that triggers this generator *)
+  (** File extension that triggers this generator (empty for generate-block-only) *)
 
   modname : Modname.t -> Modname.t;
   (** Transform module name *)
@@ -35,11 +33,10 @@ type t = {
 (** Custom generator definition from .obuild file *)
 type custom = {
   custom_name : string;                   (** Generator name for reference *)
-  custom_match : match_type;              (** How to match source files *)
+  custom_suffix : string option;          (** File extension for automatic detection *)
   custom_command : string;                (** Command template with variables *)
   custom_outputs : string list;           (** Output file patterns *)
   custom_module_name : string option;     (** Module name pattern if different from base *)
-  custom_multi_input : bool;              (** Whether this generator can take multiple inputs *)
 }
 
 val get_all : unit -> t list
@@ -70,15 +67,7 @@ val register_customs : custom list -> unit
 val clear_custom_generators : unit -> unit
 (** Clear all custom generators (useful for testing) *)
 
-(** {2 Custom Generator Matching} *)
-
-val matches_custom_generator : Filepath.filepath -> bool
-(** Check if a filepath matches any custom generator *)
-
-val get_custom_generator : Filepath.filepath -> custom option
-(** Get the custom generator that matches a filepath, if any *)
-
-(** {2 Multi-Input Generators} *)
+(** {2 Multi-Input Generators (for generate blocks)} *)
 
 val run_custom_multi :
   generator_name:string ->
@@ -86,7 +75,7 @@ val run_custom_multi :
   sources:Filepath.filepath list ->
   extra_args:string option ->
   unit
-(** Run a custom generator with multiple input files
+(** Run a generator with multiple input files (for generate blocks)
     @param generator_name Name of the generator to use
     @param dest Destination filepath (without extension)
     @param sources List of source files
@@ -97,8 +86,8 @@ val run_custom_multi :
 val get_custom_outputs : custom -> src:Filepath.filepath -> Filepath.filename list
 (** Get the output files for a custom generator given a source file *)
 
-val is_multi_input : string -> bool
-(** Check if a generator (by name) supports multiple inputs *)
+val find_generator_by_name : string -> custom option
+(** Find a custom generator by name *)
 
 (** {2 Variable Substitution} *)
 

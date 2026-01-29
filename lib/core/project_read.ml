@@ -9,19 +9,12 @@ open Filepath
 
 (** Convert Project.Generator.t to Generators.custom *)
 let convert_generator_to_custom (gen : Project.Generator.t) : Generators.custom =
-  let custom_match = match gen.Project.Generator.match_type with
-    | Project.Generator.Match_suffix s -> Generators.Match_suffix s
-    | Project.Generator.Match_filename s -> Generators.Match_filename s
-    | Project.Generator.Match_pattern s -> Generators.Match_pattern s
-    | Project.Generator.Match_directory -> Generators.Match_directory
-  in
   {
     Generators.custom_name = gen.Project.Generator.name;
-    custom_match;
+    custom_suffix = gen.Project.Generator.suffix;
     custom_command = gen.Project.Generator.command;
     custom_outputs = gen.Project.Generator.outputs;
     custom_module_name = gen.Project.Generator.module_name;
-    custom_multi_input = gen.Project.Generator.multi_input;
   }
 
 (** Register custom generators from project *)

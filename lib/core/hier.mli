@@ -121,5 +121,7 @@ val get_dest_file_ext : Filepath.filepath -> t -> (Filetype.t -> Filetype.t) -> 
 
 val register_synthetic_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
 (** [register_synthetic_entry hier root_path full_path] registers a synthetic file entry
-    for modules that will be generated during build (e.g., cstubs-generated modules).
-    This allows get_dest_file to work for these modules even before the source file exists. *)
+    for modules that will be generated during build (e.g., cstubs-generated modules,
+    generate-block modules). This allows get_dest_file to work for these modules even
+    before the source file exists. Replaces any existing entry (which may have been
+    cached during dependency analysis before the module was identified as synthetic). *)

@@ -90,6 +90,7 @@ type compile_step = Prepare_types.compile_step =
   | GenerateCstubsTypes of Libname.t
   | GenerateCstubsFunctions of Libname.t
   | CompileCstubsC of Libname.t
+  | RunGenerateBlock of Target.target_generate
   | LinkTarget of Target.target
   | CheckTarget of Target.target
 
@@ -116,7 +117,7 @@ let get_compilation_order cstate =
   let filter_modules t : Hier.t option =
     match t with
     | CompileC _ | CompileInterface _ | LinkTarget _ | CheckTarget _ -> None
-    | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ -> None
+    | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ | RunGenerateBlock _ -> None
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = 0 then Some m else None
   in
   list_filter_map filter_modules (Dagutils.linearize cstate.compilation_dag)
@@ -629,6 +630,23 @@ let add_cstubs_tasks target stepsDag =
       Dag.add_edge (LinkTarget target) compile_task stepsDag;
       Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
 
+(** Add generate block tasks to the DAG *)
+let add_generate_block_tasks target stepsDag =
+  List.iter (fun (gen_block : Target.target_generate) ->
+    let task = RunGenerateBlock gen_block in
+    Dag.add_node task stepsDag;
+
+    (* The generated module depends on the generate block running first *)
+    let output_hier = gen_block.generate_module in
+    (try
+       let _ = Dag.get_node stepsDag (CompileModule output_hier) in
+       Dag.add_edge (CompileModule output_hier) task stepsDag
+     with Dag.DagNode_Not_found -> ());
+
+    (* Link depends on all generate blocks completing *)
+    Dag.add_edge (LinkTarget target) task stepsDag
+  ) target.Target.target_generates
+
 (* get every module description
  * and their relationship with each other
  *)
@@ -658,6 +676,16 @@ let get_modules_desc bstate target toplevelModules =
     | None -> false
   in
 
+  (* Check if a module is from a generate block (will be created during build) *)
+  let find_generate_block_for_module hier =
+    let module_name = Hier.to_string hier in
+    try
+      Some (List.find (fun (gen : Target.target_generate) ->
+        Hier.to_string gen.generate_module = module_name
+      ) target.Target.target_generates)
+    with Not_found -> None
+  in
+
   let targetPP = Ppx_resolver.get_target_pp bstate target target.target_obits.target_pp in
 
   let get_one hier =
@@ -677,6 +705,16 @@ let get_modules_desc bstate target toplevelModules =
         (fp_to_string target_path);
       (* Register the synthetic entry in Hier so get_dest_file can find it *)
       Hier.register_synthetic_entry hier cstubs_autogen_dir target_path;
+      (* Return a minimal module description - the file will be created during build *)
+      Module.make_file NoThread target_path 0.0 SimpleModule None Pp.none [] [] [])
+    (* For generate-block modules, return a minimal description *)
+    else if find_generate_block_for_module hier <> None then (
+      let ml_filename = fn (Compat.string_uncapitalize moduleName ^ ".ml") in
+      let target_path = autogenDir </> ml_filename in
+      verbose Verbose "  %s is from generate block, using synthetic description at %s\n%!" moduleName
+        (fp_to_string target_path);
+      (* Register the synthetic entry in Hier so get_dest_file can find it *)
+      Hier.register_synthetic_entry hier autogenDir target_path;
       (* Return a minimal module description - the file will be created during build *)
       Module.make_file NoThread target_path 0.0 SimpleModule None Pp.none [] [] [])
     else
@@ -824,6 +862,9 @@ let prepare_target_ bstate buildDir target toplevelModules =
 
     (* Add cstubs generation tasks if configured *)
     add_cstubs_tasks target stepsDag;
+
+    (* Add generate block tasks *)
+    add_generate_block_tasks target stepsDag;
 
     (stepsDag, filesDag)
   in

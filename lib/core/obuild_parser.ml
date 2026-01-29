@@ -198,14 +198,6 @@ let parse_target_setting target key value =
       { target with ocaml = ocaml'; c = c' }
 
 (** Parse generator match type from key-value *)
-let parse_generator_match key value =
-  match Compat.string_lowercase key with
-  | "suffix" -> Some (Obuild_ast.Match_suffix value)
-  | "filename" -> Some (Obuild_ast.Match_filename value)
-  | "pattern" -> Some (Obuild_ast.Match_pattern value)
-  | "dir" when Compat.string_lowercase value = "true" -> Some Obuild_ast.Match_directory
-  | _ -> None
-
 (** Parse generator block *)
 let parse_generator_block name tokens =
   let gen = { Obuild_ast.default_generator with gen_name = name } in
@@ -215,16 +207,12 @@ let parse_generator_block name tokens =
         match t.tok with
         | KEY_VALUE (key, value) ->
             let gen' =
-              match parse_generator_match key value with
-              | Some m -> { gen with gen_match = m }
-              | None ->
-                  match Compat.string_lowercase key with
-                  | "command" -> { gen with gen_command = value }
-                  | "outputs" -> { gen with gen_outputs = gen.gen_outputs @ parse_list value }
-                  | "module-name" -> { gen with gen_module_name = Some value }
-                  | "multi-input" ->
-                      { gen with gen_multi_input = Compat.string_lowercase value = "true" }
-                  | _ -> gen
+              match Compat.string_lowercase key with
+              | "suffix" -> { gen with gen_suffix = Some value }
+              | "command" -> { gen with gen_command = value }
+              | "outputs" -> { gen with gen_outputs = gen.gen_outputs @ parse_list value }
+              | "module-name" -> { gen with gen_module_name = Some value }
+              | _ -> gen
             in
             loop gen' rest
         | _ -> loop gen rest)

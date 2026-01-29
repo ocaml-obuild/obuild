@@ -93,21 +93,13 @@ type ocaml_settings = {
   stdlib: stdlib option;
 }
 
-(** Generator match type - how to identify files for this generator *)
-type generator_match =
-  | Match_suffix of string      (** Match by file extension (e.g., "mly") *)
-  | Match_filename of string    (** Match by exact filename (e.g., "VERSION") *)
-  | Match_pattern of string     (** Match by glob pattern (e.g., "*.txt") *)
-  | Match_directory             (** Match directories *)
-
 (** Custom generator definition *)
 type generator = {
   gen_name: string;                   (** Generator name for reference *)
-  gen_match: generator_match;         (** How to match source files *)
-  gen_command: string;                (** Command template with variables *)
+  gen_suffix: string option;          (** File extension for automatic detection (e.g., "mly") *)
+  gen_command: string;                (** Command template with variables: ${src}, ${dest}, ${base}, ${sources} *)
   gen_outputs: string list;           (** Output file patterns (e.g., ["${base}.ml", "${base}.mli"]) *)
   gen_module_name: string option;     (** Module name pattern if different from base (e.g., "${base}_t") *)
-  gen_multi_input: bool;              (** Whether this generator can take multiple inputs *)
 }
 
 (** Explicit generate block for multi-input generators or overrides *)
@@ -251,11 +243,10 @@ let default_cstubs = {
 
 let default_generator = {
   gen_name = "";
-  gen_match = Match_suffix "";
+  gen_suffix = None;
   gen_command = "";
   gen_outputs = [];
   gen_module_name = None;
-  gen_multi_input = false;
 }
 
 let default_generate_block = {

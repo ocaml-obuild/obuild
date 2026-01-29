@@ -137,20 +137,13 @@ let convert_cstubs (cs : cstubs) : Target.target_cstubs =
 (* Convert generator types *)
 (* ============================================================ *)
 
-let convert_generator_match = function
-  | Obuild_ast.Match_suffix s -> Project.Generator.Match_suffix s
-  | Obuild_ast.Match_filename s -> Project.Generator.Match_filename s
-  | Obuild_ast.Match_pattern s -> Project.Generator.Match_pattern s
-  | Obuild_ast.Match_directory -> Project.Generator.Match_directory
-
 let convert_generator (gen : Obuild_ast.generator) : Project.Generator.t =
   {
     Project.Generator.name = gen.gen_name;
-    match_type = convert_generator_match gen.gen_match;
+    suffix = gen.gen_suffix;
     command = gen.gen_command;
     outputs = gen.gen_outputs;
     module_name = gen.gen_module_name;
-    multi_input = gen.gen_multi_input;
   }
 
 let convert_generate_block (gen : Obuild_ast.generate_block) : Target.target_generate =

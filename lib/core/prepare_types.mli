@@ -43,6 +43,7 @@ type compile_step =
   | GenerateCstubsTypes of Libname.t  (** Generate types_generated.ml *)
   | GenerateCstubsFunctions of Libname.t  (** Generate C.ml and stubs.c *)
   | CompileCstubsC of Libname.t  (** Compile generated C stubs *)
+  | RunGenerateBlock of Target.target_generate  (** Run explicit generate block *)
   | LinkTarget of Target.target
   | CheckTarget of Target.target
 
