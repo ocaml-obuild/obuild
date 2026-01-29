@@ -143,26 +143,37 @@ let get_all () =
 
 (** Check if a file extension has a registered generator *)
 let is_generator_ext ext =
-  List.exists (fun gen -> gen.suffix = ext) (get_all ())
+  let ext_with_dot = "." ^ ext in
+  List.exists (fun gen -> gen.suffix = ext || gen.suffix = ext_with_dot) (get_all ())
 
-(** Get generator for filepath based on extension *)
-let get_generator fp =
+(** Get ALL generators for filepath based on extension *)
+let get_generators fp =
   let ext = Filetype.of_filepath fp in
-  let s = match ext with Filetype.FileOther s -> s | _ -> raise (GeneratorNotFound (fp_to_string fp)) in
-  try
-    List.find (fun gen -> gen.suffix = s) (get_all ())
-  with Not_found ->
-    raise (GeneratorNotFound (fp_to_string fp))
+  match ext with
+  | Filetype.FileOther s ->
+      let s_with_dot = "." ^ s in
+      List.filter (fun gen -> gen.suffix = s || gen.suffix = s_with_dot) (get_all ())
+  | _ -> []
 
-(** Run generator for source file *)
+(** Get single generator for filepath (for backward compatibility) *)
+let get_generator fp =
+  match get_generators fp with
+  | [] -> raise (GeneratorNotFound (fp_to_string fp))
+  | gen :: _ -> gen
+
+(** Run ALL generators for source file *)
 let run dest src modName =
   verbose Debug "  generator dest = %s src = %s\n%!" (fp_to_string dest) (fp_to_string src);
-  let gen = get_generator src in
-  let args = gen.commands src dest modName in
-  List.iter (fun arg ->
-      match Process.run arg with
-      | Process.Success (_, warnings,_) -> print_warnings warnings
-      | Process.Failure er -> raise (GeneratorFailed er) ) args
+  let gens = get_generators src in
+  if gens = [] then raise (GeneratorNotFound (fp_to_string src));
+  List.iter (fun gen ->
+    let args = gen.commands src dest modName in
+    List.iter (fun arg ->
+        match Process.run arg with
+        | Process.Success (_, warnings,_) -> print_warnings warnings
+        | Process.Failure er -> raise (GeneratorFailed er)
+    ) args
+  ) gens
 
 (** Find a custom generator by name *)
 let find_generator_by_name name =

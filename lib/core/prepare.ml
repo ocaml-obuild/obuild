@@ -647,6 +647,39 @@ let add_generate_block_tasks target stepsDag =
     Dag.add_edge (LinkTarget target) task stepsDag
   ) target.Target.target_generates
 
+(** Scan source directories for files matching generator suffixes and register
+    the output modules. This allows modules like Ollama_t (generated from ollama.atd)
+    to be discovered before the source file is actually generated. *)
+let register_generator_outputs target =
+  let generators = Generators.get_all () in
+  let src_dirs = target.Target.target_obits.Target.target_srcdir in
+  List.iter (fun src_dir ->
+    (* Scan for files matching each generator's suffix *)
+    List.iter (fun (gen : Generators.t) ->
+      if gen.Generators.suffix <> "" then begin
+        let suffix = gen.Generators.suffix in
+        (* Find all files with this suffix in the source directory *)
+        let files = Filesystem.list_dir_pred (fun f ->
+          String_utils.endswith suffix (fn_to_string f)
+        ) src_dir in
+        List.iter (fun src_file ->
+          let src_path = src_dir </> src_file in
+          (* Get the output files from the generator *)
+          let base = fn_to_string (chop_extension src_file) in
+          let output_file = gen.Generators.generated_files src_file base in
+          (* Extract module name from output file (e.g., ollama_t.ml -> Ollama_t) *)
+          let output_base = fn_to_string (chop_extension output_file) in
+          let module_name = Compat.string_capitalize output_base in
+          let hier = Hier.of_string module_name in
+          verbose Verbose "  Registering generated module %s from %s\n%!"
+            module_name (fp_to_string src_path);
+          (* Register as GeneratedFileEntry so the build system knows how to handle it *)
+          Hier.register_generated_entry hier src_dir src_path output_file
+        ) files
+      end
+    ) generators
+  ) src_dirs
+
 (* get every module description
  * and their relationship with each other
  *)
@@ -843,6 +876,9 @@ let prepare_target_ bstate buildDir target toplevelModules =
   let obits = target.target_obits in
 
   verbose Verbose "preparing compilation for %s\n%!" (Target.get_target_name target);
+
+  (* Register output modules from generators before module discovery *)
+  register_generator_outputs target;
 
   let modulesDeps = get_modules_desc bstate target toplevelModules in
 

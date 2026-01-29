@@ -214,6 +214,15 @@ let get_file_entry hier paths =
 let register_synthetic_entry hier root_path full_path =
   Hashtbl.replace hiers hier (FileEntry (root_path, full_path))
 
+(* Register a generated file entry for modules produced by generators (e.g., atdgen).
+   This allows modules like Ollama_t (from ollama.atd) to be discovered.
+   - hier: the module hierarchy (e.g., Ollama_t)
+   - root_path: the source directory containing the generator input
+   - src_path: full path to the source file (e.g., lib/ollama.atd)
+   - output_file: the generated output filename (e.g., ollama_t.ml) *)
+let register_generated_entry hier root_path src_path output_file =
+  Hashtbl.replace hiers hier (GeneratedFileEntry (root_path, src_path, output_file))
+
 let of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in
   let m =

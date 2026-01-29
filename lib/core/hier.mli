@@ -125,3 +125,12 @@ val register_synthetic_entry : t -> Filepath.filepath -> Filepath.filepath -> un
     generate-block modules). This allows get_dest_file to work for these modules even
     before the source file exists. Replaces any existing entry (which may have been
     cached during dependency analysis before the module was identified as synthetic). *)
+
+val register_generated_entry : t -> Filepath.filepath -> Filepath.filepath -> Filepath.filename -> unit
+(** [register_generated_entry hier root_path src_path output_file] registers a generated
+    file entry for modules produced by generators (e.g., atdgen). This allows modules
+    like Ollama_t (from ollama.atd) to be discovered before generation.
+    - [hier]: the module hierarchy (e.g., Ollama_t)
+    - [root_path]: the source directory containing the generator input
+    - [src_path]: full path to the source file (e.g., lib/ollama.atd)
+    - [output_file]: the generated output filename (e.g., ollama_t.ml) *)
