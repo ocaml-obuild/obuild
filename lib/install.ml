@@ -74,9 +74,10 @@ let lib_to_meta proj_file lib =
   let set_meta_field_from_lib pkg lib =
     let linkopts_of_lib lib =
       match lib.Library.target.Target.target_cstubs with
-      | Some cstubs ->
-          let stubs_lib_name = cstubs.Target.cstubs_external_library_name ^ "_stubs" in
-          [(None, "-l" ^ stubs_lib_name)]
+      | Some _ ->
+          (* The installed stubs library is named libstubs_<library_name>.a *)
+          let lib_name = Libname.to_string lib.Library.name in
+          [(None, "-lstubs_" ^ lib_name)]
       | None -> []
     in
     {
