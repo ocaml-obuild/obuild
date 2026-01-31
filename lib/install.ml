@@ -72,11 +72,19 @@ let lib_to_meta proj_file lib =
     [ ([], List.map (fun d -> fst d) deps) ]
   in
   let set_meta_field_from_lib pkg lib =
+    let linkopts_of_lib lib =
+      match lib.Library.target.Target.target_cstubs with
+      | Some cstubs ->
+          let stubs_lib_name = cstubs.Target.cstubs_external_library_name ^ "_stubs" in
+          [(None, "-l" ^ stubs_lib_name)]
+      | None -> []
+    in
     {
       pkg with
       Meta.Pkg.requires = requires_of_lib lib;
       Meta.Pkg.description =
         (if lib.Library.description <> "" then lib.Library.description else proj_file.description);
+      Meta.Pkg.linkopts = linkopts_of_lib lib;
       Meta.Pkg.archives =
         ([
            ([ Meta.Predicate.Byte ], fn_to_string (Libname.to_cmca ByteCode Normal lib.Library.name));

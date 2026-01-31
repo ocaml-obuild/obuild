@@ -226,6 +226,15 @@ module Pkg = struct
         pkg.append_archives;
 
       List.iter
+        (fun (preds_opt, v) ->
+          let preds_str = match preds_opt with
+            | None -> ""
+            | Some preds -> preds_to_string preds
+          in
+          append (sprintf "%slinkopts%s = \"%s\"\n" indent_str preds_str v))
+        pkg.linkopts;
+
+      List.iter
         (fun spkg ->
           append (sprintf "%spackage \"%s\" (\n" indent_str spkg.name);
           write_one (indent + 2) spkg;
