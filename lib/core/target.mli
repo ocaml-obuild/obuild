@@ -182,3 +182,7 @@ val get_all_builddeps : target -> Dependencies.dependency list
 
 val find_extra_matching : target -> string -> target_extra list
 (** Find extra compilation settings for a specific object file *)
+
+val register_generator_outputs : target -> unit
+(** Register output modules from generators so they can be found during validation and build.
+    Handles both suffix-based generators (e.g., atdgen) and explicit generate blocks. *)

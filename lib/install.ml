@@ -76,8 +76,9 @@ let lib_to_meta proj_file lib =
       match lib.Library.target.Target.target_cstubs with
       | Some _ ->
           (* The installed stubs library is named libstubs_<library_name>.a *)
+          (* Use -cclib to wrap C linker flags for ocamlfind/ocamlopt compatibility *)
           let lib_name = Libname.to_string lib.Library.name in
-          [(None, "-lstubs_" ^ lib_name)]
+          [(None, "-cclib -lstubs_" ^ lib_name)]
       | None -> []
     in
     {

@@ -240,3 +240,34 @@ let get_all_builddeps target =
 
 let find_extra_matching target s =
   List.filter (fun extra -> List.mem s extra.target_extra_objects) target.target_extras
+
+(** Register output modules from generators so they can be found during validation and build.
+    Handles both suffix-based generators (e.g., atdgen) and explicit generate blocks. *)
+let register_generator_outputs target =
+  let generators = Generators.get_all () in
+  let src_dirs = target.target_obits.target_srcdir in
+  (* Register suffix-based generator outputs *)
+  List.iter (fun src_dir ->
+    List.iter (fun (gen : Generators.t) ->
+      if gen.Generators.suffix <> "" then begin
+        let suffix = gen.Generators.suffix in
+        let files = Filesystem.list_dir_pred (fun f ->
+          String_utils.endswith suffix (fn_to_string f)
+        ) src_dir in
+        List.iter (fun src_file ->
+          let src_path = src_dir </> src_file in
+          let base = fn_to_string (chop_extension src_file) in
+          let output_file = gen.Generators.generated_files src_file base in
+          let output_base = fn_to_string (chop_extension output_file) in
+          let module_name = Compat.string_capitalize output_base in
+          let hier = Hier.of_string module_name in
+          Hier.register_generated_entry hier src_dir src_path output_file
+        ) files
+      end
+    ) generators
+  ) src_dirs;
+  (* Register generate block modules *)
+  List.iter (fun (gen_block : target_generate) ->
+    let module_name = Hier.to_string gen_block.generate_module in
+    Hier.register_generated_module module_name
+  ) target.target_generates

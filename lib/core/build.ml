@@ -919,6 +919,17 @@ let build_dag bstate proj_file targets_dag =
       let task_context = Hashtbl.create 64 in
       let taskdep = Taskdep.init targets_dag in
       let targets_deps = Hashtbl.create 64 in
+
+      (* Register all generated modules globally before preparing any target.
+         This allows dependent targets to recognize generated modules. *)
+      List.iter (fun lib ->
+        let target = Project.Library.to_target lib in
+        List.iter (fun (gen : Target.target_generate) ->
+          let module_name = Hier.to_string gen.Target.generate_module in
+          Hier.register_generated_module module_name
+        ) target.Target.target_generates
+      ) proj_file.Project.libs;
+
       let prepare_state target modules =
         let build_dir = Dist.create_build (Dist.Target target.target_name) in
         let cstate =
@@ -948,7 +959,12 @@ let build_dag bstate proj_file targets_dag =
                         [ Hier.of_filename exe.Project.Executable.main ]
                   | Name.Lib name ->
                       let lib = Project.find_lib proj_file name in
-                      prepare_state (Project.Library.to_target lib) lib.Project.Library.modules
+                      let target = Project.Library.to_target lib in
+                      (* Include generated modules from generate blocks - they belong to the library *)
+                      let generated_modules = List.map (fun (g : Target.target_generate) ->
+                        g.Target.generate_module
+                      ) target.Target.target_generates in
+                      prepare_state target (lib.Project.Library.modules @ generated_modules)
                   | Name.Bench name ->
                       let bench = Project.find_bench proj_file name in
                       prepare_state (Project.Bench.to_target bench)

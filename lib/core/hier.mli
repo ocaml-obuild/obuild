@@ -134,3 +134,14 @@ val register_generated_entry : t -> Filepath.filepath -> Filepath.filepath -> Fi
     - [root_path]: the source directory containing the generator input
     - [src_path]: full path to the source file (e.g., lib/ollama.atd)
     - [output_file]: the generated output filename (e.g., ollama_t.ml) *)
+
+(** {1 Global Generated Module Registry} *)
+
+val register_generated_module : string -> unit
+(** [register_generated_module name] registers a module name as globally generated
+    (from a generate block in any target). This allows dependent targets to
+    recognize generated modules before their generating target is prepared. *)
+
+val is_generated_module : string -> bool
+(** [is_generated_module name] returns true if the module was registered as
+    generated via [register_generated_module]. *)

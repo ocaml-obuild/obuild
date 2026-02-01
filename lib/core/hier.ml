@@ -22,6 +22,16 @@ let file_entry_to_string = function
         (fn_to_string n)
 
 let hiers : (t, file_entry) Hashtbl.t = Hashtbl.create 128
+
+(* Global registry of generated module names (from generate blocks across all targets) *)
+let generated_modules : (string, unit) Hashtbl.t = Hashtbl.create 16
+
+let register_generated_module name =
+  Hashtbl.replace generated_modules name ()
+
+let is_generated_module name =
+  Hashtbl.mem generated_modules name
+
 let root = List.hd
 
 let parent x =
