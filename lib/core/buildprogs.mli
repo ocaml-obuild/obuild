@@ -93,11 +93,14 @@ val run_ocaml_linking :
   Prepare.thread_type ->
   string ->
   string list ->
+  string list ->
   Filepath.filepath list ->
   Hier.t list ->
   Filepath.filepath ->
   Process.t
-(** Link OCaml modules into library or executable *)
+(** Link OCaml modules into library or executable.
+    Parameters: includeDirs buildMode linkingMode compileType useThread systhread
+    oflags cclibs libs modules dest *)
 
 (** {2 ctypes.cstubs support} *)
 

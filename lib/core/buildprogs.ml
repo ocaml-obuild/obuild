@@ -149,7 +149,7 @@ let run_c_linking sharingMode depfiles dest =
   in
   Process.make args
 
-let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread systhread cclibs libs
+let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread systhread oflags cclibs libs
     modules dest =
   (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
   let link_maybe linking_mode dest =
@@ -191,6 +191,7 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
       | Normal -> []
       | WithDebug -> [ "-g" ]
       | WithProf -> [ "-p" ])
+    @ oflags
     @ Utils.to_include_path_options includeDirs
     @ List.map fp_to_string libs
     @ List.concat

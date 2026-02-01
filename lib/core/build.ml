@@ -676,7 +676,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
     [
       (fun () ->
         run_ocaml_linking (linking_paths_of compileOpt) compiledType link_type compileOpt
-          useThreadLib systhread cclibs buildDeps compiled dest);
+          useThreadLib systhread target.target_obits.target_oflags cclibs buildDeps compiled dest);
     ])
   else
     []
