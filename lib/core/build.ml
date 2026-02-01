@@ -722,34 +722,15 @@ let link task_index task bstate task_context dag =
       | None -> None
     ) selfDeps
   in
-  (* Check for cstubs - if present, add the cstubs library *)
-  let cstubs_cclibs =
-    match target.target_cstubs with
-    | Some cstubs ->
-        let c_lib_name = cstubs.cstubs_external_library_name in
-        [ c_lib_name ^ "_stubs" ]
-    | None -> []
-  in
-  let cstubs_lib_dirs =
-    match target.target_cstubs with
-    | Some cstubs ->
-        let libname =
-          match target.target_name with
-          | Name.Lib lib -> lib
-          | _ -> failwith "cstubs only supported for libraries"
-        in
-        [ get_cstubs_autogen_dir libname ]
-    | None -> []
-  in
-  (* Get cstubs libs and dirs from dependencies *)
+  (* cstubs objects are now included in the main stubs library, not separate *)
+  (* Get cstubs libs from dependencies - they use the standard stubs_<libname> naming *)
   let deps_cstubs_cclibs =
-    List.map (fun (_, c_lib_name) -> c_lib_name ^ "_stubs") deps_cstubs_info
+    List.map (fun (dep_name, _) -> Target.Name.get_clibname (Name.Lib dep_name)) deps_cstubs_info
   in
-  let deps_cstubs_lib_dirs =
-    List.map (fun (dep_name, _) -> get_cstubs_autogen_dir dep_name) deps_cstubs_info
-  in
+  (* Internal C library: created if we have c-sources OR cstubs *)
+  let has_c_lib = cstate.compilation_csources <> [] || target.target_cstubs <> None in
   let internal_cclibs =
-    if cstate.compilation_csources <> [] then
+    if has_c_lib then
       [ Target.get_target_clibname target ]
     else
       []
@@ -761,9 +742,7 @@ let link task_index task bstate task_context dag =
            List.map (fun x -> "-l" ^ x) (Analyze.get_c_pkg cpkg bstate.bstate_config).cpkg_conf_libs)
          cbits.target_cpkgs)
     @ List.map (fun x -> "-L" ^ fp_to_string x) selfLibDirs
-    @ List.map (fun x -> "-L" ^ fp_to_string x) cstubs_lib_dirs
-    @ List.map (fun x -> "-L" ^ fp_to_string x) deps_cstubs_lib_dirs
-    @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ cstubs_cclibs @ deps_cstubs_cclibs @ internal_cclibs @ deps_internal_cclibs)
+    @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ deps_cstubs_cclibs @ internal_cclibs @ deps_internal_cclibs)
   in
   let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
   verbose Verbose "package deps: [%s]\n" (Utils.showList "," Libname.to_string pkgDeps);
@@ -777,25 +756,38 @@ let link task_index task bstate task_context dag =
     else
       NoThreads
   in
-  (* Create C library from regular C sources *)
+  (* Create C library from regular C sources and cstubs combined *)
   let cfunlist =
-    if cstate.compilation_csources <> [] then
-      link_c cstate (Target.get_target_clibname target)
-    else
+    let csource_objs =
+      List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources
+    in
+    let cstubs_objs =
+      match (target.target_cstubs, target.target_name) with
+      | Some cstubs, Name.Lib libname ->
+          let autogen_dir = get_cstubs_autogen_dir libname in
+          let c_lib_name = cstubs.cstubs_external_library_name in
+          let c_stubs_file = fn (c_lib_name ^ "_stubs.c") in
+          [ autogen_dir </> o_from_cfile c_stubs_file ]
+      | _ -> []
+    in
+    let all_objs = csource_objs @ cstubs_objs in
+    if all_objs <> [] then begin
+      let clib_name = Target.get_target_clibname target in
+      while not (wait_for_files all_objs) do
+        ignore (Unix.select [] [] [] 0.02)
+      done;
+      if gconf.ocamlmklib then
+        [ [ (fun () -> run_c_linking LinkingShared all_objs (cstate.compilation_builddir_c </> fn clib_name)) ] ]
+      else
+        let so_file = cstate.compilation_builddir_c </> fn ("dll" ^ clib_name ^ ".so") in
+        let a_file = cstate.compilation_builddir_c </> fn ("lib" ^ clib_name ^ ".a") in
+        [
+          [ (fun () -> run_c_linking LinkingShared all_objs so_file) ];
+          [ (fun () -> run_ar a_file all_objs) ];
+          [ (fun () -> run_ranlib a_file) ];
+        ]
+    end else
       []
-  in
-  (* Create cstubs C library if needed *)
-  let cstubs_cfunlist =
-    match (target.target_cstubs, target.target_name) with
-    | Some cstubs, Name.Lib libname ->
-        let autogen_dir = get_cstubs_autogen_dir libname in
-        let c_lib_name = cstubs.cstubs_external_library_name in
-        let c_stubs_file = fn (c_lib_name ^ "_stubs.c") in
-        let obj_file = autogen_dir </> o_from_cfile c_stubs_file in
-        let lib_file = autogen_dir </> fn ("lib" ^ c_lib_name ^ "_stubs.a") in
-        (* ar and ranlib must run sequentially - each in its own list *)
-        [ [ (fun () -> run_ar lib_file [ obj_file ]) ]; [ (fun () -> run_ranlib lib_file) ] ]
-    | _ -> []
   in
   let all_modes = get_all_modes target in
   let funlist =
@@ -817,7 +809,7 @@ let link task_index task bstate task_context dag =
       [] all_modes
   in
   if funlist <> [] then
-    Scheduler.AddTask (task, cfunlist @ cstubs_cfunlist @ [ funlist ])
+    Scheduler.AddTask (task, cfunlist @ [ funlist ])
   else
     Scheduler.FinishTask task
 
