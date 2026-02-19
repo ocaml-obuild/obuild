@@ -32,6 +32,14 @@ val init : int -> string -> string
 val all : (char -> bool) -> string -> bool
 (** [all p s] tests if all characters in [s] satisfy predicate [p] *)
 
+val escape_ocaml_string : string -> string
+(** Escape a string for embedding in an OCaml string literal.
+    Escapes backslash, double-quote, newline, carriage return and tab. *)
+
+val escape_c_string : string -> string
+(** Escape a string for embedding in a C string literal.
+    Escapes backslash, double-quote, newline, carriage return, tab and percent. *)
+
 val lines : string -> string list
 (** Split string on newline characters *)
 

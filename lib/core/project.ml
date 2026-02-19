@@ -71,7 +71,6 @@ module Library = struct
     add (sprintf "%smodules: %s\n" iStr (Utils.showList "," Hier.to_string lib.modules));
     if lib.pack then add (sprintf "%spack: %b\n" iStr lib.pack);
     if lib.syntax then add (sprintf "%ssyntax: %b\n" iStr lib.syntax);
-    if lib.pack then add (sprintf "%spack: %b\n" iStr lib.pack);
     show_target iStr lib.target;
     List.iter (fun sub -> show add show_target iStr sub) lib.subs
 end

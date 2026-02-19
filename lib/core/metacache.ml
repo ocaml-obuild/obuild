@@ -1,7 +1,9 @@
 open Gconf
 open Helper
 
-let pkgs_cache : (string, Meta.t) Hashtbl.t = Hashtbl.create 100
+let initial_cache_size = 128
+
+let pkgs_cache : (string, Meta.t) Hashtbl.t = Hashtbl.create initial_cache_size
 
 let get_from_disk name =
   verbose Debug "  fetching META %s\n%!" name;

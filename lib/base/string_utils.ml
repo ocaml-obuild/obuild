@@ -80,6 +80,33 @@ let all p s =
   let rec loop i = if i = len then true else if not (p s.[i]) then false else loop (i + 1) in
   loop 0
 
+let escape_ocaml_string s =
+  let buf = Buffer.create (String.length s) in
+  for i = 0 to String.length s - 1 do
+    match s.[i] with
+    | '\\' -> Buffer.add_string buf "\\\\"
+    | '"'  -> Buffer.add_string buf "\\\""
+    | '\n' -> Buffer.add_string buf "\\n"
+    | '\r' -> Buffer.add_string buf "\\r"
+    | '\t' -> Buffer.add_string buf "\\t"
+    | c    -> Buffer.add_char buf c
+  done;
+  Buffer.contents buf
+
+let escape_c_string s =
+  let buf = Buffer.create (String.length s) in
+  for i = 0 to String.length s - 1 do
+    match s.[i] with
+    | '\\' -> Buffer.add_string buf "\\\\"
+    | '"'  -> Buffer.add_string buf "\\\""
+    | '\n' -> Buffer.add_string buf "\\n"
+    | '\r' -> Buffer.add_string buf "\\r"
+    | '\t' -> Buffer.add_string buf "\\t"
+    | '%'  -> Buffer.add_string buf "%%"
+    | c    -> Buffer.add_char buf c
+  done;
+  Buffer.contents buf
+
 let lines s = split '\n' s
 let words s = split_pred (fun c -> c = ' ' || c = '\n' || c = '\t') s
 let words_noempty s = no_empty "" (words s)

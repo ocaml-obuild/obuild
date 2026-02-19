@@ -13,6 +13,12 @@ exception CCompilationFailed of string
 exception CompilationFailed of string
 exception Internal_Inconsistancy of string * string
 
+(* Polling constants for waiting on filesystem *)
+let poll_interval_sec = 0.02          (* 20ms between file existence checks *)
+let mtime_poll_interval_sec = 0.01    (* 10ms between mtime freshness checks *)
+let mtime_poll_timeout_sec = 5.0      (* safety timeout for mtime polling *)
+let initial_task_context_size = 64
+
 (* check that destination is valid (mtime wise) against a list of srcs and
  * if not valid gives the filepath that has changed.
  *)
@@ -155,7 +161,7 @@ let generate_cstubs_functions = Build_cstubs.generate_cstubs_functions
 let compile_cstubs_c = Build_cstubs.compile_cstubs_c
 
 (* Run explicit generate block *)
-let run_generate_block _task_index task (gen_block : Target.target_generate) _bstate task_context dag =
+let run_generate_block task_index task (gen_block : Target.target_generate) _bstate task_context dag =
   let _cstate, _target = Hashtbl.find task_context task in
   let autogenDir = Dist.get_build_exn Dist.Autogen in
 
@@ -200,7 +206,6 @@ let run_generate_block _task_index task (gen_block : Target.target_generate) _bs
 
   if needs_rebuild then begin
     let nb_step, nb_step_len = get_nb_step dag in
-    let task_index = 0 in  (* TODO: get actual task index *)
     verbose Report "[%*d of %d] Generating %-30s\n%!" nb_step_len task_index nb_step
       (Hier.to_string output_module);
     let dest = autogenDir </> fn (Compat.string_lowercase (Hier.to_string output_module)) in
@@ -489,7 +494,7 @@ let link_c cstate clib_name =
   in
   (* Not sure why it is necessary ... gcc seems to return before the files are ready. *)
   while not (wait_for_files cdep_files) do
-    ignore (Unix.select [] [] [] 0.02) (* sleep 1/50 second *)
+    ignore (Unix.select [] [] [] poll_interval_sec)
   done;
   if gconf.ocamlmklib then
     [ [ (fun () -> run_c_linking LinkingShared cdep_files lib_name) ] ]
@@ -591,11 +596,10 @@ let wait_for_c_objects c_obj_files destTime =
   if List.length c_obj_files > 0 then (
     (* First wait for files to exist *)
     while not (wait_for_files c_obj_files) do
-      ignore (Unix.select [] [] [] 0.02) (* sleep 1/50 second *)
+      ignore (Unix.select [] [] [] poll_interval_sec)
     done;
     (* Then poll until all files have mtimes newer than destTime *)
-    let max_wait_time = Unix.gettimeofday () +. 5.0 in
-    (* 5 second safety timeout *)
+    let max_wait_time = Unix.gettimeofday () +. mtime_poll_timeout_sec in
     let rec poll_fresh () =
       if Unix.gettimeofday () > max_wait_time then
         verbose Debug "Warning: timeout waiting for C object mtimes to update\n"
@@ -610,8 +614,7 @@ let wait_for_c_objects c_obj_files destTime =
             c_obj_files
         in
         if not all_fresh then (
-          ignore (Unix.select [] [] [] 0.01);
-          (* 10ms between polls *)
+          ignore (Unix.select [] [] [] mtime_poll_interval_sec);
           poll_fresh ())
     in
     poll_fresh ())
@@ -892,7 +895,7 @@ let compile (bstate : build_state) task_context dag =
 let build_exe bstate exe =
   let target = Project.Executable.to_target exe in
   let modules = [ Hier.of_filename exe.Project.Executable.main ] in
-  let task_context = Hashtbl.create 64 in
+  let task_context = Hashtbl.create initial_task_context_size in
   let build_dir = Dist.create_build (Dist.Target target.target_name) in
   let cstate = prepare_target bstate build_dir target modules in
   List.iter
@@ -916,9 +919,9 @@ let rec select_leaves children duplicate dag =
 let build_dag bstate proj_file targets_dag =
   Helper.Timing.measure_time "build_dag (total)" (fun () ->
       let dag = Helper.Timing.measure_time "DAG initialization" (fun () -> Dag.init ()) in
-      let task_context = Hashtbl.create 64 in
+      let task_context = Hashtbl.create initial_task_context_size in
       let taskdep = Taskdep.init targets_dag in
-      let targets_deps = Hashtbl.create 64 in
+      let targets_deps = Hashtbl.create initial_task_context_size in
 
       (* Register all generated modules globally before preparing any target.
          This allows dependent targets to recognize generated modules. *)

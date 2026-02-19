@@ -165,17 +165,4 @@ package \"sub\" (\n\
 )\n"
 
 (** Complete example .obuild file *)
-let example_project = "\
-name = example\n\
-version = 2.0.0\n\
-obuild-ver = 1\n\
-synopsis = \"An example project\"\n\
-description = \"This is a complete example project\"\n\
-\n\
-library mylib\n\
-  modules: Foo, Bar\n\
-  build-deps: unix\n\
-\n\
-executable myexe\n\
-  main-is: main.ml\n\
-  build-deps: mylib\n"
+let example_project = "name = example\nversion = 2.0.0\nobuild-ver = 1\nsynopsis = \"An example project\"\ndescription = \"This is a complete example project\"\n\nlibrary mylib\n  modules: Foo, Bar\n  build-deps: unix\n\nexecutable myexe\n  main-is: main.ml\n  build-deps: mylib\n"

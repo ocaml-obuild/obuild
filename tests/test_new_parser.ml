@@ -224,7 +224,7 @@ let test_parser_library () =
 
   test "simple library" (fun () ->
       let input =
-        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\nmodules: A, B, C\nsrc-dir: lib\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A, B, C\n  src-dir: lib\n"
       in
       let proj = parse input in
       assert_eq_int "libs count" 1 (List.length proj.project_libs);
@@ -235,12 +235,7 @@ let test_parser_library () =
 
   test "library with build-deps" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\
-         build-deps: unix, str, base (>= 0.14)\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  build-deps: unix, str, base (>= 0.14)\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -252,16 +247,7 @@ let test_parser_library () =
 
   test "library with C settings" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\
-         c-dir: csrc\n\
-         c-sources: foo.c, bar.c\n\
-         c-flags: -O2, -Wall\n\
-         c-libs: m, pthread\n\
-         c-pkgs: glib-2.0\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  c-dir: csrc\n  c-sources: foo.c, bar.c\n  c-flags: -O2, -Wall\n  c-libs: m, pthread\n  c-pkgs: glib-2.0\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -274,13 +260,7 @@ let test_parser_library () =
 
   test "library with pack and syntax" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\
-         pack: true\n\
-         syntax: true\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  pack: true\n  syntax: true\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -289,7 +269,7 @@ let test_parser_library () =
 
   test "library with stdlib none" (fun () ->
       let input =
-        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\nmodules: A\nstdlib: none\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  stdlib: none\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -297,7 +277,7 @@ let test_parser_library () =
 
   test "library with oflags" (fun () ->
       let input =
-        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\nmodules: A\noflags: -w, +a-4\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  oflags: -w, +a-4\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -305,13 +285,7 @@ let test_parser_library () =
 
   test "library buildable/installable" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\
-         buildable: false\n\
-         installable: $flag_install\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  buildable: false\n  installable: $flag_install\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -320,13 +294,7 @@ let test_parser_library () =
 
   test "multiple libraries" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library lib1\n\
-         modules: A\n\n\
-         library lib2\n\
-         modules: B\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary lib1\n  modules: A\n\nlibrary lib2\n  modules: B\n"
       in
       let proj = parse input in
       assert_eq_int "libs count" 2 (List.length proj.project_libs));
@@ -342,19 +310,7 @@ let test_parser_cstubs () =
 
   test "library with cstubs" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: Bindings, C, Types_generated\n\
-         build-deps: ctypes, ctypes.stubs\n\n\
-         cstubs\n\
-         external-library-name: mylib_stubs\n\
-         type-description: Bindings.Types -> Types_gen\n\
-         function-description: Bindings.Functions -> Funcs_gen\n\
-         generated-types: Types_generated\n\
-         generated-entry-point: C\n\
-         headers: string.h, mylib.h\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: Bindings, C, Types_generated\n  build-deps: ctypes, ctypes.stubs\n\n  cstubs\n    external-library-name: mylib_stubs\n    type-description: Bindings.Types -> Types_gen\n    function-description: Bindings.Functions -> Funcs_gen\n    generated-types: Types_generated\n    generated-entry-point: C\n    headers: string.h, mylib.h\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -372,13 +328,7 @@ let test_parser_cstubs () =
 
   test "cstubs minimal" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\n\
-         cstubs\n\
-         external-library-name: foo\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n\n  cstubs\n    external-library-name: foo\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -399,7 +349,7 @@ let test_parser_executable () =
 
   test "simple executable" (fun () ->
       let input =
-        "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable myexe\nmain-is: main.ml\nsrc-dir: src\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable myexe\n  main-is: main.ml\n  src-dir: src\n"
       in
       let proj = parse input in
       assert_eq_int "exes count" 1 (List.length proj.project_exes);
@@ -410,12 +360,7 @@ let test_parser_executable () =
 
   test "executable with deps" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         executable myexe\n\
-         main-is: main.ml\n\
-         build-deps: unix, cmdliner\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable myexe\n  main-is: main.ml\n  build-deps: unix, cmdliner\n"
       in
       let proj = parse input in
       let exe = List.hd proj.project_exes in
@@ -423,13 +368,7 @@ let test_parser_executable () =
 
   test "multiple executables" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         executable exe1\n\
-         main-is: main1.ml\n\n\
-         executable exe2\n\
-         main-is: main2.ml\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable exe1\n  main-is: main1.ml\n\nexecutable exe2\n  main-is: main2.ml\n"
       in
       let proj = parse input in
       assert_eq_int "exes count" 2 (List.length proj.project_exes));
@@ -445,7 +384,7 @@ let test_parser_test () =
 
   test "simple test" (fun () ->
       let input =
-        "name: x\nversion: 1\nobuild-ver: 1\n\ntest mytest\nmain-is: test_main.ml\nsrc-dir: tests\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\ntest mytest\n  main-is: test_main.ml\n  src-dir: tests\n"
       in
       let proj = parse input in
       assert_eq_int "tests count" 1 (List.length proj.project_tests);
@@ -455,7 +394,7 @@ let test_parser_test () =
 
   test "test with rundir" (fun () ->
       let input =
-        "name: x\nversion: 1\nobuild-ver: 1\n\ntest mytest\nmain-is: test.ml\nrun-dir: test_data\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\ntest mytest\n  main-is: test.ml\n  run-dir: test_data\n"
       in
       let proj = parse input in
       let t = List.hd proj.project_tests in
@@ -472,14 +411,7 @@ let test_parser_per () =
 
   test "library with per block" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A, B\n\n\
-         per A\n\
-         build-deps: special_lib\n\
-         oflags: -w, -40\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A, B\n\n  per A\n    build-deps: special_lib\n    oflags: -w, -40\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -492,15 +424,7 @@ let test_parser_per () =
 
   test "multiple per blocks" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A, B, C\n\n\
-         per A\n\
-         oflags: -w, -40\n\n\
-         per B C\n\
-         pp: ppx_deriving\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A, B, C\n\n  per A\n    oflags: -w, -40\n\n  per B C\n    pp: ppx_deriving\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -520,14 +444,7 @@ let test_parser_sublib () =
 
   test "library with sublibrary" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\n\
-         sublib internal\n\
-         modules: B, C\n\
-         src-dir: internal\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n\n  sublib internal\n    modules: B, C\n    src-dir: internal\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -547,12 +464,7 @@ let test_parser_flag () =
 
   test "flag definition" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         flag debug\n\
-         description: Enable debug mode\n\
-         default: false\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nflag debug\n  description: Enable debug mode\n  default: false\n"
       in
       let proj = parse input in
       assert_eq_int "flags" 1 (List.length proj.project_flags);
@@ -572,24 +484,7 @@ let test_real_files () =
 
   test "ctypes_test.obuild" (fun () ->
       let input =
-        "name: ctypes_test\n\
-         version: 0.1.0\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: Bindings, C, Types_generated\n\
-         build-deps: ctypes, ctypes.stubs\n\
-         src-dir: lib\n\n\
-         cstubs\n\
-         external-library-name: mylib_stubs\n\
-         type-description: Bindings.Types -> Types_gen\n\
-         function-description: Bindings.Functions -> Funcs_gen\n\
-         generated-types: Types_generated\n\
-         generated-entry-point: C\n\
-         headers: string.h\n\n\
-         executable test_mylib\n\
-         main-is: main.ml\n\
-         src-dir: bin\n\
-         build-deps: mylib, integers, ctypes\n"
+        "name: ctypes_test\nversion: 0.1.0\nobuild-ver: 1\n\nlibrary mylib\n  modules: Bindings, C, Types_generated\n  build-deps: ctypes, ctypes.stubs\n  src-dir: lib\n\n  cstubs\n    external-library-name: mylib_stubs\n    type-description: Bindings.Types -> Types_gen\n    function-description: Bindings.Functions -> Funcs_gen\n    generated-types: Types_generated\n    generated-entry-point: C\n    headers: string.h\n\nexecutable test_mylib\n  main-is: main.ml\n  src-dir: bin\n  build-deps: mylib, integers, ctypes\n"
       in
       let proj = parse input in
       assert_eq "name" "ctypes_test" proj.project_name.value;
@@ -610,41 +505,7 @@ let test_real_files () =
 
   test "complex project" (fun () ->
       let input =
-        "name: myproject\n\
-         version: 1.0.0\n\
-         obuild-ver: 1\n\
-         synopsis: A complex project\n\
-         license: BSD-3-Clause\n\
-         authors: Alice, Bob, Charlie\n\
-         homepage: https://github.com/example/myproject\n\n\
-         # Main library\n\
-         library core\n\
-         modules: Types, Utils, Engine\n\
-         build-deps: base (>= 0.14), stdio, unix\n\
-         src-dir: lib/core\n\
-         oflags: -w, +a-4-40-42\n\n\
-         per Engine\n\
-         build-deps: threads\n\
-         pp: ppx_deriving.show\n\n\
-         # CLI executable\n\
-         executable mycli\n\
-         main-is: main.ml\n\
-         src-dir: bin\n\
-         build-deps: core, cmdliner (>= 1.0)\n\n\
-         # Tests\n\
-         test unit_tests\n\
-         main-is: test_unit.ml\n\
-         src-dir: tests\n\
-         build-deps: core, alcotest\n\n\
-         test integration_tests\n\
-         main-is: test_integration.ml\n\
-         src-dir: tests\n\
-         build-deps: core, alcotest\n\
-         run-dir: test_fixtures\n\n\
-         # Feature flag\n\
-         flag debug\n\
-         description: Build with debug info\n\
-         default: false\n"
+        "name: myproject\nversion: 1.0.0\nobuild-ver: 1\nsynopsis: A complex project\nlicense: BSD-3-Clause\nauthors: Alice, Bob, Charlie\nhomepage: https://github.com/example/myproject\n\n# Main library\nlibrary core\n  modules: Types, Utils, Engine\n  build-deps: base (>= 0.14), stdio, unix\n  src-dir: lib/core\n  oflags: -w, +a-4-40-42\n\n  per Engine\n    build-deps: threads\n    pp: ppx_deriving.show\n\n# CLI executable\nexecutable mycli\n  main-is: main.ml\n  src-dir: bin\n  build-deps: core, cmdliner (>= 1.0)\n\n# Tests\ntest unit_tests\n  main-is: test_unit.ml\n  src-dir: tests\n  build-deps: core, alcotest\n\ntest integration_tests\n  main-is: test_integration.ml\n  src-dir: tests\n  build-deps: core, alcotest\n  run-dir: test_fixtures\n\n# Feature flag\nflag debug\n  description: Build with debug info\n  default: false\n"
       in
       let proj = parse input in
       assert_eq "name" "myproject" proj.project_name.value;
@@ -689,12 +550,7 @@ let test_edge_cases () =
 
   test "dependency with complex constraint" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         library mylib\n\
-         modules: A\n\
-         build-deps: foo (>= 1.0 && < 2.0)\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  build-deps: foo (>= 1.0 && < 2.0)\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -708,14 +564,7 @@ let test_edge_cases () =
 
   test "mixed content" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\n\
-         # comment before library\n\
-         library mylib\n\
-         modules: A  # inline comments not supported, this is part of value\n\n\
-         # comment in library\n\
-         src-dir: lib\n"
+        "name: x\nversion: 1\nobuild-ver: 1\n\n# comment before library\nlibrary mylib\n  modules: A  # inline comments not supported, this is part of value\n\n  # comment in library\n  src-dir: lib\n"
       in
       let proj = parse input in
       let lib = List.hd proj.project_libs in
@@ -724,13 +573,7 @@ let test_edge_cases () =
 
   test "unknown fields ignored" (fun () ->
       let input =
-        "name: x\n\
-         version: 1\n\
-         obuild-ver: 1\n\
-         unknown-field: some value\n\n\
-         library mylib\n\
-         modules: A\n\
-         unknown-lib-field: ignored\n"
+        "name: x\nversion: 1\nobuild-ver: 1\nunknown-field: some value\n\nlibrary mylib\n  modules: A\n  unknown-lib-field: ignored\n"
       in
       let proj = parse input in
       assert_eq "name" "x" proj.project_name.value;

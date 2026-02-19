@@ -11,13 +11,7 @@ let test_ml_incremental_debug () =
       ("src/bar.ml", "let y = Foo.x + 1\n");
       ("src/baz.ml", "let z = Bar.y * 2\n");
     ]
-    ~obuild_content:"name: incremental-test\n\
-version: 1.0\n\
-obuild-ver: 1\n\
-\n\
-library test\n\
-  modules: Foo, Bar, Baz\n\
-  src-dir: src\n"
+    ~obuild_content:"name: incremental-test\nversion: 1.0\nobuild-ver: 1\n\nlibrary test\n  modules: Foo, Bar, Baz\n  src-dir: src\n"
     ~test_fn:(fun dir ->
       Printf.printf "Project directory: %s\n" dir;
 
@@ -101,15 +95,7 @@ let test_c_file_rebuild_debug () =
       ("src/cbits.h", "int add(int a, int b);\n");
       ("src/main.ml", "external add : int -> int -> int = \"add\"\nlet () = Printf.printf \"%d\\n\" (add 1 2)\n");
     ]
-    ~obuild_content:"name: c-test\n\
-version: 1.0\n\
-obuild-ver: 1\n\
-\n\
-executable ctest\n\
-  main-is: main.ml\n\
-  src-dir: src\n\
-  c-sources: cbits.c\n\
-  c-dir: src\n"
+    ~obuild_content:"name: c-test\nversion: 1.0\nobuild-ver: 1\n\nexecutable ctest\n  main-is: main.ml\n  src-dir: src\n  c-sources: cbits.c\n  c-dir: src\n"
     ~test_fn:(fun dir ->
       Printf.printf "Project directory: %s\n" dir;
 

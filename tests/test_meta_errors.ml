@@ -216,7 +216,7 @@ let test_location_tracking () =
 version = \"1.0\"\n\
 requires = \"unix\"\n\
 $invalid_token\n"
-    ~expected_msg:"4.0: meta lexing error: undefined character '$'"
+    ~expected_msg:"3.0: meta lexing error: undefined character '$'"
     ~name:"location tracking in lexer errors"
 
 let test_invalid_character () =
@@ -245,7 +245,7 @@ let test_unclosed_after_comment () =
     ~content:"\
 # This is a comment\n\
 version = \"1.0\n"
-    ~expected_msg:"3.10: meta lexing error: unclosed string literal"
+    ~expected_msg:"2.10: meta lexing error: unclosed string literal"
     ~name:"unclosed string after comment with position"
 
 (** {1 Predicate Combination Errors} *)

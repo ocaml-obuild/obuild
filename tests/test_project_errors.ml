@@ -61,19 +61,13 @@ let test_executable_block_as_value () =
 let test_library_without_modules () =
   (* Library with no modules fails at validation *)
   assert_project_parse_error
-    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary mylib\nsrc-dir: src\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary mylib\n  src-dir: src\n"
     ~expected_msg:"has no modules" ~name:"library without modules"
 
 let test_valid_library () =
   (* Parser validates that modules exist on disk - this will fail without actual files *)
   assert_project_parse_error
-    ~content:
-      "name: test\n\
-       version: 1.0.0\n\
-       obuild-ver: 1\n\n\
-       library mylib\n\
-       modules: Foo, Bar\n\
-       src-dir: src\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary mylib\n  modules: Foo, Bar\n  src-dir: src\n"
     ~expected_msg:"ModuleDoesntExist" ~name:"library with non-existent modules"
 
 (** {1 Executable Block Tests} *)
@@ -81,19 +75,13 @@ let test_valid_library () =
 let test_executable_without_name () =
   (* New parser allows empty name but validation catches missing main file *)
   assert_project_parse_error
-    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nexecutable\nmain-is: main.ml\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nexecutable\n  main-is: main.ml\n"
     ~expected_msg:"FileNotFoundInPaths" ~name:"executable without name"
 
 let test_valid_executable () =
   (* Parser validates that main-is file exists on disk *)
   assert_project_parse_error
-    ~content:
-      "name: test\n\
-       version: 1.0.0\n\
-       obuild-ver: 1\n\n\
-       executable myexe\n\
-       main-is: main.ml\n\
-       src-dir: src\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nexecutable myexe\n  main-is: main.ml\n  src-dir: src\n"
     ~expected_msg:"FileNotFoundInPaths" ~name:"executable with non-existent main file"
 
 (** {1 Test Block Tests} *)
@@ -101,13 +89,12 @@ let test_valid_executable () =
 let test_test_without_name () =
   (* New parser allows empty test name; Project.check() doesn't validate tests *)
   assert_project_parses
-    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\ntest\nmain-is: test.ml\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\ntest\n  main-is: test.ml\n"
     ~name:"test without name (allowed)"
 
 let test_valid_test () =
   assert_project_parses
-    ~content:
-      "name: test\nversion: 1.0.0\nobuild-ver: 1\n\ntest mytest\nmain-is: test.ml\nsrc-dir: tests\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\ntest mytest\n  main-is: test.ml\n  src-dir: tests\n"
     ~name:"valid test block"
 
 (** {1 Field Format Tests} *)
@@ -164,36 +151,13 @@ let test_valid_with_comments () =
 let test_multiple_libraries () =
   (* Parser validates module existence *)
   assert_project_parse_error
-    ~content:
-      "name: test\n\
-       version: 1.0.0\n\
-       obuild-ver: 1\n\n\
-       library lib1\n\
-       modules: Foo\n\
-       src-dir: src1\n\n\
-       library lib2\n\
-       modules: Bar\n\
-       src-dir: src2\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary lib1\n  modules: Foo\n  src-dir: src1\n\nlibrary lib2\n  modules: Bar\n  src-dir: src2\n"
     ~expected_msg:"ModuleDoesntExist" ~name:"multiple libraries with non-existent modules"
 
 let test_mixed_targets () =
   (* Parser validates file/module existence *)
   assert_project_parse_error
-    ~content:
-      "name: test\n\
-       version: 1.0.0\n\
-       obuild-ver: 1\n\n\
-       library mylib\n\
-       modules: Lib\n\
-       src-dir: lib\n\n\
-       executable myexe\n\
-       main-is: main.ml\n\
-       src-dir: src\n\
-       build-deps: mylib\n\n\
-       test mytest\n\
-       main-is: test.ml\n\
-       src-dir: tests\n\
-       build-deps: mylib\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary mylib\n  modules: Lib\n  src-dir: lib\n\nexecutable myexe\n  main-is: main.ml\n  src-dir: src\n  build-deps: mylib\n\ntest mytest\n  main-is: test.ml\n  src-dir: tests\n  build-deps: mylib\n"
     ~expected_msg:"ModuleDoesntExist" ~name:"mixed targets with non-existent files"
 
 (** {1 Edge Cases} *)
@@ -201,7 +165,7 @@ let test_mixed_targets () =
 let test_library_too_many_names () =
   (* New parser takes first name, ignores rest; fails on module validation *)
   assert_project_parse_error
-    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary lib1 lib2\nmodules: Foo\n"
+    ~content:"name: test\nversion: 1.0.0\nobuild-ver: 1\n\nlibrary lib1 lib2\n  modules: Foo\n"
     ~expected_msg:"ModuleDoesntExist" ~name:"library with extra names (first used)"
 
 let test_colons_vs_equals () =
@@ -213,25 +177,7 @@ let test_colons_vs_equals () =
 let test_real_world_obuild () =
   (* Based on actual obuild.obuild structure - but modules don't exist *)
   assert_project_parse_error
-    ~content:
-      "name: example\n\
-       version: 0.1.0\n\
-       synopsis: Example project\n\
-       obuild-ver: 1\n\
-       license: BSD\n\
-       authors: Test Author <test@example.com>\n\n\
-       library example_lib\n\
-       modules: Foo, Bar\n\
-       src-dir: lib\n\
-       build-deps: unix\n\n\
-       executable example_exe\n\
-       main-is: main.ml\n\
-       src-dir: src\n\
-       build-deps: example_lib\n\n\
-       test example_test\n\
-       main-is: test.ml\n\
-       src-dir: tests\n\
-       build-deps: example_lib\n"
+    ~content:"name: example\nversion: 0.1.0\nsynopsis: Example project\nobuild-ver: 1\nlicense: BSD\nauthors: Test Author <test@example.com>\n\nlibrary example_lib\n  modules: Foo, Bar\n  src-dir: lib\n  build-deps: unix\n\nexecutable example_exe\n  main-is: main.ml\n  src-dir: src\n  build-deps: example_lib\n\ntest example_test\n  main-is: test.ml\n  src-dir: tests\n  build-deps: example_lib\n"
     ~expected_msg:"ModuleDoesntExist" ~name:"real-world obuild file with non-existent files"
 
 (** {1 Test Suite} *)
