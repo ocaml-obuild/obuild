@@ -177,9 +177,20 @@ let get_parents dag a =
         | None -> acc  (* Should not happen - ID in parents set *)
     ) node.parents []
 
-let rec get_children_full dag a = 
-    let children = get_children dag a in
-    children @ List.concat (List.map (get_children_full dag) children)
+let get_children_full dag a =
+    let visited = Hashtbl.create 16 in
+    let result = ref [] in
+    let queue = Queue.create () in
+    List.iter (fun c -> Queue.push c queue) (get_children dag a);
+    while not (Queue.is_empty queue) do
+      let node = Queue.pop queue in
+      if not (Hashtbl.mem visited node) then begin
+        Hashtbl.replace visited node ();
+        result := node :: !result;
+        List.iter (fun c -> Queue.push c queue) (get_children dag node)
+      end
+    done;
+    List.rev !result
 
 let is_children dag a b = List.mem b (get_children dag a)
 

@@ -489,7 +489,9 @@ let build_module_steps_dag modulesDeps target stepsDag =
         | _ -> ())
       roots;
 
-    hashtbl_modify_all (fun v -> List.filter (fun x -> not (List.mem x freeModules)) v) h;
+    let free_set = Hashtbl.create (List.length freeModules) in
+    List.iter (fun m -> Hashtbl.replace free_set m ()) freeModules;
+    hashtbl_modify_all (fun v -> List.filter (fun x -> not (Hashtbl.mem free_set x)) v) h;
     List.iter (Hashtbl.remove h) freeModules
   done
 

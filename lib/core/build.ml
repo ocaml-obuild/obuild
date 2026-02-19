@@ -130,16 +130,19 @@ let buildmode_to_library_filety bmode =
   if bmode = Native then Filetype.FileCMXA else Filetype.FileCMA
 
 let internal_libs_paths self_deps =
-  List.map
+  let tbl = Hashtbl.create 6 in
+  List.iter
     (fun (compile_opt, compile_type) ->
-      ( (compile_opt, compile_type),
+      let paths =
         List.map
           (fun dep ->
             let dirname = Dist.get_build_exn (Dist.Target (Name.Lib dep)) in
             let filety = buildmode_to_library_filety compile_type in
             let libpath = dirname </> Libname.to_cmca compile_type compile_opt dep in
             (filety, libpath))
-          self_deps ))
+          self_deps
+      in
+      Hashtbl.replace tbl (compile_opt, compile_type) paths)
     [
       (Normal, Native);
       (Normal, ByteCode);
@@ -147,7 +150,8 @@ let internal_libs_paths self_deps =
       (WithProf, ByteCode);
       (WithDebug, Native);
       (WithDebug, ByteCode);
-    ]
+    ];
+  tbl
 
 (* Helper: get include paths for ctypes from dependencies *)
 
@@ -387,7 +391,7 @@ let dep_descs is_intf hdesc bstate cstate target h =
               (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep))
             module_deps
         in
-        let internal_deps = List.assoc (comp_opt, ByteCode) internal_libs_paths_all_modes in
+        let internal_deps = Hashtbl.find internal_libs_paths_all_modes (comp_opt, ByteCode) in
         (dest, Interface, comp_opt, src @ internal_deps @ m_deps))
       compile_opts
   else
@@ -427,7 +431,7 @@ let dep_descs is_intf hdesc bstate cstate target h =
                    @ [ (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep) ])
                  module_deps)
         in
-        let internal_deps = List.assoc (comp_opt, compiled_ty) internal_libs_paths_all_modes in
+        let internal_deps = Hashtbl.find internal_libs_paths_all_modes (comp_opt, compiled_ty) in
         (dest, Compiled compiled_ty, comp_opt, src @ internal_deps @ m_deps))
       all_modes
 
@@ -479,13 +483,26 @@ let compile_module task_index task is_intf h bstate task_context dag =
       Scheduler.AddTask (task, all_fun_lists)
 
 let wait_for_files cdep_files =
-  List.for_all
-    (fun f ->
-      let test = Filesystem.exists f in
-      if not test then
-        verbose Debug "warning: (temporarily?) missing file %s" (fp_to_string f);
-      test)
-    cdep_files
+  let rec loop remaining =
+    match remaining with
+    | [] -> true
+    | _ ->
+      let still_missing =
+        List.filter
+          (fun f ->
+            let test = Filesystem.exists f in
+            if not test then
+              verbose Debug "warning: (temporarily?) missing file %s" (fp_to_string f);
+            not test)
+          remaining
+      in
+      if still_missing = [] then true
+      else begin
+        ignore (Unix.select [] [] [] poll_interval_sec);
+        loop still_missing
+      end
+  in
+  loop cdep_files
 
 let link_c cstate clib_name =
   let lib_name = cstate.compilation_builddir_c </> fn clib_name in
@@ -493,9 +510,7 @@ let link_c cstate clib_name =
     List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources
   in
   (* Not sure why it is necessary ... gcc seems to return before the files are ready. *)
-  while not (wait_for_files cdep_files) do
-    ignore (Unix.select [] [] [] poll_interval_sec)
-  done;
+  ignore (wait_for_files cdep_files);
   if gconf.ocamlmklib then
     [ [ (fun () -> run_c_linking LinkingShared cdep_files lib_name) ] ]
   else
@@ -595,9 +610,7 @@ let get_link_destination cstate target compiledType compileOpt plugin =
 let wait_for_c_objects c_obj_files destTime =
   if List.length c_obj_files > 0 then (
     (* First wait for files to exist *)
-    while not (wait_for_files c_obj_files) do
-      ignore (Unix.select [] [] [] poll_interval_sec)
-    done;
+    ignore (wait_for_files c_obj_files);
     (* Then poll until all files have mtimes newer than destTime *)
     let max_wait_time = Unix.gettimeofday () +. mtime_poll_timeout_sec in
     let rec poll_fresh () =
@@ -776,9 +789,7 @@ let link task_index task bstate task_context dag =
     let all_objs = csource_objs @ cstubs_objs in
     if all_objs <> [] then begin
       let clib_name = Target.get_target_clibname target in
-      while not (wait_for_files all_objs) do
-        ignore (Unix.select [] [] [] 0.02)
-      done;
+      ignore (wait_for_files all_objs);
       if gconf.ocamlmklib then
         [ [ (fun () -> run_c_linking LinkingShared all_objs (cstate.compilation_builddir_c </> fn clib_name)) ] ]
       else

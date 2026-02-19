@@ -150,12 +150,14 @@ module Pkg = struct
 
   let get_archive_with_filter (_, rootPkg) dep preds =
     let pkg = find dep.Libname.subnames rootPkg in
+    let preds_set = Hashtbl.create (List.length preds) in
+    List.iter (fun p -> Hashtbl.replace preds_set p ()) preds;
     let fulfills archive_preds =
       List.for_all
         (fun p ->
           match p with
-          | Predicate.Neg n -> not (List.mem n preds)
-          | _ -> List.mem p preds)
+          | Predicate.Neg n -> not (Hashtbl.mem preds_set n)
+          | _ -> Hashtbl.mem preds_set p)
         archive_preds
     in
     let rec best_archive best_n best_value archives =
