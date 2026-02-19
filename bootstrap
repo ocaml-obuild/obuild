@@ -1,4 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
+
+# Ensure we run from the repository root regardless of where the script is called from
+cd "$(dirname "$0")" || exit 1
 
 libs="unix.cma"
 
@@ -6,19 +9,7 @@ OCAMLC="ocamlc -g -I +unix"
 OCAMLVER=$($OCAMLC -version)
 echo "$OCAMLVER"
 
-rm -f lib/base/compat.ml
-if [[ $OCAMLVER < "4.02.0" ]] ; then
-    echo "Using compat401.ml"
-    cp -f compat401.ml lib/base/compat.ml
-else
-	if [[ $OCAMLVER < "4.03.0" ]] ; then
-		echo "Using compat402.ml"
-		cp -f compat402.ml lib/base/compat.ml
-	else
-		echo "Using compat403.ml"
-		cp -f compat403.ml lib/base/compat.ml
-	fi
-fi
+ocaml configure.ml
 
 
 extmodules="compat_common compat location fugue string_utils filepath filesystem cli"
@@ -93,21 +84,21 @@ let project_version = "0.0.0"
 
 EOF
 cd src
-FILES=()
+MAINCMO=""
 for mod in $mainmodules
 do
 	echo "COMPILING $mod"
 	[ -f "${mod}.mli" ] && $OCAMLC -I ../ -c "${mod}.mli"
 	$OCAMLC -I ../ -c "${mod}.ml"
-	FILES+=("${mod}.cmo")
+	MAINCMO="$MAINCMO ${mod}.cmo"
 done
 echo "LINKING obuild.bootstrap"
 # Link with all individual .cmo files for bootstrap
 ALLCMO=""
 for mod in $extmodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
-for mod in $coremodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done  
+for mod in $coremodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
 for mod in $commandmodules; do ALLCMO="$ALLCMO ${mod}.cmo"; done
-$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} $ALLCMO "${FILES[@]}"
+$OCAMLC -o ../obuild.bootstrap -I ../ ${libs} $ALLCMO $MAINCMO
 cd ..
 
 rm -f lib/*.cmi lib/*.cmo lib/*.o
@@ -126,7 +117,7 @@ export OCAMLRUNPARAM=b
 ./obuild.bootstrap clean
 if [ -x "$(command -v ocamlopt)" ]; then
 	./obuild.bootstrap configure
-	time ./obuild.bootstrap build
+	./obuild.bootstrap build
 else
 	./obuild.bootstrap configure \
 		--executable-native=false \
@@ -134,7 +125,7 @@ else
 		--library-plugin=false \
 		--executable-bytecode=true \
 		--library-bytecode=true
-	time ./obuild.bootstrap build
+	./obuild.bootstrap build
 	mv dist/build/obuild/obuild.byte dist/build/obuild/obuild
 fi
 if [ -x dist/build/obuild/obuild ]; then

@@ -166,7 +166,10 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
           let real = fp_to_string dest in
           let basename = Filename.basename real in
           if not (file_or_link_exists basename) then
-            Unix.symlink real basename
+            if Utils.isWindows then
+              Filesystem.copy_file dest (fp basename)
+            else
+              Unix.symlink real basename
   in
   let prog =
     match buildMode with

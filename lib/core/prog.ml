@@ -40,7 +40,7 @@ let get_ocamldep () = get_cache "ocamldep" [ "ocamldep.opt"; "ocamldep" ]
 let get_ocamldoc () = get_cache "ocamldoc" [ "ocamldoc.opt"; "ocamldoc" ]
 let get_ocamlmklib () = get_cache "ocamlmklib" [ "ocamlmklib" ]
 let get_camlp4 () = get_cache "camlp4" [ "camlp4" ]
-let get_cc () = get_cache "cc" [ "gcc" ]
+let get_cc () = get_cache "cc" [ "cc"; "gcc"; "clang" ]
 let get_ranlib () = get_cache "ranlib" [ "ranlib" ]
 let get_ar () = get_cache "ar" [ "ar" ]
 let get_ld () = get_cache "ld" [ "ld" ]
@@ -80,8 +80,10 @@ let get_camlp4_config () =
       l
   | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err))
 
+let get_tar () = get_cache "tar" [ "tar"; "gtar" ]
+
 let run_tar output dir =
-  match Process.run [ "tar"; "czf"; output; dir ] with
+  match Process.run [ get_tar (); "czf"; output; dir ] with
   | Process.Success _ -> ()
   | Process.Failure err -> raise (TarError err)
 

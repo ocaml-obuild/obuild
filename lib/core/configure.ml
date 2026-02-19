@@ -43,11 +43,16 @@ let makeSetup digestKV project flags =
     @ List.map (fun (opt, v) -> (opt, string_of_bool v)) (Gconf.get_target_options ())
     @ List.map (fun (flagname, flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) flags)
 
-let sanityCheck () =
+let sanityCheck ?(needs_c_toolchain=false) () =
   let (_ : string) = Prog.get_ocamlopt () in
   let (_ : string) = Prog.get_ocamlc () in
   let (_ : string) = Prog.get_ocamldep () in
-  ()
+  if needs_c_toolchain then begin
+    let (_ : string) = Prog.get_cc () in
+    let (_ : string) = Prog.get_ar () in
+    let (_ : string) = Prog.get_ranlib () in
+    ()
+  end
 
 let comparekvs reason setup l =
   List.iter
