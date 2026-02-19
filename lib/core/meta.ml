@@ -416,7 +416,7 @@ module Token = struct
             let deps =
               List.map (fun r -> Libname.of_string r)
               $ (List.filter (fun x -> x <> "")
-                $ String_utils.split_pred (fun c -> List.mem c [ ','; ' '; '\n'; '\r'; '\t' ]) reqs
+                $ String_utils.split_pred (fun c -> match c with ',' | ' ' | '\n' | '\r' | '\t' -> true | _ -> false) reqs
                 )
             in
             parse pkg_name

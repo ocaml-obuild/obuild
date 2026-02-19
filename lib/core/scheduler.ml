@@ -29,6 +29,7 @@ type stats = {
 
 type 'a state = {
   mutable runqueue : ('a * Process.t) list;
+  mutable runqueue_len : int;
   mutable waitqueue : ('a * call) list;
   mutable terminate : bool;
   mutable waiting_task : bool;
@@ -61,12 +62,13 @@ let wait_process state =
       true
   in
   state.runqueue <- processes;
+  state.runqueue_len <- List.length processes;
   (proc_done, finished_task)
 
 let rec idle_loop idle_fun on_task_finish_fun state =
   match idle_fun () with
   | Retry          -> idle_loop idle_fun on_task_finish_fun state
-  | AddProcess p   -> state.runqueue <- p :: state.runqueue
+  | AddProcess p   -> state.runqueue <- p :: state.runqueue; state.runqueue_len <- state.runqueue_len + 1
   | WaitingTask    -> state.waiting_task <- true
   | Terminate      -> state.terminate <- true
   | FinishTask t   ->
@@ -112,8 +114,9 @@ let schedule_idle taskdep dispatch_fun () =
  * to true.
  **)
 let schedule j taskdep dispatch_fun finish_fun =
-  let st = { 
+  let st = {
     runqueue = [];
+    runqueue_len = 0;
     waitqueue = [];
     terminate = false;
     waiting_task = false;
@@ -123,25 +126,25 @@ let schedule j taskdep dispatch_fun finish_fun =
   let stats = { max_runqueue = 0; nb_processes = 0 } in
   let pick_process (task, process) remaining_processes =
     stats.nb_processes <- stats.nb_processes + 1;
-    st.runqueue <- (task,process ()) :: st.runqueue; 
-    st.waitqueue <- remaining_processes 
+    st.runqueue <- (task,process ()) :: st.runqueue;
+    st.runqueue_len <- st.runqueue_len + 1;
+    st.waitqueue <- remaining_processes
   in
   let set_max () =
-    let m = List.length st.runqueue in
-    if stats.max_runqueue < m then stats.max_runqueue <- m
+    if stats.max_runqueue < st.runqueue_len then stats.max_runqueue <- st.runqueue_len
   in
 
   (* add more bulletproofing to prevent busy looping for no reason
    * if user of this api is not behaving properly *)
   while not st.terminate || st.runqueue <> [] || st.waitqueue <> [] do
-    while not st.terminate && not st.waiting_task && List.length st.runqueue < j do
+    while not st.terminate && not st.waiting_task && st.runqueue_len < j do
       match st.waitqueue with
       | []           -> idle_loop (schedule_idle taskdep dispatch_fun) on_task_finish st
       | (t,p)::procs -> pick_process (t,p) procs
     done;
     set_max ();
 
-    if List.length st.runqueue > 0
+    if st.runqueue_len > 0
     then
       let (proc_done, finished_task) = wait_process st in
       st.waiting_task <- false;

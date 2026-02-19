@@ -903,18 +903,23 @@ let build_exe bstate exe =
     (Dag.get_nodes cstate.compilation_dag);
   compile bstate task_context cstate.compilation_dag
 
-let rec select_leaves children duplicate dag =
-  let good, bad = List.partition (fun a -> not (List.mem a duplicate)) children in
-  let new_ = ref [] in
-  List.iter
-    (fun a ->
-      let parents = Dag.get_parents dag a in
-      List.iter (fun p -> new_ := p :: !new_) parents)
-    bad;
-  if List.length bad > 0 then
-    select_leaves (!new_ @ good) duplicate dag
-  else
-    good
+let select_leaves children duplicate dag =
+  let dup_set = Hashtbl.create (List.length duplicate) in
+  List.iter (fun d -> Hashtbl.replace dup_set d ()) duplicate;
+  let rec loop children =
+    let good, bad = List.partition (fun a -> not (Hashtbl.mem dup_set a)) children in
+    match bad with
+    | [] -> good
+    | _ ->
+      let new_ = ref [] in
+      List.iter
+        (fun a ->
+          let parents = Dag.get_parents dag a in
+          List.iter (fun p -> new_ := p :: !new_) parents)
+        bad;
+      loop (!new_ @ good)
+  in
+  loop children
 
 let build_dag bstate proj_file targets_dag =
   Helper.Timing.measure_time "build_dag (total)" (fun () ->

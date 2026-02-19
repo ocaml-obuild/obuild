@@ -4,7 +4,6 @@ open Fugue
 type direction = FromChildren | FromParent
 
 (* this is a simple task dependency 'scheduler' *)
-(* TODO Set *)
 type 'a t = {
   dag               : 'a Dag.t;
   nb_steps          : int;
@@ -12,17 +11,22 @@ type 'a t = {
   direction         : direction;
   mutable current_step   : int;
   mutable next_tasks : 'a list;
+  next_tasks_set    : ('a, unit) Hashtbl.t;
 }
 
 (* init a new taskdep from a dag *)
-let init_with dag direction nodes = {
-  dag       = dag;
-  nb_steps   = Dag.length dag;
-  current_step   = 1;
-  direction = direction;
-  steps_done  = Hashtbl.create 16;
-  next_tasks = nodes;
-}
+let init_with dag direction nodes =
+  let set = Hashtbl.create 16 in
+  List.iter (fun n -> Hashtbl.replace set n ()) nodes;
+  {
+    dag       = dag;
+    nb_steps   = Dag.length dag;
+    current_step   = 1;
+    direction = direction;
+    steps_done  = Hashtbl.create 16;
+    next_tasks = nodes;
+    next_tasks_set = set;
+  }
 
 let init ?(direction=FromChildren) dag =
   init_with dag direction (if direction = FromChildren then Dag.get_leaves dag else Dag.get_roots dag)
@@ -39,6 +43,7 @@ let get_next taskdep =
   | []       -> None
   | task::xs ->
     taskdep.next_tasks <- xs;
+    Hashtbl.remove taskdep.next_tasks_set task;
     Some (next_index taskdep, task)
 
 let mark_done taskdep step =
@@ -53,9 +58,10 @@ let mark_done taskdep step =
         then Dag.get_children taskdep.dag parent
         else Dag.get_parents taskdep.dag parent
       in
-      let allDone  = List.for_all (fun child -> Hashtbl.mem taskdep.steps_done child) children in
-      if allDone && not (List.mem parent taskdep.next_tasks) then
-        taskdep.next_tasks <- taskdep.next_tasks @ [parent]
+      let allDone = List.for_all (fun child -> Hashtbl.mem taskdep.steps_done child) children in
+      if allDone && not (Hashtbl.mem taskdep.next_tasks_set parent) then (
+        Hashtbl.replace taskdep.next_tasks_set parent ();
+        taskdep.next_tasks <- taskdep.next_tasks @ [parent])
     ) parents
 
 let is_complete taskdep =
