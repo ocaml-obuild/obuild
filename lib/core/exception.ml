@@ -20,11 +20,11 @@ let show exn =
   | Project.MultipleConfFiles ->
       error "multiples obuild files found\n";
       exit 3
-  | Project.FileDoesntExist (t, f) ->
+  | Project.FileNotFound (t, f) ->
       error "project is referencing in %s, a file %s that cannot be found\n"
         (Target.get_target_name t) (fn_to_string f);
       exit 3
-  | Project.ModuleDoesntExist (t, m) ->
+  | Project.ModuleNotFound (t, m) ->
       error "project is referencing in '%s', a module %s that cannot be found\n"
         (Target.get_target_name t) (Hier.to_string m);
       exit 3
@@ -45,10 +45,10 @@ let show exn =
       error "cannot parse constraints for build dependency '%s': %s\n" builddep s;
       exit 3
   (* dist directory related *)
-  | Dist.NotADirectory ->
+  | Dist.DistNotADirectory ->
       error "dist is not a directory\n";
       exit 4
-  | Dist.DoesntExist ->
+  | Dist.DistNotFound ->
       error "run 'obuild configure' first\n";
       exit 4
   | Dist.MissingDestinationDirectory dir ->
@@ -89,7 +89,7 @@ let show exn =
         (Utils.showList "," Meta.Predicate.to_string preds)
         (Libname.to_string dep) (fp_to_string path);
       exit 4
-  | Analyze.SublibraryDoesntExists dep ->
+  | Analyze.SublibraryNotFound dep ->
       error "dependency %s not found\n" (Libname.to_string dep);
       exit 4
   (* build related failure *)

@@ -4,8 +4,8 @@ open Filepath
 exception OCamlProgramError of string
 exception TarError of string
 exception PkgConfigError of string
-exception PkgConfigErrorNoVersion
-exception PkgConfigErrorUnexpectedOutput of string
+exception PkgConfigVersionNotFound
+exception PkgConfigUnexpectedOutput of string
 exception ProgramNotFound of string
 
 let get_cache prog names =
@@ -96,8 +96,8 @@ let run_pkg_config_version name =
   let output = run_pkg_config "--version" name in
   match String_utils.words_noempty output with
   | [ ver ] -> ver
-  | [] -> raise PkgConfigErrorNoVersion
-  | _ -> raise (PkgConfigErrorUnexpectedOutput ("version: " ^ output))
+  | [] -> raise PkgConfigVersionNotFound
+  | _ -> raise (PkgConfigUnexpectedOutput ("version: " ^ output))
 
 let run_pkg_config_includes name =
   let output = run_pkg_config "--cflags" name in

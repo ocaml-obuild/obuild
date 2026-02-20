@@ -23,16 +23,16 @@ exception UnknownDependencyName of string
 exception UnsupportedFutureVersion of int
 (** Raised when .obuild file uses a newer format version *)
 
-exception ModuleDoesntExist of Target.target * Hier.t
+exception ModuleNotFound of Target.target * Hier.t
 (** Raised when a declared module file doesn't exist *)
 
 exception ModuleListEmpty of Libname.t
 (** Raised when a library has no modules defined *)
 
-exception FileDoesntExist of Target.target * Filepath.filename
+exception FileNotFound of Target.target * Filepath.filename
 (** Raised when a referenced file doesn't exist *)
 
-exception LicenseFileDoesntExist of Filepath.filepath
+exception LicenseFileNotFound of Filepath.filepath
 (** Raised when the declared license file doesn't exist *)
 
 exception BlockSectionAsValue of string
@@ -288,9 +288,9 @@ val write : Filepath.filepath -> t -> unit
 val check : t -> unit
 (** [check proj] validates the project configuration.
     Checks that required files and modules exist on disk.
-    @raise ModuleDoesntExist if a declared module doesn't exist
-    @raise FileDoesntExist if a referenced file doesn't exist
-    @raise LicenseFileDoesntExist if license file is missing
+    @raise ModuleNotFound if a declared module doesn't exist
+    @raise FileNotFound if a referenced file doesn't exist
+    @raise LicenseFileNotFound if license file is missing
     @raise ExecutableWithNoMain if executable has no main file
     @raise BadOcamlVersion if OCaml version constraint fails *)
 

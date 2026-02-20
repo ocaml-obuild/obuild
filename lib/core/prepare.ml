@@ -562,20 +562,20 @@ let add_cstubs_tasks target stepsDag =
       (try
          let _ = Dag.get_node stepsDag (CompileModule generated_types_hier) in
          Dag.add_edge (CompileModule generated_types_hier) types_task stepsDag
-       with Dag.DagNode_Not_found -> ());
+       with Dag.DagNodeNotFound -> ());
 
       (* GenerateCstubsFunctions needs the compiled types_generated.cmo for stubgen *)
       (try
          let _ = Dag.get_node stepsDag (CompileModule generated_types_hier) in
          Dag.add_edge funcs_task (CompileModule generated_types_hier) stepsDag
-       with Dag.DagNode_Not_found -> ());
+       with Dag.DagNodeNotFound -> ());
 
       (* The entry point module depends on GenerateCstubsFunctions *)
       let entry_point_hier = Hier.of_string cstubs.cstubs_generated_entry_point in
       (try
          let _ = Dag.get_node stepsDag (CompileModule entry_point_hier) in
          Dag.add_edge (CompileModule entry_point_hier) funcs_task stepsDag
-       with Dag.DagNode_Not_found -> ());
+       with Dag.DagNodeNotFound -> ());
 
       (* The generated FOREIGN implementation module also depends on GenerateCstubsFunctions *)
       let generated_foreign_name = cstubs.cstubs_external_library_name ^ "_generated" in
@@ -585,7 +585,7 @@ let add_cstubs_tasks target stepsDag =
       (try
          let _ = Dag.get_node stepsDag (CompileModule generated_foreign_hier) in
          Dag.add_edge (CompileModule generated_foreign_hier) funcs_task stepsDag
-       with Dag.DagNode_Not_found -> ());
+       with Dag.DagNodeNotFound -> ());
 
       (* Add inter-module dependencies between cstubs-generated modules for correct link order:
          entry_point (C) -> generated_foreign (Otreesitter_stubs_generated) -> generated_types (Types_generated) *)
@@ -593,12 +593,12 @@ let add_cstubs_tasks target stepsDag =
          let _ = Dag.get_node stepsDag (CompileModule entry_point_hier) in
          let _ = Dag.get_node stepsDag (CompileModule generated_foreign_hier) in
          Dag.add_edge (CompileModule entry_point_hier) (CompileModule generated_foreign_hier) stepsDag
-       with Dag.DagNode_Not_found -> ());
+       with Dag.DagNodeNotFound -> ());
       (try
          let _ = Dag.get_node stepsDag (CompileModule generated_foreign_hier) in
          let _ = Dag.get_node stepsDag (CompileModule generated_types_hier) in
          Dag.add_edge (CompileModule generated_foreign_hier) (CompileModule generated_types_hier) stepsDag
-       with Dag.DagNode_Not_found -> ());
+       with Dag.DagNodeNotFound -> ());
 
       (* Helper: extract the top-level module from a functor path like "Bindings.Types" -> "Bindings" *)
       let get_module_from_functor_path hier = Hier.of_modname (Hier.root hier) in
@@ -615,7 +615,7 @@ let add_cstubs_tasks target stepsDag =
             Dag.add_edge types_task (CompileModule bindings_module) stepsDag;
             (* funcs_task also depends on Bindings for Cstubs.write_c *)
             Dag.add_edge funcs_task (CompileModule bindings_module) stepsDag
-          with Dag.DagNode_Not_found -> ())
+          with Dag.DagNodeNotFound -> ())
       | None -> ());
 
       (* If there's a function description functor, funcs_task depends on its module *)
@@ -625,7 +625,7 @@ let add_cstubs_tasks target stepsDag =
           try
             let _ = Dag.get_node stepsDag (CompileModule bindings_module) in
             Dag.add_edge funcs_task (CompileModule bindings_module) stepsDag
-          with Dag.DagNode_Not_found -> ())
+          with Dag.DagNodeNotFound -> ())
       | None -> ());
 
       (* Link depends on CompileCstubsC *)
@@ -643,7 +643,7 @@ let add_generate_block_tasks target stepsDag =
     (try
        let _ = Dag.get_node stepsDag (CompileModule output_hier) in
        Dag.add_edge (CompileModule output_hier) task stepsDag
-     with Dag.DagNode_Not_found -> ());
+     with Dag.DagNodeNotFound -> ());
 
     (* Link depends on all generate blocks completing *)
     Dag.add_edge (LinkTarget target) task stepsDag

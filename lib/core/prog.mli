@@ -10,10 +10,10 @@ exception TarError of string
 exception PkgConfigError of string
 
 (** Exception raised when pkg-config doesn't return version *)
-exception PkgConfigErrorNoVersion
+exception PkgConfigVersionNotFound
 
 (** Exception raised when pkg-config output is unexpected *)
-exception PkgConfigErrorUnexpectedOutput of string
+exception PkgConfigUnexpectedOutput of string
 
 (** Exception raised when a required program is not found *)
 exception ProgramNotFound of string
@@ -99,8 +99,8 @@ val run_pkg_config_version : string -> string
     @param name package name
     @return version string
     @raise PkgConfigError if pkg-config fails
-    @raise PkgConfigErrorNoVersion if no version returned
-    @raise PkgConfigErrorUnexpectedOutput if output format is unexpected *)
+    @raise PkgConfigVersionNotFound if no version returned
+    @raise PkgConfigUnexpectedOutput if output format is unexpected *)
 
 val run_pkg_config_includes : string -> string list
 (** [run_pkg_config_includes name] gets include flags from pkg-config

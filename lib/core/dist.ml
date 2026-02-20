@@ -16,10 +16,10 @@ let to_filename = function
   | Dot -> fn "dot"
   | Autogen -> fn "autogen"
 
-exception NotADirectory
+exception DistNotADirectory
 exception MissingDestinationDirectory of t
-exception DoesntExist
-exception FileDoesntExist of string
+exception DistNotFound
+exception DistFileNotFound of string
 
 let path = ref (fp "dist")
 let set_path p = path := p
@@ -33,11 +33,11 @@ let check_exn f =
     if Sys.is_directory $ fp_to_string (get_path ()) then
       ()
     else
-      raise NotADirectory
+      raise DistNotADirectory
   else
     f ()
 
-let exist () = check_exn (fun () -> raise DoesntExist)
+let exist () = check_exn (fun () -> raise DistNotFound)
 
 let create_maybe () =
   check_exn (fun () ->
@@ -65,7 +65,7 @@ let read_dist_file path =
     let content = Filesystem.read_file path in
     hashtbl_from_list
       (List.map (fun l -> second (default "") $ Utils.toKV l) $ String_utils.split '\n' content)
-  with _ -> raise (FileDoesntExist (fp_to_string path))
+  with _ -> raise (DistFileNotFound (fp_to_string path))
 
 let read_setup () = read_dist_file setup_path
 let read_configure () = read_dist_file configure_path

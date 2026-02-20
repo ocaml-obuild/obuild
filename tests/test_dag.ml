@@ -183,7 +183,7 @@ let () =
     try
       Dag.add_node_exclusive "E" d_excl;
       false
-    with Dag.DagNode_Already_Exists -> true
+    with Dag.DagNodeAlreadyExists -> true
   in
   assumeBool "add_node_exclusive raises on duplicate" true exc_raised;
 
@@ -191,7 +191,7 @@ let () =
     try
       let _ = Dag.get_node d_excl "NONEXISTENT" in
       false
-    with Dag.DagNode_Not_found -> true
+    with Dag.DagNodeNotFound -> true
   in
   assumeBool "get_node raises on missing node" true not_found_raised;
 

@@ -145,3 +145,6 @@ val register_generated_module : string -> unit
 val is_generated_module : string -> bool
 (** [is_generated_module name] returns true if the module was registered as
     generated via [register_generated_module]. *)
+
+val clear : unit -> unit
+(** [clear ()] resets all caches (file entry cache and generated module registry). *)

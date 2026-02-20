@@ -32,6 +32,10 @@ let register_generated_module name =
 let is_generated_module name =
   Hashtbl.mem generated_modules name
 
+let clear () =
+  Hashtbl.clear hiers;
+  Hashtbl.clear generated_modules
+
 let root = List.hd
 
 let parent x =

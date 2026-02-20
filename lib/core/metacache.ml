@@ -35,3 +35,5 @@ let find name =
   try
     Some (Hashtbl.find pkgs_cache name)
   with Not_found -> None
+
+let clear () = Hashtbl.clear pkgs_cache

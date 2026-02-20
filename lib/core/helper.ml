@@ -9,14 +9,8 @@ let log lvl fmt =
         then printf fmt
         else ifprintf stdout fmt
 
-let debug fmt = log Gconf.Debug fmt
-let report fmt = log Gconf.Report fmt
-
-(* deprecated, replace by other stuff *)
-let verbose lvl fmt =
-    if lvl <= gconf.verbosity
-        then printf fmt
-        else ifprintf stdout fmt
+(* backward compatibility alias *)
+let verbose = log
 
 let support_color () =
     if Utils.isWindows
@@ -36,14 +30,14 @@ module Timing = struct
     let start = Unix.gettimeofday () in
     let result = f () in
     let elapsed = Unix.gettimeofday () -. start in
-    report "[TIMING] %s: %.3fs\n" name elapsed;
+    log Gconf.Debug "[TIMING] %s: %.3fs\n" name elapsed;
     result
 
   let measure_time_verbose name f =
     let start = Unix.gettimeofday () in
-    report "[TIMING] %s: starting...\n" name;
+    log Gconf.Debug "[TIMING] %s: starting...\n" name;
     let result = f () in
     let elapsed = Unix.gettimeofday () -. start in
-    report "[TIMING] %s: completed in %.3fs\n" name elapsed;
+    log Gconf.Debug "[TIMING] %s: completed in %.3fs\n" name elapsed;
     result
 end

@@ -1,7 +1,7 @@
 (** Project analysis and dependency resolution *)
 
 (** Exception raised when a sublibrary doesn't exist *)
-exception SublibraryDoesntExists of Libname.t
+exception SublibraryNotFound of Libname.t
 
 (** Exception raised when an OCaml configuration key is missing *)
 exception OcamlConfigMissing of string
@@ -57,7 +57,7 @@ val prepare : Project.t -> (string * bool) list -> project_config
     @return analyzed project configuration
     @raise Dependencies.DependencyMissing if a dependency is not found
     @raise Dependencies.DependenciesMissing if multiple dependencies are missing
-    @raise SublibraryDoesntExists if a sublibrary is not found *)
+    @raise SublibraryNotFound if a sublibrary is not found *)
 
 val get_ocaml_config_key_global : string -> string
 (** [get_ocaml_config_key_global key] retrieves OCaml config value from global config

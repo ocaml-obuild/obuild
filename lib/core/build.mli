@@ -7,7 +7,7 @@ exception CCompilationFailed of string
 exception CompilationFailed of string
 
 (** Exception raised for internal consistency errors *)
-exception Internal_Inconsistancy of string * string
+exception InternalInconsistency of string * string
 
 val build_exe : Prepare.build_state -> Project.Executable.t -> unit
 (** [build_exe bstate exe] builds a single executable

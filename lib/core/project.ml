@@ -14,10 +14,10 @@ exception InvalidConfFile of string
 exception MissingField of string
 exception UnknownDependencyName of string
 exception UnsupportedFutureVersion of int
-exception ModuleDoesntExist of target * Hier.t
+exception ModuleNotFound of target * Hier.t
 exception ModuleListEmpty of Libname.t
-exception FileDoesntExist of target * filename
-exception LicenseFileDoesntExist of filepath
+exception FileNotFound of target * filename
+exception LicenseFileNotFound of filepath
 exception BlockSectionAsValue of string
 exception ExecutableWithNoMain of string
 exception UnknownStdlib of string
@@ -298,7 +298,7 @@ let check_modules_exists target modules =
       if not (List.mem m cstubs_generated_modules) then
         try
           ignore (Hier.get_file_entry m srcdir)
-        with Not_found -> raise (ModuleDoesntExist (target, m)))
+        with Not_found -> raise (ModuleNotFound (target, m)))
     modules
 
 (** Validate project configuration
@@ -312,7 +312,7 @@ let check proj =
   if proj.obuild_ver > 1 then raise (UnsupportedFutureVersion proj.obuild_ver);
 
   maybe_unit
-    (fun x -> if not (Filesystem.exists x) then raise (LicenseFileDoesntExist x))
+    (fun x -> if not (Filesystem.exists x) then raise (LicenseFileNotFound x))
     proj.license_file;
   maybe_unit
     (fun x ->

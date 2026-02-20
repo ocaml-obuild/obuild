@@ -11,7 +11,7 @@ open Buildprogs
 
 exception CCompilationFailed of string
 exception CompilationFailed of string
-exception Internal_Inconsistancy of string * string
+exception InternalInconsistency of string * string
 
 (* Polling constants for waiting on filesystem *)
 let poll_interval_sec = 0.02          (* 20ms between file existence checks *)
@@ -42,9 +42,9 @@ let check_destination_valid_with srcs (_, dest) =
 let check_destination_valid cstate (filety, dest) =
   let children =
     try Dag.get_children cstate.compilation_filesdag (Filetype.make_id (filety, dest))
-    with Dag.DagNode_Not_found ->
+    with Dag.DagNodeNotFound ->
       raise
-        (Internal_Inconsistancy
+        (InternalInconsistency
            (Filetype.to_string filety, "missing destination: " ^ fp_to_string dest))
   in
   check_destination_valid_with (List.map Filetype.get_id children) (filety, dest)

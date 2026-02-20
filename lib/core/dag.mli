@@ -11,10 +11,10 @@ type 'a dagnode
 
 (** {1 Exceptions} *)
 
-exception DagNode_Not_found
+exception DagNodeNotFound
 (** Raised when attempting to access a node that doesn't exist in the DAG *)
 
-exception DagNode_Already_Exists
+exception DagNodeAlreadyExists
 (** Raised when attempting to exclusively add a node that already exists *)
 
 (** {1 Construction} *)
@@ -27,7 +27,7 @@ val add_node : 'a -> 'a t -> unit
 
 val add_node_exclusive : 'a -> 'a t -> unit
 (** [add_node_exclusive n dag] adds node [n] to [dag].
-    @raise DagNode_Already_Exists if [n] already exists *)
+    @raise DagNodeAlreadyExists if [n] already exists *)
 
 val add_edge : 'a -> 'a -> 'a t -> unit
 (** [add_edge a b dag] adds a directed edge from [a] to [b].
@@ -62,7 +62,7 @@ val has_edge : 'a -> 'a -> 'a t -> bool
 
 val get_node : 'a t -> 'a -> 'a dagnode
 (** [get_node dag n] returns the node structure for [n].
-    @raise DagNode_Not_found if [n] doesn't exist *)
+    @raise DagNodeNotFound if [n] doesn't exist *)
 
 val get_nodes : 'a t -> 'a list
 (** [get_nodes dag] returns all nodes in [dag] *)
@@ -75,15 +75,15 @@ val get_roots : 'a t -> 'a list
 
 val get_children : 'a t -> 'a -> 'a list
 (** [get_children dag n] returns the immediate children of [n].
-    @raise DagNode_Not_found if [n] doesn't exist *)
+    @raise DagNodeNotFound if [n] doesn't exist *)
 
 val get_parents : 'a t -> 'a -> 'a list
 (** [get_parents dag n] returns the immediate parents of [n].
-    @raise DagNode_Not_found if [n] doesn't exist *)
+    @raise DagNodeNotFound if [n] doesn't exist *)
 
 val get_children_full : 'a t -> 'a -> 'a list
 (** [get_children_full dag n] returns all descendants of [n] (transitive closure).
-    @raise DagNode_Not_found if [n] doesn't exist *)
+    @raise DagNodeNotFound if [n] doesn't exist *)
 
 val is_children : 'a t -> 'a -> 'a -> bool
 (** [is_children dag a b] returns [true] if [b] is an immediate child of [a] *)

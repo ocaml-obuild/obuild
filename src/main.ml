@@ -24,6 +24,18 @@ let project_read () =
     verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn);
     raise exn
 
+let collect_all_targets proj_file =
+  List.map (fun lib -> lib.Project.Library.target) proj_file.Project.libs
+  @ List.map (fun exe -> exe.Project.Executable.target) proj_file.Project.exes
+  @ List.map (fun test -> test.Project.Test.target) proj_file.Project.tests
+  @ List.map (fun bench -> bench.Project.Bench.target) proj_file.Project.benchs
+  @ List.map (fun ex -> ex.Project.Example.target) proj_file.Project.examples
+
+let collect_all_deps proj_file =
+  let targets = collect_all_targets proj_file in
+  list_uniq (List.sort compare
+    (List.concat (List.map (fun t -> t.Target.target_obits.Target.target_builddeps) targets)))
+
 (* ===== Configure Command ===== *)
 
 let cmd_configure =
@@ -426,24 +438,7 @@ let cmd_generate_merlin =
           proj_file.Project.exes;
 
         (* Collect all package dependencies *)
-        let all_deps = ref [] in
-        List.iter
-          (fun lib ->
-            all_deps :=
-              lib.Project.Library.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.libs;
-        List.iter
-          (fun exe ->
-            all_deps :=
-              exe.Project.Executable.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.exes;
-        List.iter
-          (fun test ->
-            all_deps :=
-              test.Project.Test.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.tests;
-
-        let unique_deps = list_uniq (List.sort compare !all_deps) in
+        let unique_deps = collect_all_deps proj_file in
         List.iter
           (fun (libname, _) ->
             Buffer.add_string merlin_content (Printf.sprintf "PKG %s\n" (Libname.to_string libname)))
@@ -504,34 +499,7 @@ let cmd_generate_opam =
             (Printf.sprintf "homepage: \"%s\"\n" proj_file.Project.homepage);
 
         (* Collect all dependencies from all target types *)
-        let all_deps = ref [] in
-        List.iter
-          (fun lib ->
-            all_deps :=
-              lib.Project.Library.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.libs;
-        List.iter
-          (fun exe ->
-            all_deps :=
-              exe.Project.Executable.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.exes;
-        List.iter
-          (fun test ->
-            all_deps :=
-              test.Project.Test.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.tests;
-        List.iter
-          (fun bench ->
-            all_deps :=
-              bench.Project.Bench.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.benchs;
-        List.iter
-          (fun example ->
-            all_deps :=
-              example.Project.Example.target.Target.target_obits.Target.target_builddeps @ !all_deps)
-          proj_file.Project.examples;
-
-        let unique_deps = list_uniq (List.sort compare !all_deps) in
+        let unique_deps = collect_all_deps proj_file in
         if unique_deps <> [] then (
           Buffer.add_string opam_content "depends: [\n";
           Buffer.add_string opam_content "  \"ocaml\"\n";

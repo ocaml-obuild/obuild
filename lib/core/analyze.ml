@@ -7,7 +7,7 @@ open Gconf
 open Target
 open Dependencies
 
-exception SublibraryDoesntExists of Libname.t
+exception SublibraryNotFound of Libname.t
 exception OcamlConfigMissing of string
 
 (* differentiate if the dependency is system or is internal to the project *)
@@ -217,8 +217,8 @@ let prepare projFile user_flags =
           Dag.add_node (Dependency dep) depsDag;
           let pkg =
             try Meta.Pkg.find dep.Libname.subnames meta with
-            | Not_found -> raise (SublibraryDoesntExists dep)
-            | Meta.SubpackageNotFound _ -> raise (SublibraryDoesntExists dep)
+            | Not_found -> raise (SublibraryNotFound dep)
+            | Meta.SubpackageNotFound _ -> raise (SublibraryNotFound dep)
           in
           List.iter
             (fun (preds, reqDeps) ->

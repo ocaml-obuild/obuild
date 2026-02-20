@@ -9,10 +9,10 @@ type t =
 val to_string : t -> string
 (** Convert build directory type to string *)
 
-exception NotADirectory
+exception DistNotADirectory
 exception MissingDestinationDirectory of t
-exception DoesntExist
-exception FileDoesntExist of string
+exception DistNotFound
+exception DistFileNotFound of string
 
 val set_path : Filepath.filepath -> unit
 val get_path : unit -> Filepath.filepath
@@ -24,7 +24,7 @@ val check_exn : (unit -> unit) -> unit
 (** Check dist directory exists, call function if it doesn't *)
 
 val exist : unit -> unit
-(** Check dist directory exists, raise DoesntExist if not *)
+(** Check dist directory exists, raise DistNotFound if not *)
 
 val create_maybe : unit -> unit
 (** Create dist directory if it doesn't exist *)

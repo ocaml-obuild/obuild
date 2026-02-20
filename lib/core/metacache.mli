@@ -26,3 +26,6 @@ val add : string -> Meta.t -> unit
 val find : string -> Meta.t option
 (** [find name] looks up a library in the cache without fetching from disk.
     Returns [Some meta] if cached, [None] otherwise. *)
+
+val clear : unit -> unit
+(** [clear ()] removes all entries from the cache. *)

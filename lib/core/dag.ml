@@ -68,8 +68,8 @@ let add_edge a b dag =
     );
     ()
 
-exception DagNode_Not_found
-exception DagNode_Already_Exists
+exception DagNodeNotFound
+exception DagNodeAlreadyExists
 
 let add_node a dag =
     let aid = get_node_id dag a in
@@ -79,7 +79,7 @@ let add_node a dag =
 let add_node_exclusive a dag =
     let aid = get_node_id dag a in
     if Hashtbl.mem dag.nodes aid then
-        raise DagNode_Already_Exists
+        raise DagNodeAlreadyExists
     else
         Hashtbl.add dag.nodes aid { parents = IntSet.empty; children = IntSet.empty }
 
@@ -151,8 +151,8 @@ let get_node dag a =
     | Some aid ->
         (match SafeHashtbl.find_opt dag.nodes aid with
         | Some node -> node
-        | None -> raise DagNode_Not_found)
-    | None -> raise DagNode_Not_found
+        | None -> raise DagNodeNotFound)
+    | None -> raise DagNodeNotFound
 
 let get_nodes dag =
     Hashtbl.fold (fun id _ acc ->
