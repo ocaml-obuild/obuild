@@ -95,7 +95,7 @@ let lib_to_meta proj_file lib =
            ([ Meta.Predicate.Native ], fn_to_string (Libname.to_cmca Native Normal lib.Library.name));
          ]
         @
-        if Gconf.get_target_option "library-plugin" then
+        if Gconf.get_target_option_typed Gconf.Library_plugin then
           [
             ( [ Meta.Predicate.Native; Meta.Predicate.Plugin ],
               fn_to_string (Libname.to_cmxs Normal lib.Library.name) );

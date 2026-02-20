@@ -68,23 +68,23 @@ let reason_from_paths (_, dest) (srcTy, changedSrc) =
   else
     let bdest = path_basename dest in
     let bsrc = path_basename changedSrc in
-    match Filetype.of_filename bdest with
-    | Filetype.FileCMX | Filetype.FileCMO -> (
-        match srcTy with
-        | Filetype.FileCMX | Filetype.FileCMO ->
-            let bml = Filetype.replace_extension bdest Filetype.FileML in
-            let bmli = Filetype.replace_extension bdest Filetype.FileMLI in
-            if bml = bsrc then
-              "Source changed"
-            else if bmli = bsrc then
-              "Interface changed"
-            else
-              "Dependency "
-              ^ Modname.to_string (Modname.of_filename (trim_pd_exts bsrc))
-              ^ " changed " ^ fp_to_string changedSrc
-        | Filetype.FileCMXA | Filetype.FileCMA -> "Library changed " ^ fp_to_string changedSrc
-        | _ -> "Dependencies changed " ^ fp_to_string changedSrc)
-    | Filetype.FileO ->
+    match (Filetype.of_filename bdest, srcTy) with
+    | (Filetype.FileCMX | Filetype.FileCMO), (Filetype.FileCMX | Filetype.FileCMO) ->
+        let bml = Filetype.replace_extension bdest Filetype.FileML in
+        let bmli = Filetype.replace_extension bdest Filetype.FileMLI in
+        if bml = bsrc then
+          "Source changed"
+        else if bmli = bsrc then
+          "Interface changed"
+        else
+          "Dependency "
+          ^ Modname.to_string (Modname.of_filename (trim_pd_exts bsrc))
+          ^ " changed " ^ fp_to_string changedSrc
+    | (Filetype.FileCMX | Filetype.FileCMO), (Filetype.FileCMXA | Filetype.FileCMA) ->
+        "Library changed " ^ fp_to_string changedSrc
+    | (Filetype.FileCMX | Filetype.FileCMO), _ ->
+        "Dependencies changed " ^ fp_to_string changedSrc
+    | Filetype.FileO, _ ->
         let bc = Filetype.replace_extension bdest Filetype.FileC in
         let bh = Filetype.replace_extension bdest Filetype.FileH in
         if bc = bsrc then
@@ -93,7 +93,7 @@ let reason_from_paths (_, dest) (srcTy, changedSrc) =
           "H file " ^ fn_to_string bsrc ^ " changed"
         else
           "file changed " ^ fp_to_string changedSrc
-    | _ -> fp_to_string changedSrc ^ " changed"
+    | _, _ -> fp_to_string changedSrc ^ " changed"
 
 let get_all_modes target =
   let compile_opts = Target.get_compilation_opts target in
@@ -110,9 +110,9 @@ let get_all_modes target =
     all_modes
 
 let annot_mode () =
-  if Gconf.get_target_option "annot" && gconf.bin_annot then
+  if Gconf.get_target_option_typed Annot && gconf.bin_annot then
     AnnotationBoth
-  else if Gconf.get_target_option "annot" then
+  else if Gconf.get_target_option_typed Annot then
     AnnotationText
   else if gconf.bin_annot then
     AnnotationBin
@@ -143,14 +143,9 @@ let internal_libs_paths self_deps =
           self_deps
       in
       Hashtbl.replace tbl (compile_opt, compile_type) paths)
-    [
-      (Normal, Native);
-      (Normal, ByteCode);
-      (WithProf, Native);
-      (WithProf, ByteCode);
-      (WithDebug, Native);
-      (WithDebug, ByteCode);
-    ];
+    (List.concat (List.map (fun opt ->
+      List.map (fun ty -> (opt, ty)) [Native; ByteCode])
+      [Normal; WithProf; WithDebug]));
   tbl
 
 (* Helper: get include paths for ctypes from dependencies *)
@@ -812,7 +807,7 @@ let link task_index task bstate task_context dag =
             compiledType compileOpt false
         in
         let res =
-          if is_lib target && compiledType = Native && Gconf.get_target_option "library-plugin" then
+          if is_lib target && compiledType = Native && Gconf.get_target_option_typed Library_plugin then
             link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
               compiledType compileOpt true
             @ normal

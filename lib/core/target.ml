@@ -215,17 +215,17 @@ let is_lib target = Typ.is_lib target.target_type
 let get_ocaml_compiled_types target =
   let nat, byte =
     if is_lib target then
-      (Gconf.get_target_option "library-native", Gconf.get_target_option "library-bytecode")
+      (Gconf.get_target_option_typed Library_native, Gconf.get_target_option_typed Library_bytecode)
     else
-      (Gconf.get_target_option "executable-native", Gconf.get_target_option "executable-bytecode")
+      (Gconf.get_target_option_typed Executable_native, Gconf.get_target_option_typed Executable_bytecode)
   in
   (if nat then [ Native ] else []) @ if byte then [ ByteCode ] else []
 
 let get_debug_profile target =
   if is_lib target then
-    (Gconf.get_target_option "library-debugging", Gconf.get_target_option "library-profiling")
+    (Gconf.get_target_option_typed Library_debugging, Gconf.get_target_option_typed Library_profiling)
   else
-    (Gconf.get_target_option "executable-debugging", Gconf.get_target_option "executable-profiling")
+    (Gconf.get_target_option_typed Executable_debugging, Gconf.get_target_option_typed Executable_profiling)
 
 let get_compilation_opts target =
   let debug, prof = get_debug_profile target in

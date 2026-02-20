@@ -105,7 +105,7 @@ module Test = struct
     (* For tests, buildable defaults to CLI option "build-tests" *)
     let buildable =
       match target.target_buildable with
-      | BoolConst true -> BoolConst (Gconf.get_target_option "build-tests")
+      | BoolConst true -> BoolConst (Gconf.get_target_option_typed Gconf.Build_tests)
       | other -> other
     in
     {
@@ -134,7 +134,7 @@ module Bench = struct
     (* For benchmarks, buildable defaults to CLI option "build-benchs" *)
     let buildable =
       match target.target_buildable with
-      | BoolConst true -> BoolConst (Gconf.get_target_option "build-benchs")
+      | BoolConst true -> BoolConst (Gconf.get_target_option_typed Gconf.Build_benchs)
       | other -> other
     in
     {
@@ -162,7 +162,7 @@ module Example = struct
     (* For examples, buildable defaults to CLI option "build-examples" *)
     let buildable =
       match target.target_buildable with
-      | BoolConst true -> BoolConst (Gconf.get_target_option "build-examples")
+      | BoolConst true -> BoolConst (Gconf.get_target_option_typed Gconf.Build_examples)
       | other -> other
     in
     {

@@ -55,7 +55,7 @@ let to_exe_name mode build name =
   let ext2 =
     match build with
     | ByteCode -> ".byte"
-    | Native -> if Gconf.get_target_option "executable-as-obj" then ".o" else ""
+    | Native -> if Gconf.get_target_option_typed Gconf.Executable_as_obj then ".o" else ""
   in
   fn (name ^ ext ^ ext2 ^ if isWindows then ".exe" else "")
 

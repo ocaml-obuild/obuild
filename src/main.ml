@@ -235,7 +235,7 @@ let cmd_test =
         let proj_file = project_read () in
         let _ = Configure.check proj_file false setup in
 
-        if not (Gconf.get_target_option "build-tests") then (
+        if not (Gconf.get_target_option_typed Build_tests) then (
           eprintf "error: building tests are disabled, re-configure with --tests=true\n";
           exit 1);
 
