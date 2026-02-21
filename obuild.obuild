@@ -131,3 +131,8 @@ test validate
   src-dir: tests
   main-is: test_validate.ml
   build-deps: obuild_core
+
+test generators
+  src-dir: tests
+  main-is: test_generators.ml
+  build-deps: obuild, obuild_base, str

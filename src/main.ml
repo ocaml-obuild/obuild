@@ -79,9 +79,9 @@ let cmd_configure =
         add_bool_opt "library-debugging" "library-debugging";
         add_bool_opt "executable-profiling" "executable-profiling";
         add_bool_opt "executable-debugging" "executable-debugging";
-        add_bool_opt "examples" "build-examples";
-        add_bool_opt "benchs" "build-benchs";
-        add_bool_opt "tests" "build-tests";
+        add_bool_opt "build-examples" "build-examples";
+        add_bool_opt "build-benchs" "build-benchs";
+        add_bool_opt "build-tests" "build-tests";
 
         (* Handle shorthand flags *)
         if Cli.get_flag ctx "executable-as-obj" then add_opt "executable-as-obj" true;
@@ -111,9 +111,9 @@ let cmd_configure =
   |> Cli.option_bool "library-debugging" ~doc:"Enable library debugging"
   |> Cli.option_bool "executable-profiling" ~doc:"Enable executable profiling"
   |> Cli.option_bool "executable-debugging" ~doc:"Enable executable debugging"
-  |> Cli.option_bool "examples" ~doc:"Build examples"
-  |> Cli.option_bool "benchs" ~doc:"Build benchmarks"
-  |> Cli.option_bool "tests" ~doc:"Build tests"
+  |> Cli.option_bool "build-examples" ~doc:"Build examples"
+  |> Cli.option_bool "build-benchs" ~doc:"Build benchmarks"
+  |> Cli.option_bool "build-tests" ~doc:"Build tests"
   |> Cli.flag "executable-as-obj" ~doc:"Output executable as obj file"
   |> Cli.flag "annot" ~doc:"Generate .annot files"
   |> Cli.flag "g" ~short:'g' ~doc:"Compilation with debugging"
@@ -303,9 +303,8 @@ let cmd_doc =
     Cli.command "doc" ~doc:"Generate documentation"
       ~description:"Generates OCamldoc documentation for the project."
       ~run:(fun _ctx ->
-        let proj_file = project_read () in
-        Doc.run proj_file;
-        eprintf "sorry, you've reached an unimplemented part! please be patient or send a patch.\n";
+        eprintf "error: the 'doc' command is not yet implemented.\n";
+        eprintf "  You can use ocamldoc directly on your source files.\n";
         exit 1)
       ()
   in
@@ -347,12 +346,8 @@ let cmd_infer =
   let cmd =
     Cli.command "infer" ~doc:"Infer module dependencies (unimplemented)"
       ~description:"Analyzes source files to infer module dependencies."
-      ~run:(fun ctx ->
-        let modules = Cli.get_positionals ctx in
-        if modules = [] then (
-          printf "no modules to infer\n";
-          exit 0);
-        eprintf "sorry, you've reached an unimplemented part! please be patient or send a patch.\n";
+      ~run:(fun _ctx ->
+        eprintf "error: the 'infer' command is not yet implemented.\n";
         exit 1)
       ()
   in
@@ -572,8 +567,14 @@ let process_global_args ctx =
   (match Cli.get_string_opt ctx "pkg-config" with
   | Some p -> Gconf.set_env "pkgconfig" p
   | None -> ());
-  match Cli.get_string_opt ctx "ranlib" with
+  (match Cli.get_string_opt ctx "ranlib" with
   | Some p -> Gconf.set_env "ranlib" p
+  | None -> ());
+  (match Cli.get_string_opt ctx "ocamldoc" with
+  | Some p -> Gconf.set_env "ocamldoc" p
+  | None -> ());
+  match Cli.get_string_opt ctx "ld" with
+  | Some p -> Gconf.set_env "ld" p
   | None -> ()
 
 (* ===== Application Definition ===== *)
@@ -605,6 +606,9 @@ let obuild_app =
         (fun cmd ->
           Cli.option_string "pkg-config" ~placeholder:"PATH" ~doc:"Path to pkg-config tool" cmd);
         (fun cmd -> Cli.option_string "ranlib" ~placeholder:"PATH" ~doc:"Path to ranlib tool" cmd);
+        (fun cmd ->
+          Cli.option_string "ocamldoc" ~placeholder:"PATH" ~doc:"Path to ocamldoc tool" cmd);
+        (fun cmd -> Cli.option_string "ld" ~placeholder:"PATH" ~doc:"Path to linker" cmd);
       ]
     ~on_global_args:process_global_args
     ~commands:

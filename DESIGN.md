@@ -12,7 +12,11 @@ This document explains the architecture and design decisions of obuild, a parall
 6. [Build Execution Pipeline](#build-execution-pipeline)
 7. [Type System Design](#type-system-design)
 8. [Ctypes.cstubs Integration](#ctypescstubs-integration)
-9. [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
+9. [Custom Code Generators](#custom-code-generators)
+10. [PPX and Preprocessor Resolution](#ppx-and-preprocessor-resolution)
+11. [Configuration Files](#configuration-files)
+12. [CLI Reference](#cli-reference)
+13. [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
 
 ---
 
@@ -681,6 +685,235 @@ library mylib
                                     │
                          CompileModule(Types_generated)
 ```
+
+---
+
+## Custom Code Generators
+
+Obuild supports custom code generators defined in the `.obuild` file. This allows any code generation tool (menhir, ocamllex, atdgen, protobuf, etc.) to be integrated without hardcoding support in obuild itself.
+
+### Generator Architecture
+
+Generators are registered during project parsing and invoked during module resolution. When obuild looks for a module and cannot find a `.ml` file, it checks for source files matching registered generator suffixes.
+
+```
+Module resolution for "Parser":
+
+  1. Look for parser.ml in src-dir       → Not found
+  2. Check registered generators:
+     ├── suffix "mly" → look for parser.mly  → Found!
+     └── suffix "mll" → look for parser.mll  → Not found
+  3. Run menhir generator on parser.mly
+  4. Produces parser.ml (and parser.mli)
+  5. Continue compilation with generated files
+```
+
+### Generator Types
+
+Generators are defined in `lib/core/generators.ml` with two key types:
+
+```ocaml
+(* Built-in generator *)
+type t = {
+  suffix : string;                    (* File extension to match *)
+  modname : Modname.t -> Modname.t;   (* Module name transformation *)
+  commands : filepath -> filepath -> string -> string list list;
+  generated_files : filename -> string -> filename;
+}
+
+(* Custom generator from .obuild file *)
+type custom = {
+  custom_name : string;               (* Unique identifier *)
+  custom_suffix : string option;      (* Auto-detection suffix *)
+  custom_command : string;            (* Command template *)
+  custom_outputs : string list;       (* Output file patterns *)
+  custom_module_name : string option; (* Optional module name pattern *)
+}
+```
+
+### Variable Substitution
+
+Generator commands support template variables:
+
+| Variable | Description |
+|----------|-------------|
+| `${src}` | Full path to source file |
+| `${dest}` | Destination path without extension |
+| `${base}` | Base filename without extension |
+| `${srcdir}` | Source directory |
+| `${destdir}` | Destination directory |
+| `${sources}` | Space-separated list of all inputs (multi-input only) |
+
+### Generator Execution Flow
+
+```
+.obuild file                  Module resolution           Build execution
+     │                              │                          │
+     │  generator menhir            │  Parser not found        │
+     │    suffix: mly               │  parser.mly exists       │
+     │    command: menhir ...       │                          │
+     │    outputs: ${base}.ml       │                          │
+     │                              │                          │
+     ▼                              ▼                          ▼
+register_custom()           get_generators("mly")      run(dest, src, modName)
+     │                              │                          │
+     │  Stored in global            │  Returns matching        │  substitute_variables()
+     │  generator registry          │  generators              │  Execute via sh -c
+     │                              │                          │  Produce .ml/.mli
+```
+
+Custom generators defined in `.obuild` take precedence over built-in ones, allowing users to override default behavior (e.g., using menhir instead of ocamlyacc for `.mly` files).
+
+---
+
+## PPX and Preprocessor Resolution
+
+The `ppx_resolver.ml` module handles resolution of PPX preprocessors and legacy camlp4 syntax extensions.
+
+### Resolution Strategy
+
+PPX and syntax packages are resolved through the META file system using special predicates:
+
+```
+For a target with syntax dependencies:
+
+  1. Collect syntax deps from project DAG
+  2. For each syntax dep:
+     ├── Internal (project library)?
+     │     └── Use compiled bytecode archive path
+     └── External (findlib package)?
+           └── Query META with predicates:
+               [Syntax, Preprocessor, Camlp4o/Camlp4r]
+  3. Generate -I include paths
+  4. Generate archive file arguments
+  5. Return complete preprocessor command
+```
+
+### Key Functions
+
+- `get_syntax_pp`: Generates preprocessor flags (`-I` paths and archive files) for syntax packages
+- `get_target_pp`: Resolves all syntax/preprocessor dependencies for a target and returns a complete preprocessor configuration
+
+The resolver distinguishes between internal syntax packages (compiled as part of the project) and external ones (resolved via findlib META files).
+
+---
+
+## Configuration Files
+
+Obuild supports configuration files (`.obuildrc`) for setting default values that apply before command-line argument parsing.
+
+### File Locations
+
+Configuration is loaded from two locations, in order:
+
+1. `~/.obuildrc` — User-level defaults
+2. `./.obuildrc` — Project-level defaults
+
+Project-level values override user-level values. Command-line arguments override both.
+
+### File Format
+
+```
+# Comments start with #
+verbose = true
+jobs = 4
+ocamlopt = /usr/local/bin/ocamlopt
+```
+
+Each line is a `key = value` pair. Keys correspond to CLI option names (without the `--` prefix).
+
+### Integration
+
+The CLI framework (`lib/base/cli.ml`) loads configuration files via `load_config()` and applies them as argument defaults through `run_with_config`. This happens before command-line parsing, so CLI flags always take precedence.
+
+```
+Priority (highest to lowest):
+
+  1. Command-line arguments     --jobs 8
+  2. Project .obuildrc          jobs = 4
+  3. User ~/.obuildrc           jobs = 2
+  4. Built-in defaults          jobs = 2
+```
+
+---
+
+## CLI Reference
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `configure` | Detect dependencies and prepare build configuration |
+| `build` | Compile targets (all or specified) |
+| `clean` | Remove build artifacts |
+| `install` | Install compiled artifacts |
+| `test` | Build and run test targets |
+| `init` | Create a new project skeleton |
+| `sdist` | Create a source distribution tarball |
+| `get` | Query configuration values |
+| `generate` | Generate helper files (see subcommands below) |
+| `doc` | Generate documentation (not yet implemented) |
+| `infer` | Infer project structure (not yet implemented) |
+
+### Generate Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `generate merlin` | Create `.merlin` file for IDE support (source dirs, build dirs, packages) |
+| `generate opam` | Create `.opam` file (OPAM 2.0 format) from project metadata |
+| `generate completion` | Generate shell completion scripts (bash, zsh, fish) |
+
+### Global Options
+
+These options apply to all commands:
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--help` | `-h` | Show help |
+| `--version` | `-V` | Show version |
+| `--verbose` | `-v` | Enable verbose output |
+| `--quiet` | `-q` | Suppress output |
+| `--debug` | `-d` | Enable debug output |
+| `--debug+` | | Enable debug output with commands |
+| `--color` | | Enable colored output |
+| `--findlib-conf` | | Path to findlib configuration |
+| `--ocamlopt` | | Path to ocamlopt compiler |
+| `--ocamldep` | | Path to ocamldep tool |
+| `--ocamlc` | | Path to ocamlc compiler |
+| `--cc` | | Path to C compiler |
+| `--ar` | | Path to ar archiver |
+| `--pkg-config` | | Path to pkg-config tool |
+| `--ranlib` | | Path to ranlib tool |
+| `--ocamldoc` | | Path to ocamldoc tool |
+| `--ld` | | Path to linker |
+
+### Configure Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--executable-native` | true | Build native executables |
+| `--executable-bytecode` | false | Build bytecode executables |
+| `--executable-profiling` | false | Build profiling executables |
+| `--executable-debugging` | false | Build debugging executables |
+| `--executable-as-obj` | false | Build executables as objects |
+| `--library-native` | true | Build native libraries |
+| `--library-bytecode` | true | Build bytecode libraries |
+| `--library-profiling` | false | Build profiling libraries |
+| `--library-debugging` | false | Build debugging libraries |
+| `--library-plugin` | true (Unix) | Build library plugins |
+| `--build-examples` | false | Build example targets |
+| `--build-benchs` | false | Build benchmark targets |
+| `--build-tests` | false | Build test targets |
+| `--annot` | false | Generate annotation files |
+
+### Build Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--jobs` | `-j` | Number of parallel jobs (default: 2) |
+| `--dot` | | Dump dependency graph in DOT format |
+| `--noocamlmklib` | | Disable ocamlmklib usage |
+| `-g` | | Shorthand for `--library-debugging --executable-debugging` |
 
 ---
 

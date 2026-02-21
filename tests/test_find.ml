@@ -9,6 +9,21 @@ let assumeEq testname expected got =
     Printf.printf "FAILED %s Expected %s Got %s\n" testname expected got;
     err := !err + 1)
 
+let assumeTrue testname v =
+  if v then
+    Printf.printf "SUCCESS %s\n" testname
+  else (
+    Printf.printf "FAILED %s Expected true Got false\n" testname;
+    err := !err + 1)
+
+let assumeRaises testname f =
+  let raised = (try f (); false with _ -> true) in
+  if raised then
+    Printf.printf "SUCCESS %s\n" testname
+  else (
+    Printf.printf "FAILED %s Expected exception\n" testname;
+    err := !err + 1)
+
 let archive_to_string (ps, n) =
   let pres = List.map (fun p -> Meta.Predicate.to_string p) ps in
   Printf.sprintf "archive(%s) = [%s]" (String.concat "," pres) n
@@ -16,6 +31,7 @@ let archive_to_string (ps, n) =
 let archives_to_string l = String.concat "\n" (List.map (fun a -> archive_to_string a) l)
 
 let () =
+  (* --- Original tests --- *)
   let meta_unix =
     "requires = \"\"\n" ^ "description = \"Unix system calls\"\n"
     ^ "version = \"[distributed with Ocaml]\"\n" ^ "directory = \"^\"\n"
@@ -40,8 +56,6 @@ let () =
     ^ "archive(byte,-nonetaccel) +=\n" ^ "    \"netaccel.cma netaccel_link.cmo\""
   in
   let netstring = Meta.parse (Filepath.fp "netstring") meta_netstring "netstring" in
-  Printf.printf "archives\n%s\n" (archives_to_string netstring.Meta.Pkg.archives);
-  Printf.printf "append_archives\n%s\n" (archives_to_string netstring.Meta.Pkg.append_archives);
   assumeEq "netstring description" "Ocamlnet - String processing library"
     netstring.Meta.Pkg.description;
   let netstring_byte =
@@ -57,6 +71,7 @@ let () =
   in
   assumeEq "netstring byte nonetaccel" "archive(byte) = [netstring.cma]"
     (archives_to_string netstring_byte_nonetaccel);
+
   let meta_num =
     "# Specification for the \"num\" library:\n\
      requires = \"num.core\"\n\
@@ -81,6 +96,7 @@ let () =
   in
   assumeEq "num plugin native" "archive(plugin,native) = [nums.cmxs]"
     (archives_to_string num_answer);
+
   let meta_threads =
     "# Specifications for the \"threads\" library:\n\
      version = \"[distributed with Ocaml]\"\n\
@@ -189,9 +205,85 @@ let () =
     \ )\n\
      )\n"
   in
+  let _ctypes = Meta.parse (Filepath.fp "ctypes") meta_ctypes "ctypes" in
+
+  (* --- New tests: version field extraction --- *)
+  assumeEq "unix version" "[distributed with Ocaml]" unix.Meta.Pkg.version;
+  assumeEq "netstring version" "4.0.2" netstring.Meta.Pkg.version;
+
+  (* --- New tests: requires field parsing --- *)
+  let requires_to_string reqs =
+    String.concat "; " (List.map (fun (_, libs) ->
+      String.concat " " (List.map Libname.to_string libs)
+    ) reqs)
+  in
+  assumeEq "netstring requires" "netsys unix str"
+    (requires_to_string netstring.Meta.Pkg.requires);
+
+  (* --- New tests: subpackage navigation --- *)
+  let num_core = Meta.Pkg.find ["core"] num in
+  assumeEq "num.core version" "[internal]" num_core.Meta.Pkg.version;
+
+  let threads_posix = Meta.Pkg.find ["posix"] threads in
+  assumeEq "threads.posix requires" "unix"
+    (requires_to_string threads_posix.Meta.Pkg.requires);
+
+  (* --- New tests: deep subpackage navigation --- *)
   let ctypes = Meta.parse (Filepath.fp "ctypes") meta_ctypes "ctypes" in
-  Printf.printf "archives\n%s\n" (archives_to_string ctypes.Meta.Pkg.archives);
-  Printf.printf "append_archives\n%s\n" (archives_to_string ctypes.Meta.Pkg.append_archives);
+  let ctypes_foreign_base = Meta.Pkg.find ["foreign"; "base"] ctypes in
+  assumeEq "ctypes.foreign.base description"
+    "Dynamic linking of C functions (base package)"
+    ctypes_foreign_base.Meta.Pkg.description;
+
+  let ctypes_stubs = Meta.Pkg.find ["stubs"] ctypes in
+  assumeEq "ctypes.stubs description" "Stub generation from C types"
+    ctypes_stubs.Meta.Pkg.description;
+
+  (* --- New tests: archive selection with multiple predicates --- *)
+  let ctypes_native =
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "ctypes", ctypes)
+      (Libname.of_string "ctypes")
+      [ Meta.Predicate.Native ]
+  in
+  assumeEq "ctypes native archive" "archive(native) = [ctypes.cmxa]"
+    (archives_to_string ctypes_native);
+
+  let ctypes_native_plugin =
+    Meta.Pkg.get_archive_with_filter (Filepath.fp "ctypes", ctypes)
+      (Libname.of_string "ctypes")
+      [ Meta.Predicate.Native; Meta.Predicate.Plugin ]
+  in
+  assumeEq "ctypes native plugin archive" "archive(native,plugin) = [ctypes.cmxs]"
+    (archives_to_string ctypes_native_plugin);
+
+  (* --- New tests: empty META fields --- *)
+  let meta_minimal =
+    "version = \"1.0\"\n\
+     description = \"\"\n"
+  in
+  let minimal = Meta.parse (Filepath.fp "minimal") meta_minimal "minimal" in
+  assumeEq "minimal version" "1.0" minimal.Meta.Pkg.version;
+  assumeEq "minimal empty description" "" minimal.Meta.Pkg.description;
+
+  (* --- New tests: META with comments --- *)
+  let meta_comments =
+    "# This is a comment\n\
+     version = \"2.0\"\n\
+     # Another comment\n\
+     description = \"Test package\"\n"
+  in
+  let comments_pkg = Meta.parse (Filepath.fp "comments") meta_comments "comments" in
+  assumeEq "comments version" "2.0" comments_pkg.Meta.Pkg.version;
+  assumeEq "comments description" "Test package" comments_pkg.Meta.Pkg.description;
+
+  (* --- New tests: directory field --- *)
+  assumeEq "unix directory" "^" unix.Meta.Pkg.directory;
+  assumeEq "threads.vm directory" "+vmthreads"
+    (Meta.Pkg.find ["vm"] threads).Meta.Pkg.directory;
+
+  (* --- New tests: subpackage not found --- *)
+  assumeRaises "subpackage not found"
+    (fun () -> ignore (Meta.Pkg.find ["nonexistent"] unix));
 
   if !err > 0 then
     exit 1
