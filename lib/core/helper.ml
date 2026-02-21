@@ -9,9 +9,6 @@ let log lvl fmt =
         then printf fmt
         else ifprintf stdout fmt
 
-(* backward compatibility alias *)
-let verbose = log
-
 let support_color () =
     if Utils.isWindows
         then false

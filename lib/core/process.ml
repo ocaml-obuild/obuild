@@ -29,7 +29,8 @@ let make args =
   let escape s = try
       let _ = String.index s ' ' in "\"" ^ s ^ "\""
     with Not_found -> s in
-  verbose DebugPlus "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
+  if Gconf.gconf.Gconf.verbosity >= Gconf.Trace then
+    log Trace "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
   let (r1,w1) = Unix.pipe () in
   let (r2,w2) = Unix.pipe () in
   let argv = Array.of_list args in

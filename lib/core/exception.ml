@@ -117,10 +117,10 @@ let show exn =
       eprintf "\n%s\n%!" e;
       exit 8
   | Dependencies.DependenciesMissing missing -> (
-      match List.length missing with
-      | 0 -> assert false
-      | 1 ->
-          error "missing dependency '%s'\n" (List.hd missing);
+      match missing with
+      | [] -> assert false
+      | [dep] ->
+          error "missing dependency '%s'\n" dep;
           exit 9
       | _ ->
           eprintf "missing dependencies:\n%s\n" (Utils.showList "\n" (fun x -> x) missing);

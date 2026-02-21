@@ -25,11 +25,16 @@ type annotation_mode =
 
 type packopt = Hier.t option
 
-let annotToOpts = function
+let annotToOpts mode =
+  let bin_annot_opts =
+    if gconf.bin_annot_occurrences then [ "-bin-annot"; "-bin-annot-occurrences" ]
+    else [ "-bin-annot" ]
+  in
+  match mode with
   | AnnotationNone -> []
-  | AnnotationBin -> [ "-bin-annot" ]
+  | AnnotationBin -> bin_annot_opts
   | AnnotationText -> [ "-annot" ]
-  | AnnotationBoth -> [ "-bin-annot"; "-annot" ]
+  | AnnotationBoth -> bin_annot_opts @ [ "-annot" ]
 
 let run_ocaml_compile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
   let dstDir = dirSpec.dst_dir in
@@ -139,11 +144,16 @@ let run_c_linking sharingMode depfiles dest =
         | LinkingShared -> [])
       @ [ "-o"; fp_to_string dest ]
       @ List.map fp_to_string depfiles
-    else (* Not working if system != linux *)
+    else
       [ Prog.get_cc () ]
       @ (match sharingMode with
         | LinkingStatic -> []
-        | LinkingShared -> [ "-shared" ]) (* TODO: fix this for all system != linux *)
+        | LinkingShared ->
+            if Sys.os_type = "Unix" then
+              (* -shared works on both Linux and macOS with clang *)
+              [ "-shared" ]
+            else
+              [ "-shared" ])
       @ [ "-o"; fp_to_string dest ]
       @ List.map fp_to_string depfiles
   in
@@ -157,7 +167,7 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
       try
         let _ = Unix.lstat fn in
         true
-      with _ -> false
+      with Unix.Unix_error _ -> false
     in
     match linking_mode with
     | LinkingPlugin | LinkingLibrary -> ()

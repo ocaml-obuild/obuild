@@ -140,8 +140,8 @@ let install_lib proj_file lib dest_dir =
       (Project.Library.to_targets lib)
   in
   let dir_name = fn (Libname.to_string lib.Project.Library.name) in
-  verbose Report "installing library %s\n" (Libname.to_string lib.Project.Library.name);
-  verbose Debug "installing files: %s\n"
+  log Report "installing library %s\n" (Libname.to_string lib.Project.Library.name);
+  log Debug "installing files: %s\n"
     (Utils.showList "," fn_to_string (List.concat (List.map snd all_files)));
   copy_files all_files dest_dir dir_name
 

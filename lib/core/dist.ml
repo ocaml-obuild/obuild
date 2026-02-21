@@ -65,7 +65,7 @@ let read_dist_file path =
     let content = Filesystem.read_file path in
     hashtbl_from_list
       (List.map (fun l -> second (default "") $ Utils.toKV l) $ String_utils.split '\n' content)
-  with _ -> raise (DistFileNotFound (fp_to_string path))
+  with Sys_error _ | Unix.Unix_error _ -> raise (DistFileNotFound (fp_to_string path))
 
 let read_setup () = read_dist_file setup_path
 let read_configure () = read_dist_file configure_path
@@ -83,5 +83,5 @@ let remove_dead_links () =
         let l = Unix.readlink fn in
         if String_utils.startswith build_path l then
           Sys.remove fn
-      with _ -> ())
+      with Unix.Unix_error _ | Sys_error _ -> ())
     files

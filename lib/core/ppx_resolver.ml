@@ -82,11 +82,11 @@ let get_target_pp bstate target = function
         | _              -> None
       ) nodes
     in
-    verbose Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
+    log Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
     let p4pred = get_p4pred pp in
     let p4Meta = Metacache.get_from_cache camlp4Libname in
     let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
     let archive = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] in
-    (*verbose Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
+    (*log Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)
     let camlp4Strs = get_syntax_pp bstate pp syntaxPkgs in
     Pp.some preproc (archive :: camlp4Strs)

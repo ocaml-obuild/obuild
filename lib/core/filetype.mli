@@ -18,6 +18,9 @@ type t =
   | FileA         (** Static archive (.a) *)
   | FileSO        (** Shared object (.so) *)
   | FileEXE       (** Executable (.exe) *)
+  | FileObj       (** Windows object file (.obj) *)
+  | FileLib       (** Windows static library (.lib) *)
+  | FileDylib     (** macOS dynamic library (.dylib) *)
   | FileOther of string  (** Other file type with extension *)
 
 val of_string : string -> t

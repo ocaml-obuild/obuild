@@ -9,18 +9,20 @@ let remove_dir_content wpath =
   let path = fp_to_string wpath in
   let rec rmdir_recursive f path =
     let dirhandle = Unix.opendir path in
-    (try
-       while true do
-         let ent = Unix.readdir dirhandle in
-         if String.length ent > 0 && ent.[0] <> '.' then
-           let fent = path ^ Filename.dir_sep ^ ent in
-           match (Unix.lstat fent).Unix.st_kind with
-           | Unix.S_DIR -> rmdir_recursive Unix.rmdir fent
-           | Unix.S_REG -> Unix.unlink fent
-           | _ -> raise (UnexpectedFileType fent)
-       done
-     with End_of_file -> ());
-    Unix.closedir dirhandle;
+    finally
+      (fun () ->
+        try
+          while true do
+            let ent = Unix.readdir dirhandle in
+            if String.length ent > 0 && ent.[0] <> '.' then
+              let fent = path ^ Filename.dir_sep ^ ent in
+              match (Unix.lstat fent).Unix.st_kind with
+              | Unix.S_DIR -> rmdir_recursive Unix.rmdir fent
+              | Unix.S_REG -> Unix.unlink fent
+              | _ -> raise (UnexpectedFileType fent)
+          done
+        with End_of_file -> ())
+      (fun () -> Unix.closedir dirhandle);
     f path
   in
   if Sys.file_exists path then
@@ -51,9 +53,15 @@ let list_dir_pred_map (p : filename -> 'a option) path : 'a list =
 let list_dir_pred (p : filename -> bool) path : filename list =
   list_dir_pred_map (fun e -> if p e then Some e else None) path
 
-let get_modification_time path = try (Unix.stat (fp_to_string path)).Unix.st_mtime with _ -> 0.0
+let get_modification_time path =
+  try (Unix.stat (fp_to_string path)).Unix.st_mtime
+  with Unix.Unix_error _ -> 0.0
+
 let exists path = Sys.file_exists (fp_to_string path)
-let is_dir path = try Sys.is_directory (fp_to_string path) with _ -> false
+
+let is_dir path =
+  try Sys.is_directory (fp_to_string path)
+  with Sys_error _ -> false
 
 (* create a directory safely.
  *

@@ -84,10 +84,10 @@ let execute_configure_script proj_file =
       | Process.Failure er -> raise (ConfigureScriptFailed er))
 
 let create_dist project flags =
-  verbose Verbose "configuration changed, deleting dist\n%!";
+  log Verbose "configuration changed, deleting dist\n%!";
   Filesystem.remove_dir_content Dist.build_path;
   Dist.remove_dead_links ();
-  verbose Verbose "auto-generating configuration files\n%!";
+  log Verbose "auto-generating configuration files\n%!";
   let autogenDir = Dist.create_build Dist.Autogen in
   generateMlFile project (autogenDir </> fn "path_generated.ml") flags;
   generateCFile project (autogenDir </> fn "obuild_macros.h") flags
@@ -153,8 +153,11 @@ let check_ocaml () =
   let ver = String_utils.split '.' ocaml_ver in
   (match ver with
   | major :: minor :: _ ->
-      if int_of_string major < 4 then gconf.bin_annot <- false;
-      if int_of_string major > 4 && int_of_string minor > 1 then gconf.short_path <- true
+      let maj = int_of_string major in
+      let min = int_of_string minor in
+      if maj < 4 then gconf.bin_annot <- false;
+      if maj > 4 || (maj = 4 && min > 1) then gconf.short_path <- true;
+      if maj > 5 || (maj = 5 && min >= 2) then gconf.bin_annot_occurrences <- true
   | _ -> gconf.bin_annot <- false);
   ocamlCfg
 
@@ -163,13 +166,13 @@ let run proj_file user_flags user_opts =
   let _ = check_ocaml () in
   (* Auto-detect CPU count and set default parallelism *)
   let cpu_count = Utils.get_cpu_count () in
-  verbose Report "Detected %d CPU core%s, setting default parallelism to %d\n" cpu_count
+  log Report "Detected %d CPU core%s, setting default parallelism to %d\n" cpu_count
     (if cpu_count = 1 then "" else "s")
     cpu_count;
   gconf.parallel_jobs <- cpu_count;
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
-  let configure = try Some (Dist.read_configure ()) with _ -> None in
+  let configure = try Some (Dist.read_configure ()) with Dist.DistFileNotFound _ -> None in
   let configure_flags =
     match configure with
     | None -> []
@@ -183,14 +186,14 @@ let run proj_file user_flags user_opts =
         get_flags h
   in
   let flags = get_flags_value proj_file configure_flags user_flags in
-  verbose Debug "  configure flag: [%s]\n"
+  log Debug "  configure flag: [%s]\n"
     (Utils.showList "," (fun (n, v) -> n ^ "=" ^ string_of_bool v) flags);
   check_extra_tools proj_file;
   (* Set the user opts BEFORE analyzing the project *)
   List.iter (fun (o, v) -> Gconf.set_target_options o v) user_opts;
   let project = Analyze.prepare proj_file flags in
   let currentSetup = makeSetup digestKV project flags in
-  let actualSetup = try Some (Dist.read_setup ()) with _ -> None in
+  let actualSetup = try Some (Dist.read_setup ()) with Dist.DistFileNotFound _ -> None in
   let projectSystemChanged =
     match actualSetup with
     | None -> true
@@ -199,13 +202,13 @@ let run proj_file user_flags user_opts =
         try
           comparekvs "setup" stp (hashtbl_to_list currentSetup);
           (* FORCED should be false *) true
-        with _ -> true)
+        with ConfigChanged _ | Not_found -> true)
   in
 
   if projectSystemChanged then (
     create_dist project flags;
     (* write setup file *)
-    verbose Verbose "Writing new setup\n%!";
+    log Verbose "Writing new setup\n%!";
     Dist.write_setup currentSetup)
 
 let check proj_file reconf setup =
@@ -227,13 +230,13 @@ let check proj_file reconf setup =
   if reconfigure then (
     (* let's call configure-script if available, however we don't care about the content of dist/configure *)
     execute_configure_script proj_file;
-    verbose Debug "  configure flag: [%s]\n"
+    log Debug "  configure flag: [%s]\n"
       (Utils.showList "," (fun (n, v) -> n ^ "=" ^ string_of_bool v) flags);
     check_extra_tools proj_file;
     let project = Analyze.prepare proj_file flags in
     create_dist project flags;
     (* write setup file *)
-    verbose Verbose "Writing new setup\n%!";
+    log Verbose "Writing new setup\n%!";
     let current_setup = makeSetup digestKV project flags in
     Dist.write_setup current_setup);
   flags

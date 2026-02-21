@@ -54,7 +54,7 @@ let run () =
         String.sub s 0 (l - ext_l)
       else
         s
-    with _ -> s (* in case out of bounds above *)
+    with Invalid_argument _ -> s (* in case out of bounds above *)
   in
 
   let invalid ~x = function

@@ -30,6 +30,12 @@ val showList : string -> ('a -> string) -> 'a list -> string
 val isWindows : bool
 (** True if running on Windows platform *)
 
+val shared_lib_name : string -> string
+(** [shared_lib_name clib_name] returns platform-appropriate shared library filename *)
+
+val static_lib_name : string -> string
+(** [static_lib_name clib_name] returns platform-appropriate static library filename *)
+
 val to_exe_name : Types.ocaml_compilation_option -> Types.ocaml_compiled_type -> string -> Filepath.filename
 (** Generate executable filename with appropriate extensions
     @param mode Compilation option (Normal, WithDebug, WithProf)

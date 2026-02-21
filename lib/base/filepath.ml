@@ -49,7 +49,7 @@ let valid_fn x =
   try
     let _ = fn x in
     true
-  with _ -> false
+  with EmptyFilename | InvalidFilename _ -> false
 
 let ( <//> ) (afp : filepath) (bfp : filepath) =
   match (afp.absolute, bfp.absolute) with

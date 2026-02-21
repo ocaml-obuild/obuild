@@ -163,7 +163,7 @@ let get_generator fp =
 
 (** Run ALL generators for source file *)
 let run dest src modName =
-  verbose Debug "  generator dest = %s src = %s\n%!" (fp_to_string dest) (fp_to_string src);
+  log Debug "  generator dest = %s src = %s\n%!" (fp_to_string dest) (fp_to_string src);
   let gens = get_generators src in
   if gens = [] then raise (GeneratorNotFound (fp_to_string src));
   List.iter (fun gen ->
@@ -198,7 +198,7 @@ let run_custom_multi ~generator_name ~dest ~sources ~extra_args =
     | None -> cmd_base
     | Some args -> cmd_base ^ " " ^ args
   in
-  verbose Debug "  custom generator: %s\n%!" cmd;
+  log Debug "  custom generator: %s\n%!" cmd;
   (* Run command through shell to support shell features *)
   let args = ["sh"; "-c"; cmd] in
   match Process.run args with

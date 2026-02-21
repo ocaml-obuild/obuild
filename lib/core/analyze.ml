@@ -96,7 +96,7 @@ let initializeSystemStdlib ocamlCfg =
     (fun lib ->
       (* skip .p library which are just variant of the no .p library *)
       if not (String_utils.endswith ".p" lib) then (
-        verbose Verbose "initializing standard library : package %s\n" lib;
+        log Verbose "initializing standard library : package %s\n" lib;
         let libCmxa = lib ^ ".cmxa" in
         let libCma = lib ^ ".cma" in
         let archives =
@@ -142,7 +142,7 @@ let readOcamlMkConfig filename =
 (* get all the dependencies required
  * and prepare the global bstate.of value *)
 let prepare projFile user_flags =
-  verbose Verbose "analyzing project\n%!";
+  log Verbose "analyzing project\n%!";
   let ocamlCfg = Prog.get_ocaml_config () in
   let ocamlMkCfg = readOcamlMkConfig (Hashtbl.find ocamlCfg "standard_library") in
 
@@ -184,7 +184,7 @@ let prepare projFile user_flags =
       List.iter
         (fun (dep, _) ->
           if isInternal dep then (
-            verbose Debug "  internal depends: %s\n" (Libname.to_string dep);
+            log Debug "  internal depends: %s\n" (Libname.to_string dep);
             Dag.add_edge target.target_name (Name.Lib dep) targetsDag))
         (Target.get_all_builddeps target))
     allTargets;
@@ -204,7 +204,7 @@ let prepare projFile user_flags =
         Dag.add_node iLibDep depsDag;
         List.iter
           (fun (reqDep, _) ->
-            verbose Debug "  library %s depends on %s\n"
+            log Debug "  library %s depends on %s\n"
               (Libname.to_string iLib.Project.Library.name)
               (Libname.to_string reqDep);
             Dag.add_edge iLibDep (Dependency reqDep) depsDag;
@@ -227,7 +227,7 @@ let prepare projFile user_flags =
               | _ ->
                   List.iter
                     (fun reqDep ->
-                      verbose Debug "  library %s depends on %s\n" (Libname.to_string dep)
+                      log Debug "  library %s depends on %s\n" (Libname.to_string dep)
                         (Libname.to_string reqDep);
                       Dag.add_edge (Dependency dep) (Dependency reqDep) depsDag;
                       loop reqDep)
@@ -244,7 +244,7 @@ let prepare projFile user_flags =
   in
   List.iter
     (fun target ->
-      verbose Debug "  getting dependencies for target %s\n%!" (Target.get_target_name target);
+      log Debug "  getting dependencies for target %s\n%!" (Target.get_target_name target);
       let nodeTarget = Target target.target_name in
       Dag.add_node nodeTarget depsDag;
       (* if a lib, then we insert ourself as dependency for executable or other library *)

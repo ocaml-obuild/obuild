@@ -65,7 +65,7 @@ module Token = struct
     try
       let _ = String.index "&/|!+=><()" c in
       true
-    with _ -> false
+    with Not_found -> false
 
   let is_ident_char c =
     (c >= 'a' && c <= 'z')
@@ -275,9 +275,9 @@ let parse_expr l =
   in
   let e, r = parse_sub_expr l in
   let rec loop e r =
-    if List.length r = 0 then
-      e
-    else
+    match r with
+    | [] -> e
+    | _ ->
       let e, r = parse_bin_expr e r in
       loop e r
   in

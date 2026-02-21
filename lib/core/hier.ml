@@ -36,7 +36,9 @@ let clear () =
   Hashtbl.clear hiers;
   Hashtbl.clear generated_modules
 
-let root = List.hd
+let root = function
+  | x :: _ -> x
+  | [] -> raise EmptyModuleHierarchy
 
 let parent x =
   match x with
@@ -62,17 +64,16 @@ let of_modname x = [ x ]
 let to_node x = x
 
 let to_dirpath x =
-  if List.length x > 1 then
-    fp (String.concat Filename.dir_sep (List.map Modname.to_dir $ list_init x))
-  else
-    current_dir
+  match x with
+  | [] | [_] -> current_dir
+  | _ -> fp (String.concat Filename.dir_sep (List.map Modname.to_dir $ list_init x))
 
 let append x m = x @ [ m ]
 
 let add_prefix prefix_path hier =
-  if List.length hier <= 1 then
-    prefix_path
-  else
+  match hier with
+  | [] | [_] -> prefix_path
+  | _ ->
     let to_fp = fp (String.concat Filename.dir_sep (List.map Modname.to_dir $ list_init hier)) in
     if path_length prefix_path = 0 then
       to_fp

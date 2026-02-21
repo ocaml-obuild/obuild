@@ -50,6 +50,16 @@ let to_include_path_options paths =
 let showList sep f l = String.concat sep (List.map f l)
 let isWindows = Sys.os_type = "Win32"
 
+(* Platform-aware C library naming.
+   OCaml's convention uses dll*.so even on macOS for stub libraries. *)
+let shared_lib_name clib_name =
+  if isWindows then clib_name ^ ".dll"
+  else "dll" ^ clib_name ^ ".so"
+
+let static_lib_name clib_name =
+  if isWindows then clib_name ^ ".lib"
+  else "lib" ^ clib_name ^ ".a"
+
 let to_exe_name mode build name =
   let ext = extDP mode in
   let ext2 =
@@ -65,7 +75,15 @@ exception FilesNotFoundInPaths of (filepath list * filepath list)
 let get_system_paths () =
   let sep = if isWindows then ';' else ':' in
   try List.map fp (String_utils.split sep (Sys.getenv "PATH"))
-  with Not_found -> List.map fp [ "/usr/bin"; "/usr/local/bin" ]
+  with Not_found ->
+    if isWindows then
+      let sysroot =
+        try Sys.getenv "SystemRoot"
+        with Not_found -> "C:\\Windows"
+      in
+      List.map fp [ sysroot ^ "\\System32" ]
+    else
+      List.map fp [ "/usr/bin"; "/usr/local/bin" ]
 
 let find_in_paths paths name =
   try List.find (fun p -> Filesystem.exists (p </> name)) paths
@@ -81,7 +99,8 @@ let find_choice_in_paths paths names =
         with Not_found -> false)
       paths
   with Not_found ->
-    raise (FilesNotFoundInPaths (paths, List.map (fun n -> n (List.hd paths)) names))
+    let sample_path = match paths with p :: _ -> p | [] -> fp "." in
+    raise (FilesNotFoundInPaths (paths, List.map (fun n -> n sample_path) names))
 
 let exist_choice_in_paths paths names =
   try

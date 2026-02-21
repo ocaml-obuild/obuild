@@ -29,7 +29,7 @@ let get_ctypes_includes bstate =
     let stubs_pkg = Meta.Pkg.find ctypes_stubs_lib.Libname.subnames stubs_root_pkg in
     let stubs_dir = Meta.get_include_dir stdlib (stubs_path, stubs_pkg) in
     [integers_dir; str_dir; ctypes_dir; stubs_dir]
-  with _ -> []
+  with Not_found | Meta.SubpackageNotFound _ | Dependencies.DependencyMissing _ -> []
 
 (* Helper: get ctypes library files for linking *)
 let get_ctypes_libs bstate =
@@ -58,7 +58,7 @@ let get_ctypes_libs bstate =
     let stubs_cma = stubs_dir </> fn "ctypes_stubs.cma" in
 
     [integers_cma; str_cma; ctypes_cma; stubs_cma]
-  with _ -> []
+  with Not_found | Meta.SubpackageNotFound _ | Dependencies.DependencyMissing _ -> []
 
 let get_nb_step dag =
   let nb_step = Dag.length dag in
@@ -69,11 +69,11 @@ let get_nb_step dag =
 let generate_cstubs_types task_index task lib bstate task_context dag =
   let (cstate, target) = Hashtbl.find task_context task in
   let (nb_step, nb_step_len) = get_nb_step dag in
-  verbose Report "[%*d of %d] Generating cstubs types for %s\n%!" nb_step_len task_index nb_step
+  log Report "[%*d of %d] Generating cstubs types for %s\n%!" nb_step_len task_index nb_step
     (Libname.to_string lib);
   match target.target_cstubs with
   | None ->
-    verbose Report "  No cstubs configuration found\n%!";
+    log Report "  No cstubs configuration found\n%!";
     Scheduler.FinishTask task
   | Some cstubs ->
     let autogen_dir = Dist.get_build_exn Dist.Autogen </> fn (Libname.to_string lib) in
@@ -92,7 +92,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         (Libname.to_string lib)
       in
       Filesystem.write_file target_file content;
-      verbose Report "  Generated %s (no types)\n%!" (fp_to_string target_file);
+      log Report "  Generated %s (no types)\n%!" (fp_to_string target_file);
       Scheduler.FinishTask task
     | Some type_desc ->
       (* Get the bindings module name *)
@@ -103,7 +103,8 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
       let (bindings_module, types_functor) = match parts with
         | [m; f] -> (m, f)
         | [m] -> (m, "Types")
-        | _ -> (List.hd parts, "Types")
+        | m :: _ -> (m, "Types")
+        | [] -> (bindings_parts, "Types")
       in
 
       (* Get paths *)
@@ -132,7 +133,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         types_functor
       in
       Filesystem.write_file discover_ml discover_content;
-      verbose Report "  Generated %s\n%!" (fp_to_string discover_ml);
+      log Report "  Generated %s\n%!" (fp_to_string discover_ml);
 
       (* Compile discover.ml - needs ctypes.stubs and the bindings module *)
       let discover_exe = autogen_dir </> fn "discover.byte" in
@@ -153,11 +154,11 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         (if bindings_exists then [fp_to_string bindings_cmo] else []) @
         ["-o"; fp_to_string discover_exe; fp_to_string discover_ml] in
 
-      verbose Report "  Compiling type discovery program...\n%!";
+      log Report "  Compiling type discovery program...\n%!";
       (match Process.run compile_args with
       | Process.Failure err ->
-        verbose Report "  Warning: Failed to compile discover.ml: %s\n%!" err;
-        verbose Report "  Falling back to static type sizes\n%!";
+        log Report "  Warning: Failed to compile discover.ml: %s\n%!" err;
+        log Report "  Falling back to static type sizes\n%!";
         (* Fallback: generate static content *)
         let content = Printf.sprintf
           "(* Auto-generated type bindings for %s *)\n\
@@ -171,10 +172,10 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         Scheduler.FinishTask task
       | Process.Success _ ->
         (* Run discover to generate C code *)
-        verbose Report "  Running type discovery program...\n%!";
+        log Report "  Running type discovery program...\n%!";
         (match Process.run [fp_to_string discover_exe] with
         | Process.Failure err ->
-          verbose Report "  Warning: Failed to run discover: %s\n%!" err;
+          log Report "  Warning: Failed to run discover: %s\n%!" err;
           let content = Printf.sprintf
             "(* Auto-generated type bindings for %s *)\n\
              let size_t_size = %d\n"
@@ -187,7 +188,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
           (* Write the C program *)
           let discover_c = autogen_dir </> fn "discover.c" in
           Filesystem.write_file discover_c c_code;
-          verbose Report "  Generated %s\n%!" (fp_to_string discover_c);
+          log Report "  Generated %s\n%!" (fp_to_string discover_c);
 
           (* Compile the C program - include ctypes directory for ctypes_cstubs_internals.h *)
           let discover_c_exe = autogen_dir </> fn "discover_c" in
@@ -200,10 +201,10 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
           let compile_c_args = [cc; "-I"; ocaml_include] @ ctypes_c_includes @
             ["-o"; fp_to_string discover_c_exe; fp_to_string discover_c] in
 
-          verbose Report "  Compiling C type discovery...\n%!";
+          log Report "  Compiling C type discovery...\n%!";
           (match Process.run compile_c_args with
           | Process.Failure err ->
-            verbose Report "  Warning: Failed to compile discover.c: %s\n%!" err;
+            log Report "  Warning: Failed to compile discover.c: %s\n%!" err;
             let content = Printf.sprintf
               "(* Auto-generated type bindings for %s *)\n\
                let size_t_size = %d\n"
@@ -214,10 +215,10 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
             Scheduler.FinishTask task
           | Process.Success _ ->
             (* Run the C program to get types *)
-            verbose Report "  Running C type discovery...\n%!";
+            log Report "  Running C type discovery...\n%!";
             (match Process.run [fp_to_string discover_c_exe] with
             | Process.Failure err ->
-              verbose Report "  Warning: Failed to run C discover: %s\n%!" err;
+              log Report "  Warning: Failed to run C discover: %s\n%!" err;
               let content = Printf.sprintf
                 "(* Auto-generated type bindings for %s *)\n\
                  let size_t_size = %d\n"
@@ -228,7 +229,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
               Scheduler.FinishTask task
             | Process.Success (ml_code, _, _) ->
               Filesystem.write_file target_file ml_code;
-              verbose Report "  Generated %s\n%!" (fp_to_string target_file);
+              log Report "  Generated %s\n%!" (fp_to_string target_file);
               ignore (bindings_module, types_functor);
               Scheduler.FinishTask task
             )
@@ -240,11 +241,11 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
 let generate_cstubs_functions task_index task lib bstate task_context dag =
   let (cstate, target) = Hashtbl.find task_context task in
   let (nb_step, nb_step_len) = get_nb_step dag in
-  verbose Report "[%*d of %d] Generating cstubs functions for %s\n%!" nb_step_len task_index nb_step
+  log Report "[%*d of %d] Generating cstubs functions for %s\n%!" nb_step_len task_index nb_step
     (Libname.to_string lib);
   match target.target_cstubs with
   | None ->
-    verbose Report "  No cstubs configuration found\n%!";
+    log Report "  No cstubs configuration found\n%!";
     Scheduler.FinishTask task
   | Some cstubs ->
     let autogen_dir = Dist.get_build_exn Dist.Autogen </> fn (Libname.to_string lib) in
@@ -270,7 +271,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
       Filesystem.write_file c_stubs_file
         "/* Auto-generated C stubs - no functions bound */\n\
          #include <caml/mlvalues.h>\n";
-      verbose Report "  Generated %s (no functions)\n%!" (fp_to_string entry_file);
+      log Report "  Generated %s (no functions)\n%!" (fp_to_string entry_file);
       Scheduler.FinishTask task
     | Some func_desc ->
       let bindings_hier = func_desc.Target.cstubs_functor in
@@ -279,7 +280,8 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
       let (bindings_module, functions_functor) = match parts with
         | [m; f] -> (m, f)
         | [m] -> (m, "Functions")
-        | _ -> (List.hd parts, "Functions")
+        | m :: _ -> (m, "Functions")
+        | [] -> (bindings_parts, "Functions")
       in
 
       (* Get types functor name from type description *)
@@ -399,7 +401,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         (if has_types then "(Types)" else "")
       in
       Filesystem.write_file stubgen_ml stubgen_content;
-      verbose Report "  Generated %s\n%!" (fp_to_string stubgen_ml);
+      log Report "  Generated %s\n%!" (fp_to_string stubgen_ml);
 
       (* Compile stubgen.ml *)
       let stubgen_exe = autogen_dir </> fn "stubgen.byte" in
@@ -414,9 +416,9 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
       (* Check if bindings and types modules exist *)
       let bindings_exists = Filesystem.exists bindings_cmo in
       let types_exists = Filesystem.exists types_cmo in
-      verbose Report "  Bindings module at %s: %s\n%!"
+      log Report "  Bindings module at %s: %s\n%!"
         (fp_to_string bindings_cmo) (if bindings_exists then "found" else "not found");
-      verbose Report "  Types generated module at %s: %s\n%!"
+      log Report "  Types generated module at %s: %s\n%!"
         (fp_to_string types_cmo) (if types_exists then "found" else "not found");
 
       (* Compile and link user provided C sources *)
@@ -427,7 +429,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         let cc = Prog.get_cc () in
         let include_args = Utils.to_include_path_options (cstate.compilation_c_include_paths @ ctypes_includes @ src_dirs) in
         let args = [cc] @ include_args @ ["-o"; fp_to_string dst_file; "-c"; fp_to_string src_file] in
-        verbose Report "  Compiling C source %s for stubgen...\n%!" c_src;
+        log Report "  Compiling C source %s for stubgen...\n%!" c_src;
         (match Process.run args with
          | Process.Failure err -> failwith ("Failed to compile C source " ^ c_src ^ ": " ^ err)
          | Process.Success _ -> ());
@@ -440,11 +442,11 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         c_objs @
         ["-o"; fp_to_string stubgen_exe; fp_to_string stubgen_ml] in
 
-      verbose Report "  Compiling stub generator...\n%!";
+      log Report "  Compiling stub generator...\n%!";
       (match Process.run compile_args with
       | Process.Failure err ->
-        verbose Report "  Warning: Failed to compile stubgen.ml: %s\n%!" err;
-        verbose Report "  Falling back to placeholder stubs\n%!";
+        log Report "  Warning: Failed to compile stubgen.ml: %s\n%!" err;
+        log Report "  Falling back to placeholder stubs\n%!";
         (* Fallback: generate placeholder content *)
         let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
         let entry_content = Printf.sprintf
@@ -466,14 +468,14 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
            #include <caml/mlvalues.h>\n\
            #include <caml/memory.h>\n\
            #include <caml/alloc.h>\n";
-        verbose Report "  Generated placeholder stubs\n%!";
+        log Report "  Generated placeholder stubs\n%!";
         Scheduler.FinishTask task
       | Process.Success _ ->
         (* Run stubgen *)
-        verbose Report "  Running stub generator...\n%!";
+        log Report "  Running stub generator...\n%!";
         (match Process.run [fp_to_string stubgen_exe] with
         | Process.Failure err ->
-          verbose Report "  Warning: Failed to run stubgen: %s\n%!" err;
+          log Report "  Warning: Failed to run stubgen: %s\n%!" err;
           (* Fallback *)
           let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
           let entry_content = Printf.sprintf
@@ -490,8 +492,8 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
              #include <caml/mlvalues.h>\n";
           Scheduler.FinishTask task
         | Process.Success (output, _, _) ->
-          verbose Report "  %s\n%!" output;
-          verbose Report "  Stubs generated successfully\n%!";
+          log Report "  %s\n%!" output;
+          log Report "  Stubs generated successfully\n%!";
           Scheduler.FinishTask task
         )
       )
@@ -500,11 +502,11 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
 let compile_cstubs_c task_index task lib bstate task_context dag =
   let (cstate, target) = Hashtbl.find task_context task in
   let (nb_step, nb_step_len) = get_nb_step dag in
-  verbose Report "[%*d of %d] Compiling cstubs C for %s\n%!" nb_step_len task_index nb_step
+  log Report "[%*d of %d] Compiling cstubs C for %s\n%!" nb_step_len task_index nb_step
     (Libname.to_string lib);
   match target.target_cstubs with
   | None ->
-    verbose Report "  No cstubs configuration found\n%!";
+    log Report "  No cstubs configuration found\n%!";
     Scheduler.FinishTask task
   | Some cstubs ->
     let autogen_dir = Dist.get_build_exn Dist.Autogen </> fn (Libname.to_string lib) in
@@ -519,6 +521,6 @@ let compile_cstubs_c task_index task lib bstate task_context dag =
       src_dir      = autogen_dir
     } in
     let dest = (Filetype.FileO, c_dir_spec.dst_dir </> o_from_cfile c_stubs_file) in
-    verbose Report "  Compiling %s -> %s\n%!" (fn_to_string c_stubs_file) (fp_to_string (snd dest));
+    log Report "  Compiling %s -> %s\n%!" (fn_to_string c_stubs_file) (fp_to_string (snd dest));
     (* Use the C compiler to compile the stubs *)
     Scheduler.AddProcess (task, run_c_compile bstate.bstate_config c_dir_spec [] c_stubs_file)

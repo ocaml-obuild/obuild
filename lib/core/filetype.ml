@@ -17,6 +17,9 @@ type t =
   | FileA
   | FileSO
   | FileEXE
+  | FileObj    (* Windows .obj *)
+  | FileLib    (* Windows .lib *)
+  | FileDylib  (* macOS .dylib *)
   | FileOther of string
 
 let of_string s =
@@ -37,6 +40,9 @@ let of_string s =
   | "a" -> FileA
   | "so" -> FileSO
   | "exe" -> FileEXE
+  | "obj" -> FileObj
+  | "lib" -> FileLib
+  | "dylib" -> FileDylib
   | _ -> FileOther s
 
 let to_string fty =
@@ -57,6 +63,9 @@ let to_string fty =
   | FileA -> "a"
   | FileSO -> "so"
   | FileEXE -> "exe"
+  | FileObj -> "obj"
+  | FileLib -> "lib"
+  | FileDylib -> "dylib"
   | FileOther s -> s
 
 type id = {
@@ -75,7 +84,7 @@ let of_filename (name : filename) : t =
     let len = String.length (Filename.chop_extension nameUnpack) in
     (* +1 to remove the dot *)
     of_string (String.sub nameUnpack (len + 1) (String.length nameUnpack - len - 1))
-  with Invalid_argument _ -> FileEXE (* best effort, suit our case for unix *)
+  with Invalid_argument _ -> FileEXE (* no extension: assume executable *)
 
 let of_filepath (path : filepath) : t = of_filename (path_basename path)
 

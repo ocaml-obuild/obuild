@@ -21,7 +21,7 @@ let read_setup () =
 let project_read () =
   try Project_read.read ()
   with exn ->
-    verbose Verbose "exception during project read: %s\n" (Printexc.to_string exn);
+    log Verbose "exception during project read: %s\n" (Printexc.to_string exn);
     raise exn
 
 let collect_all_targets proj_file =
@@ -96,7 +96,7 @@ let cmd_configure =
         (* Run configuration *)
         FindlibConf.load ();
         let proj_file = Project_read.read () in
-        verbose Report "Configuring %s-%s...\n" proj_file.Project.name proj_file.Project.version;
+        log Report "Configuring %s-%s...\n" proj_file.Project.name proj_file.Project.version;
         Configure.run proj_file !user_flags !user_opts)
       ()
   in
@@ -547,7 +547,7 @@ let process_global_args ctx =
   if Cli.get_flag ctx "verbose" then gconf.verbosity <- Verbose;
   if Cli.get_flag ctx "quiet" then gconf.verbosity <- Silent;
   if Cli.get_flag ctx "debug" then gconf.verbosity <- Debug;
-  if Cli.get_flag ctx "debug+" then gconf.verbosity <- DebugPlus;
+  if Cli.get_flag ctx "debug+" then gconf.verbosity <- Trace;
   if Cli.get_flag ctx "color" then gconf.color <- true;
 
   (* Process global options *)

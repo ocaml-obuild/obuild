@@ -5,7 +5,7 @@ type verbosity_t =
   | Report
   | Verbose
   | Debug
-  | DebugPlus
+  | Trace
 
 type t = {
   mutable verbosity : verbosity_t;
@@ -13,6 +13,7 @@ type t = {
   mutable dump_dot : bool;
   mutable color : bool;
   mutable bin_annot : bool;
+  mutable bin_annot_occurrences : bool;
   mutable short_path : bool;
   mutable ocamlmklib : bool;
   mutable ocaml_extra_args : string list;
@@ -146,6 +147,7 @@ let defaults =
     dump_dot = false;
     color = false;
     bin_annot = true;
+    bin_annot_occurrences = false;
     short_path = false;
     ocamlmklib = true;
     ocaml_extra_args = [];

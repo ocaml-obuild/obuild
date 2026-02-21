@@ -659,19 +659,18 @@ let run_internal argv app =
      if get_flag global_ctx "version" then (
        Printf.printf "%s %s\n" app.app_name app.app_version;
        exit 0)
-   with _ -> ());
+   with Not_found -> ());
 
   (* Invoke global args callback if provided *)
   (match app.app_on_global_args with
   | Some f -> f { command_name = ""; values = global_vals; positionals = [] }
   | None -> ());
 
-  if List.length remaining = 0 then (
+  match remaining with
+  | [] ->
     print_help app None;
-    raise (Parse_error "No command specified"));
-
-  let cmd_name = List.hd remaining in
-  let cmd_args = List.tl remaining in
+    raise (Parse_error "No command specified")
+  | cmd_name :: cmd_args ->
 
   (* Find command *)
   let cmd_opt = SafeList.find_opt (fun c -> c.cmd_name = cmd_name) app.app_commands in
@@ -699,12 +698,11 @@ let run_internal argv app =
             raise (Parse_error "Command has no implementation")
           else (
             (* Handle subcommands *)
-            if List.length cmd_positionals = 0 then (
+            match cmd_positionals with
+            | [] ->
               print_help app (Some cmd);
-              raise (Parse_error "Subcommand required"));
-
-            let subcmd_name = List.hd cmd_positionals in
-            let subcmd_args = List.tl cmd_positionals in
+              raise (Parse_error "Subcommand required")
+            | subcmd_name :: subcmd_args ->
 
             (* Find subcommand *)
             let subcmd_opt =

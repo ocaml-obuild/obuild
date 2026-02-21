@@ -197,12 +197,11 @@ let resolve_module_ppx_flags bstate target =
             ([], []) (List.rev l)
         in
         let ppxs = list_uniq ppxs in
-        if List.length ppxs > 1 then
-          failwith ("More than 1 ppx " ^ String.concat ", " (List.map (fun (_, s, _) -> s) ppxs));
-        if List.length ppxs = 0 then
-          []
-        else
-          let includePath, ppx_name, ppx_lib = List.hd ppxs in
+        match ppxs with
+        | [] -> []
+        | _ :: _ :: _ ->
+          failwith ("More than 1 ppx " ^ String.concat ", " (List.map (fun (_, s, _) -> s) ppxs))
+        | [includePath, ppx_name, ppx_lib] ->
           List.iter
             (fun (_, ss) ->
               let res = Libname.of_string (List.hd ss) = ppx_lib in
@@ -240,7 +239,7 @@ let analyze_module_dependencies srcFile hier pp file_search_paths =
     | ml :: mli :: _ -> list_uniq (ml @ mli)
     | x :: _ -> x
   in
-  verbose Debug "  %s depends on %s\n%!" (Hier.to_string hier)
+  log Debug "  %s depends on %s\n%!" (Hier.to_string hier)
     (String.concat "," (List.map Modname.to_string allDeps));
 
   (* Partition dependencies into internal (same directory) vs external *)
@@ -256,7 +255,7 @@ let analyze_module_dependencies srcFile hier pp file_search_paths =
       allDeps
   in
 
-  verbose Debug "  %s internally depends on %s\n%!" (Hier.to_string hier)
+  log Debug "  %s internally depends on %s\n%!" (Hier.to_string hier)
     (String.concat "," (List.map Modname.to_string cwdDepsInDir));
 
   (* Detect thread library usage *)
@@ -507,7 +506,7 @@ let add_c_compilation_tasks cbits buildDir stepsDag filesDag =
       (fun cSource ->
         let (fps : filepath list) =
           try List.assoc (Filetype.replace_extension cSource Filetype.FileO) objDeps
-          with _ -> failwith ("cannot find dependencies for " ^ fn_to_string cSource)
+          with Not_found -> failwith ("cannot find dependencies for " ^ fn_to_string cSource)
         in
         let cFile = cbits.target_cdir </> cSource in
         let hFiles =
@@ -660,7 +659,7 @@ let register_generator_outputs target =
     let module_name = Hier.to_string gen_block.Target.generate_module in
     let ml_filename = fn (Compat.string_lowercase module_name ^ ".ml") in
     let target_path = autogenDir </> ml_filename in
-    verbose Verbose "  Registering generate-block module %s (synthetic entry)\n%!" module_name;
+    log Verbose "  Registering generate-block module %s (synthetic entry)\n%!" module_name;
     Hier.register_synthetic_entry gen_block.Target.generate_module autogenDir target_path
   ) target.Target.target_generates
 
@@ -712,7 +711,7 @@ let get_modules_desc bstate target toplevelModules =
 
   let get_one hier =
     let moduleName = Hier.to_string hier in
-    verbose Verbose "Analysing %s\n%!" moduleName;
+    log Verbose "Analysing %s\n%!" moduleName;
     (* For cstubs-generated modules, return a minimal description without file analysis *)
     if is_cstubs_generated_module hier then (
       (* Get library-specific autogen dir for cstubs generated files *)
@@ -723,7 +722,7 @@ let get_modules_desc bstate target toplevelModules =
       in
       let ml_filename = fn (Compat.string_uncapitalize moduleName ^ ".ml") in
       let target_path = cstubs_autogen_dir </> ml_filename in
-      verbose Verbose "  %s is cstubs-generated, using synthetic description at %s\n%!" moduleName
+      log Verbose "  %s is cstubs-generated, using synthetic description at %s\n%!" moduleName
         (fp_to_string target_path);
       (* Register the synthetic entry in Hier so get_dest_file can find it *)
       Hier.register_synthetic_entry hier cstubs_autogen_dir target_path;
@@ -733,7 +732,7 @@ let get_modules_desc bstate target toplevelModules =
     else if find_generate_block_for_module hier <> None || is_globally_generated_module hier then (
       let ml_filename = fn (Compat.string_uncapitalize moduleName ^ ".ml") in
       let target_path = autogenDir </> ml_filename in
-      verbose Verbose "  %s is from generate block, using synthetic description at %s\n%!" moduleName
+      log Verbose "  %s is from generate block, using synthetic description at %s\n%!" moduleName
         (fp_to_string target_path);
       (* Register the synthetic entry in Hier so get_dest_file can find it *)
       Hier.register_synthetic_entry hier autogenDir target_path;
@@ -777,11 +776,9 @@ let get_modules_desc bstate target toplevelModules =
           (* augment pp if needed with per-file dependencies *)
           let per_settings = find_extra_matching target (Hier.to_string hier) in
           let per_pp =
-            let l = List.filter (fun x -> x.target_extra_pp <> None) per_settings in
-            if List.length l > 0 then
-              (List.hd l).target_extra_pp
-            else
-              None
+            match List.filter (fun x -> x.target_extra_pp <> None) per_settings with
+            | x :: _ -> x.target_extra_pp
+            | [] -> None
           in
           let pp =
             match (target.target_obits.target_pp, per_pp) with
@@ -807,9 +804,9 @@ let get_modules_desc bstate target toplevelModules =
           (* Resolve PPX flags for this module *)
           let ppx = resolve_module_ppx_flags bstate target in
 
-          verbose Debug "  %s has mtime %f\n%!" moduleName modTime;
+          log Debug "  %s has mtime %f\n%!" moduleName modTime;
           if hasInterface then
-            verbose Debug "  %s has interface (mtime=%f)\n%!" moduleName intfModTime;
+            log Debug "  %s has interface (mtime=%f)\n%!" moduleName intfModTime;
 
           (* Analyze module dependencies *)
           let cwdDeps, otherDeps, use_thread =
@@ -852,7 +849,7 @@ let get_modules_desc bstate target toplevelModules =
       ()
     (* Skip modules that are generated by OTHER targets - they come from library dependencies *)
     else if is_globally_generated_module modname && find_generate_block_for_module modname = None then (
-      verbose Verbose "  Skipping %s - generated by another target (external dependency)\n%!"
+      log Verbose "  Skipping %s - generated by another target (external dependency)\n%!"
         (Hier.to_string modname);
       ())
     else
@@ -878,7 +875,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   let cbits = target.target_cbits in
   let obits = target.target_obits in
 
-  verbose Verbose "preparing compilation for %s\n%!" (Target.get_target_name target);
+  log Verbose "preparing compilation for %s\n%!" (Target.get_target_name target);
 
   (* Register output modules from generators before module discovery *)
   register_generator_outputs target;
@@ -982,5 +979,5 @@ let prepare_target_ bstate buildDir target toplevelModules =
 let prepare_target bstate buildDir target toplevelModules =
   try prepare_target_ bstate buildDir target toplevelModules
   with exn ->
-    verbose Verbose "Prepare.target : uncaught exception %s\n%!" (Printexc.to_string exn);
+    log Verbose "Prepare.target : uncaught exception %s\n%!" (Printexc.to_string exn);
     raise exn

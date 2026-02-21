@@ -6,9 +6,6 @@ val print_warnings : string -> unit
 val log : Gconf.verbosity_t -> ('a, out_channel, unit, unit) format4 -> 'a
 (** Log message if verbosity level is sufficient *)
 
-val verbose : Gconf.verbosity_t -> ('a, out_channel, unit, unit) format4 -> 'a
-(** Backward compatibility alias for [log] *)
-
 val support_color : unit -> bool
 (** Check if terminal supports color output *)
 

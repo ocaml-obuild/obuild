@@ -27,7 +27,8 @@ let parse_output_KsemiVs onNonKV mapFstTy mapSndTys out =
 let run_ocamldep dopt srcFile =
   let wrap_module_safe f =
     try Modname.wrap f
-    with _ -> raise (BuildDepAnalyzeFailed ("ocamldep returned a bad module name " ^ f))
+    with Modname.InvalidModuleName _ | Modname.EmptyModuleName ->
+      raise (BuildDepAnalyzeFailed ("ocamldep returned a bad module name " ^ f))
   in
   let fileType = Filetype.of_filepath srcFile in
   let baseFile = fp_to_string srcFile in

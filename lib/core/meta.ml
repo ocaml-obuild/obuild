@@ -145,7 +145,7 @@ module Pkg = struct
         | _ -> List.mem p constraints)
       preds
 
-  let is_syntax_ pkg = List.length (get_syntaxes pkg) > 0
+  let is_syntax_ pkg = get_syntaxes pkg <> []
   let is_syntax (_, rootPkg) dep = is_syntax_ (find dep.Libname.subnames rootPkg)
 
   let get_archive_with_filter (_, rootPkg) dep preds =

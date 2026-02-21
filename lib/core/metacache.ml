@@ -6,7 +6,7 @@ let initial_cache_size = 128
 let pkgs_cache : (string, Meta.t) Hashtbl.t = Hashtbl.create initial_cache_size
 
 let get_from_disk name =
-  verbose Debug "  fetching META %s\n%!" name;
+  log Debug "  fetching META %s\n%!" name;
   try
     Meta.find_lib name
   with Meta.LibraryNotFound n ->

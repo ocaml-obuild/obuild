@@ -57,5 +57,5 @@ let run projFile _isSnapshot =
       Prog.run_tar (fn_to_string sdistName) sdistDir)
     (fun () -> Unix.chdir current_dir);
 
-  verbose Report "Source tarball created: %s\n" (fp_to_string (Dist.get_path () </> sdistName));
+  log Report "Source tarball created: %s\n" (fp_to_string (Dist.get_path () </> sdistName));
   ()

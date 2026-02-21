@@ -33,7 +33,7 @@ let get_program_config () =
 let get_paths () =
   try [ fp (Sys.getenv "OCAMLFIND_CONF") ]
   with Not_found -> (
-    try get_program_config () with _ -> [ fp "/etc/findlib.conf"; fp "/etc/ocamlfind.conf" ])
+    try get_program_config () with Failure _ | Not_found -> [ fp "/etc/findlib.conf"; fp "/etc/ocamlfind.conf" ])
 
 let get_system () =
   let paths = get_paths () in

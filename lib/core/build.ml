@@ -180,7 +180,7 @@ let run_generate_block task_index task (gen_block : Target.target_generate) _bst
             String_utils.endswith ext entry_str
           ) dir in
           List.map (fun entry -> dir </> entry) entries
-        with _ -> [pattern]  (* If directory doesn't exist, return original *)
+        with Sys_error _ -> [pattern]  (* If directory doesn't exist, return original *)
       else
         [pattern]
     else
@@ -205,7 +205,7 @@ let run_generate_block task_index task (gen_block : Target.target_generate) _bst
 
   if needs_rebuild then begin
     let nb_step, nb_step_len = get_nb_step dag in
-    verbose Report "[%*d of %d] Generating %-30s\n%!" nb_step_len task_index nb_step
+    log Report "[%*d of %d] Generating %-30s\n%!" nb_step_len task_index nb_step
       (Hier.to_string output_module);
     let dest = autogenDir </> fn (Compat.string_lowercase (Hier.to_string output_module)) in
     Generators.run_custom_multi
@@ -234,7 +234,7 @@ let compile_c task_index task c_file bstate task_context dag =
   | Some src_changed ->
       let reason = reason_from_paths dest src_changed in
       let nb_step, nb_step_len = get_nb_step dag in
-      verbose Report "[%*d of %d] Compiling C %-30s%s\n%!" nb_step_len task_index nb_step
+      log Report "[%*d of %d] Compiling C %-30s%s\n%!" nb_step_len task_index nb_step
         (fn_to_string c_file)
         (if reason <> "" then "    ( " ^ reason ^ " )" else "");
       let cflags = cbits.target_cflags in
@@ -301,12 +301,11 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
     let l : (string * Scheduler.call) list list = List.map maybes_to_list tasks_ops in
     match List.filter (fun x -> x <> []) l with
     | [] -> ("", [])
-    | [] :: _ -> assert false
     | ((r, x) :: xs) :: ys -> (r, (x :: List.map snd xs) :: List.map (List.map snd) ys)
   in
   if ops <> [] then (
     let nb_step, nb_step_len = get_nb_step dag in
-    verbose Report "[%*d of %d] Packing %-30s%s\n%!" nb_step_len task_index nb_step
+    log Report "[%*d of %d] Packing %-30s%s\n%!" nb_step_len task_index nb_step
       (Hier.to_string h) reason;
     Scheduler.AddTask (task, ops))
   else
@@ -361,7 +360,7 @@ let organize_compilation_functions is_intf check_fun_list hdesc =
     [ List.map snd check_fun_list ]
   else
     let l1, l2 = List.partition (fun (x, _) -> x = Compiled Native) check_fun_list in
-    List.filter (fun x -> List.length x > 0) [ List.map snd l1; List.map snd l2 ]
+    List.filter (fun x -> x <> []) [ List.map snd l1; List.map snd l2 ]
 
 let dep_descs is_intf hdesc bstate cstate target h =
   let self_deps = Analyze.get_internal_library_deps bstate.bstate_config target in
@@ -456,7 +455,9 @@ let compile_module task_index task is_intf h bstate task_context dag =
     (check_result, hdesc)
   in
   let all = List.map (fun (c, t) -> process_one_target c t) all in
-  let (compilation_reason, _), _ = List.hd all in
+  match all with
+  | [] -> Scheduler.FinishTask task
+  | ((compilation_reason, _), _) :: _ ->
   match compilation_reason with
   | None -> Scheduler.FinishTask task
   | Some reason ->
@@ -472,30 +473,37 @@ let compile_module task_index task is_intf h bstate task_context dag =
 
       let verb = if is_intf then "Intfing" else "Compiling" in
       let nb_step, nb_step_len = get_nb_step dag in
-      verbose Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb
+      log Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb
         (Hier.to_string h)
         (if reason <> "" then "    ( " ^ reason ^ " )" else "");
       Scheduler.AddTask (task, all_fun_lists)
 
 let wait_for_files cdep_files =
+  let max_wait = 30.0 in
+  let start = Unix.gettimeofday () in
   let rec loop remaining =
     match remaining with
     | [] -> true
     | _ ->
-      let still_missing =
-        List.filter
-          (fun f ->
-            let test = Filesystem.exists f in
-            if not test then
-              verbose Debug "warning: (temporarily?) missing file %s" (fp_to_string f);
-            not test)
-          remaining
-      in
-      if still_missing = [] then true
-      else begin
-        ignore (Unix.select [] [] [] poll_interval_sec);
-        loop still_missing
-      end
+      if Unix.gettimeofday () -. start > max_wait then begin
+        log Report "warning: timed out waiting for files: %s"
+          (String.concat ", " (List.map fp_to_string remaining));
+        false
+      end else
+        let still_missing =
+          List.filter
+            (fun f ->
+              let test = Filesystem.exists f in
+              if not test then
+                log Debug "warning: (temporarily?) missing file %s" (fp_to_string f);
+              not test)
+            remaining
+        in
+        if still_missing = [] then true
+        else begin
+          ignore (Unix.select [] [] [] poll_interval_sec);
+          loop still_missing
+        end
   in
   loop cdep_files
 
@@ -509,8 +517,8 @@ let link_c cstate clib_name =
   if gconf.ocamlmklib then
     [ [ (fun () -> run_c_linking LinkingShared cdep_files lib_name) ] ]
   else
-    let so_file = cstate.compilation_builddir_c </> fn ("dll" ^ clib_name ^ ".so") in
-    let a_file = cstate.compilation_builddir_c </> fn ("lib" ^ clib_name ^ ".a") in
+    let so_file = cstate.compilation_builddir_c </> fn (Utils.shared_lib_name clib_name) in
+    let a_file = cstate.compilation_builddir_c </> fn (Utils.static_lib_name clib_name) in
     [
       [ (fun () -> run_c_linking LinkingShared cdep_files so_file) ];
       [ (fun () -> run_ar a_file cdep_files) ];
@@ -603,14 +611,14 @@ let get_link_destination cstate target compiledType compileOpt plugin =
     finished. Poll until mtimes are fresh rather than using an arbitrary fixed delay. This
     implements the Phase 4 bug fix. *)
 let wait_for_c_objects c_obj_files destTime =
-  if List.length c_obj_files > 0 then (
+  if c_obj_files <> [] then (
     (* First wait for files to exist *)
     ignore (wait_for_files c_obj_files);
     (* Then poll until all files have mtimes newer than destTime *)
     let max_wait_time = Unix.gettimeofday () +. mtime_poll_timeout_sec in
     let rec poll_fresh () =
       if Unix.gettimeofday () > max_wait_time then
-        verbose Debug "Warning: timeout waiting for C object mtimes to update\n"
+        log Debug "Warning: timeout waiting for C object mtimes to update\n"
       else
         let all_fresh =
           List.for_all
@@ -618,7 +626,7 @@ let wait_for_c_objects c_obj_files destTime =
               try
                 let obj_mtime = Filesystem.get_modification_time obj_file in
                 obj_mtime > destTime
-              with _ -> false)
+              with Unix.Unix_error _ -> false)
             c_obj_files
         in
         if not all_fresh then (
@@ -681,7 +689,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       else
         LinkingExecutable
     in
-    verbose Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
+    log Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
       (if is_lib target then "library" else "executable")
       (fp_to_string dest);
     [
@@ -696,9 +704,9 @@ let link task_index task bstate task_context dag =
   let cstate, target = Hashtbl.find task_context task in
   let cbits = target.target_cbits in
   let compiled = get_compilation_order cstate in
-  verbose Debug "  compilation order: %s\n" (Utils.showList "," Hier.to_string compiled);
+  log Debug "  compilation order: %s\n" (Utils.showList "," Hier.to_string compiled);
   let selfDeps = Analyze.get_internal_library_deps bstate.bstate_config target in
-  verbose Debug "  self deps: %s\n" (Utils.showList "," Libname.to_string selfDeps);
+  log Debug "  self deps: %s\n" (Utils.showList "," Libname.to_string selfDeps);
   let selfLibDirs =
     List.map (fun dep -> Dist.get_build_exn (Dist.Target (Name.Lib dep))) selfDeps
   in
@@ -756,7 +764,7 @@ let link task_index task bstate task_context dag =
     @ List.map (fun x -> "-l" ^ x) (cbits.target_clibs @ deps_cstubs_cclibs @ internal_cclibs @ deps_internal_cclibs)
   in
   let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
-  verbose Verbose "package deps: [%s]\n" (Utils.showList "," Libname.to_string pkgDeps);
+  log Verbose "package deps: [%s]\n" (Utils.showList "," Libname.to_string pkgDeps);
   let useThreadLib =
     if List.mem (Libname.of_string "threads") pkgDeps then
       DefaultThread
@@ -788,8 +796,8 @@ let link task_index task bstate task_context dag =
       if gconf.ocamlmklib then
         [ [ (fun () -> run_c_linking LinkingShared all_objs (cstate.compilation_builddir_c </> fn clib_name)) ] ]
       else
-        let so_file = cstate.compilation_builddir_c </> fn ("dll" ^ clib_name ^ ".so") in
-        let a_file = cstate.compilation_builddir_c </> fn ("lib" ^ clib_name ^ ".a") in
+        let so_file = cstate.compilation_builddir_c </> fn (Utils.shared_lib_name clib_name) in
+        let a_file = cstate.compilation_builddir_c </> fn (Utils.static_lib_name clib_name) in
         [
           [ (fun () -> run_c_linking LinkingShared all_objs so_file) ];
           [ (fun () -> run_ar a_file all_objs) ];
@@ -838,19 +846,19 @@ let sanity_check build_dir target =
       (fun f ->
         let test = Filesystem.exists (build_dir </> f) in
         if not test then
-          verbose Debug "warning: missing file %s" (fp_to_string (build_dir </> f));
+          log Debug "warning: missing file %s" (fp_to_string (build_dir </> f));
         test)
       files
   in
   if not allOK then
-    verbose Report "warning: some target file appears to be missing";
+    log Report "warning: some target file appears to be missing";
   ()
 
 let check task_index task task_context dag =
   let _, target = Hashtbl.find task_context task in
   let buildDir = Dist.get_build_path (Dist.Target target.target_name) in
   let nb_step, nb_step_len = get_nb_step dag in
-  verbose Report "[%*d of %d] Checking %s\n%!" nb_step_len task_index nb_step
+  log Report "[%*d of %d] Checking %s\n%!" nb_step_len task_index nb_step
     (fp_to_string buildDir);
   sanity_check buildDir target;
   Scheduler.FinishTask task
@@ -894,7 +902,7 @@ let compile (bstate : build_state) task_context dag =
     Helper.Timing.measure_time "Scheduler.schedule" (fun () ->
         Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish)
   in
-  verbose Verbose "schedule finished: #processes=%d max_concurrency=%d\n"
+  log Verbose "schedule finished: #processes=%d max_concurrency=%d\n"
     stat.Scheduler.nb_processes stat.Scheduler.max_runqueue;
   ()
 
@@ -963,7 +971,7 @@ let build_dag bstate proj_file targets_dag =
             match Taskdep.get_next taskdep with
             | None -> failwith "no free task in targets"
             | Some (_, ntask) ->
-                verbose Verbose "preparing target %s\n%!" (Name.to_string ntask);
+                log Verbose "preparing target %s\n%!" (Name.to_string ntask);
                 let cur_dag, dups =
                   match ntask with
                   | Name.Exe name ->

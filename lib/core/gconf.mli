@@ -6,7 +6,7 @@ type verbosity_t =
   | Report  (** Normal output *)
   | Verbose  (** Verbose output *)
   | Debug  (** Debug output *)
-  | DebugPlus  (** Debug with command output *)
+  | Trace  (** Debug with command output *)
 
 type t = {
   mutable verbosity : verbosity_t;
@@ -14,6 +14,7 @@ type t = {
   mutable dump_dot : bool;
   mutable color : bool;
   mutable bin_annot : bool;
+  mutable bin_annot_occurrences : bool;
   mutable short_path : bool;
   mutable ocamlmklib : bool;
   mutable ocaml_extra_args : string list;

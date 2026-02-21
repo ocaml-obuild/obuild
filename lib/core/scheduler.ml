@@ -62,7 +62,7 @@ let wait_process state =
       true
   in
   state.runqueue <- processes;
-  state.runqueue_len <- List.length processes;
+  state.runqueue_len <- state.runqueue_len - 1;
   (proc_done, finished_task)
 
 let rec idle_loop idle_fun on_task_finish_fun state =
