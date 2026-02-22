@@ -236,7 +236,7 @@ let cmd_test =
         let _ = Configure.check proj_file false setup in
 
         if not (Gconf.get_target_option_typed Build_tests) then (
-          eprintf "error: building tests are disabled, re-configure with --tests=true\n";
+          eprintf "error: building tests are disabled, re-configure with --build-tests=true\n";
           exit 1);
 
         let test_targets = List.map Project.Test.to_target proj_file.Project.tests in

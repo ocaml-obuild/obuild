@@ -32,20 +32,6 @@ let () =
   (* Clean state before each run *)
   Generators.clear_custom_generators ();
 
-  (* --- find_substring tests --- *)
-  assumeEq "find_substring basic" "0"
-    (string_of_int (Generators.find_substring "hello" "hello"));
-  assumeEq "find_substring middle" "2"
-    (string_of_int (Generators.find_substring "abcdef" "cd"));
-  assumeEq "find_substring end" "3"
-    (string_of_int (Generators.find_substring "abcdef" "def"));
-  assumeEq "find_substring empty pattern" "0"
-    (string_of_int (Generators.find_substring "abc" ""));
-  assumeRaises "find_substring not found"
-    (fun () -> ignore (Generators.find_substring "abc" "xyz"));
-  assumeRaises "find_substring longer pattern"
-    (fun () -> ignore (Generators.find_substring "ab" "abcde"));
-
   (* --- substitute_variables tests --- *)
   let src = Filepath.fp "src/parser.mly" in
   let dest = Filepath.fp "dist/build/lib/parser" in
@@ -174,7 +160,7 @@ let () =
       Printf.printf "FAILED find no-suffix by name: Expected Some, Got None\n";
       incr test_count; err := !err + 1);
 
-  (* --- custom_to_builtin tests --- *)
+  (* --- get_all returns builtin type with correct suffix --- *)
   Generators.clear_custom_generators ();
   Generators.register_custom gen_menhir;
 
@@ -204,6 +190,17 @@ let () =
   Generators.clear_custom_generators ();
   let all_after_clear = Generators.get_all () in
   assumeEq "clear generators" "0" (string_of_int (List.length all_after_clear));
+
+  (* --- get_generator raises on unknown extension --- *)
+  Generators.clear_custom_generators ();
+  assumeRaises "get_generator not found"
+    (fun () -> ignore (Generators.get_generator (Filepath.fp "foo.xyz")));
+
+  (* --- register_customs (batch registration) --- *)
+  Generators.clear_custom_generators ();
+  Generators.register_customs [gen_menhir; gen_lex];
+  let all_batch = Generators.get_all () in
+  assumeEq "register_customs count" "2" (string_of_int (List.length all_batch));
 
   (* --- Summary --- *)
   Printf.printf "\n%d tests run, %d failures\n" !test_count !err;

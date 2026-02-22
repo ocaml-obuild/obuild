@@ -164,27 +164,93 @@ let run_generate_block task_index task (gen_block : Target.target_generate) _bst
   let _cstate, _target = Hashtbl.find task_context task in
   let autogenDir = Dist.get_build_exn Dist.Autogen in
 
+  (* Match a filename against a glob pattern segment (e.g., "*.scm", "*") *)
+  let matches_glob_pattern pattern name =
+    let name_str = fn_to_string name in
+    if pattern = "*" then true
+    else if String.length pattern > 1 && pattern.[0] = '*' then
+      let suffix = String.sub pattern 1 (String.length pattern - 1) in
+      String_utils.endswith suffix name_str
+    else
+      name_str = pattern
+  in
+
+  (* Collect all files recursively under a directory *)
+  let rec collect_all_files base =
+    try
+      let accum = ref [] in
+      Filesystem.iterate (fun entry ->
+        let full = base </> entry in
+        if Filesystem.is_dir full then
+          accum := !accum @ collect_all_files full
+        else
+          accum := full :: !accum
+      ) base;
+      !accum
+    with Sys_error _ -> []
+  in
+
   (* Expand glob patterns in generate_from *)
   let expand_pattern pattern =
     let pattern_str = fp_to_string pattern in
-    if String.contains pattern_str '*' then
-      (* Use Filesystem.list_dir_pred to get matching files *)
-      let dir = path_dirname pattern in
-      let pattern_base = fn_to_string (path_basename pattern) in
-      (* Simple glob: only handle *.ext patterns *)
-      if String.length pattern_base > 1 && pattern_base.[0] = '*' then
-        let ext = String.sub pattern_base 1 (String.length pattern_base - 1) in
-        try
-          let entries = Filesystem.list_dir_pred (fun entry ->
-            let entry_str = fn_to_string entry in
-            String_utils.endswith ext entry_str
-          ) dir in
-          List.map (fun entry -> dir </> entry) entries
-        with Sys_error _ -> [pattern]  (* If directory doesn't exist, return original *)
-      else
-        [pattern]
-    else
+    if not (String.contains pattern_str '*') then
       [pattern]
+    else
+      let segments = String_utils.split Filename.dir_sep.[0] pattern_str in
+      (* Split into leading literal path and glob segments *)
+      let rec split_at_glob acc = function
+        | [] -> (List.rev acc, [])
+        | seg :: rest when String.contains seg '*' -> (List.rev acc, seg :: rest)
+        | seg :: rest -> split_at_glob (seg :: acc) rest
+      in
+      let (literal_parts, glob_parts) = split_at_glob [] segments in
+      let base = match literal_parts with
+        | [] -> current_dir
+        | parts -> fp (String.concat Filename.dir_sep parts)
+      in
+      let rec glob_match base_path = function
+        | [] -> [base_path]
+        | "**" :: [] ->
+            (* ** at end: all files recursively *)
+            collect_all_files base_path
+        | "**" :: rest ->
+            (* ** matches zero or more directory levels *)
+            let zero_match = glob_match base_path rest in
+            let sub_matches =
+              try
+                let accum = ref [] in
+                Filesystem.iterate (fun entry ->
+                  let full = base_path </> entry in
+                  if Filesystem.is_dir full then
+                    accum := !accum @ glob_match full ("**" :: rest)
+                ) base_path;
+                !accum
+              with Sys_error _ -> []
+            in
+            zero_match @ sub_matches
+        | [file_pattern] ->
+            (* Terminal segment: match files *)
+            (try
+              Filesystem.list_dir_pred (fun entry ->
+                (not (Filesystem.is_dir (base_path </> entry))) &&
+                matches_glob_pattern file_pattern entry
+              ) base_path
+              |> List.map (fun entry -> base_path </> entry)
+            with Sys_error _ -> [])
+        | dir_pattern :: rest ->
+            (* Non-terminal segment: match directories and recurse *)
+            (try
+              let subdirs = Filesystem.list_dir_pred (fun entry ->
+                Filesystem.is_dir (base_path </> entry) &&
+                matches_glob_pattern dir_pattern entry
+              ) base_path in
+              List.concat (List.map (fun d ->
+                glob_match (base_path </> d) rest
+              ) subdirs)
+            with Sys_error _ -> [])
+      in
+      let results = glob_match base glob_parts in
+      List.sort compare results
   in
 
   let sources = List.concat (List.map expand_pattern gen_block.generate_from) in
