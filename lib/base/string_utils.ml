@@ -107,7 +107,11 @@ let escape_c_string s =
   done;
   Buffer.contents buf
 
-let lines s = split '\n' s
+let strip_cr s =
+  let len = String.length s in
+  if len > 0 && s.[len - 1] = '\r' then String.sub s 0 (len - 1) else s
+
+let lines s = List.map strip_cr (split '\n' s)
 let words s = split_pred (fun c -> c = ' ' || c = '\n' || c = '\t') s
 let words_noempty s = no_empty "" (words s)
 let lines_noempty s = no_empty "" (lines s)
