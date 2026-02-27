@@ -168,9 +168,9 @@ let parse_c_setting c key value =
   | "cdir" | "c-dir" -> { c with c_dir = Some value }
   | "csources" | "c-sources" -> { c with c_sources = c.c_sources @ parse_list value }
   | "cflags" | "c-flags" | "ccopts" | "ccopt" | "c-opts" ->
-      { c with c_flags = c.c_flags @ parse_list value }
-  | "c-libs" -> { c with c_libs = c.c_libs @ parse_list value }
-  | "c-libpaths" -> { c with c_lib_paths = c.c_lib_paths @ parse_list value }
+      { c with c_flags = c.c_flags @ parse_words value }
+  | "c-libs" -> { c with c_libs = c.c_libs @ parse_words value }
+  | "c-libpaths" -> { c with c_lib_paths = c.c_lib_paths @ parse_words value }
   | "c-pkgs" -> { c with c_pkgs = c.c_pkgs @ parse_dependencies value }
   | _ -> c
 
@@ -183,7 +183,7 @@ let parse_ocaml_setting o key value =
   | "preprocessor" | "pp" -> { o with pp = Some value }
   | "extra-deps" ->
       { o with extra_deps = o.extra_deps @ List.map parse_extra_dep (parse_list value) }
-  | "oflags" -> { o with oflags = o.oflags @ parse_list value }
+  | "oflags" -> { o with oflags = o.oflags @ parse_words value }
   | "stdlib" -> { o with stdlib = parse_stdlib value }
   | _ -> o
 
@@ -300,7 +300,7 @@ let parse_per_block args tokens =
               match Compat.string_lowercase key with
               | "builddepends" | "builddeps" | "build-deps" ->
                   { per with per_build_deps = per.per_build_deps @ parse_dependencies value }
-              | "oflags" -> { per with per_oflags = per.per_oflags @ parse_list value }
+              | "oflags" -> { per with per_oflags = per.per_oflags @ parse_words value }
               | "pp" -> { per with per_pp = Some value }
               | _ -> per
             in
@@ -393,7 +393,7 @@ let parse_executable_block name tokens =
         | KEY_VALUE (key, value) ->
             let exe' =
               match Compat.string_lowercase key with
-              | "main" | "main-is" -> { exe with exe_main = value }
+              | "main" | "mainis" | "main-is" -> { exe with exe_main = value }
               | _ -> { exe with exe_target = parse_target_setting exe.exe_target key value }
             in
             loop exe' rest
@@ -441,7 +441,7 @@ let parse_test_block name tokens =
         | KEY_VALUE (key, value) ->
             let test' =
               match Compat.string_lowercase key with
-              | "main" | "main-is" -> { test with test_main = value }
+              | "main" | "mainis" | "main-is" -> { test with test_main = value }
               | "rundir" | "run-dir" -> { test with test_rundir = Some value }
               | "runparams" | "run-params" -> { test with test_run_params = parse_list value }
               | _ -> { test with test_target = parse_target_setting test.test_target key value }
@@ -485,7 +485,7 @@ let parse_example_block name tokens =
         | KEY_VALUE (key, value) ->
             let example' =
               match Compat.string_lowercase key with
-              | "main" | "main-is" -> { example with example_main = value }
+              | "main" | "mainis" | "main-is" -> { example with example_main = value }
               | _ ->
                   {
                     example with
@@ -530,7 +530,7 @@ let parse_benchmark_block name tokens =
         | KEY_VALUE (key, value) ->
             let bench' =
               match Compat.string_lowercase key with
-              | "main" | "main-is" -> { bench with bench_main = value }
+              | "main" | "mainis" | "main-is" -> { bench with bench_main = value }
               | _ -> { bench with bench_target = parse_target_setting bench.bench_target key value }
             in
             loop bench' rest
