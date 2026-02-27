@@ -19,6 +19,12 @@ let mtime_poll_interval_sec = 0.01    (* 10ms between mtime freshness checks *)
 let mtime_poll_timeout_sec = 5.0      (* safety timeout for mtime polling *)
 let initial_task_context_size = 64
 
+(* Timestamp set at the start of each compile phase.  C object files whose
+   mtime is >= this value were compiled during the current build run and may
+   need mtime-freshness polling.  Files older than this are from a previous
+   run and need no polling. *)
+let build_start_time = ref 0.0
+
 (* check that destination is valid (mtime wise) against a list of srcs and
  * if not valid gives the filepath that has changed.
  *)
@@ -673,33 +679,40 @@ let get_link_destination cstate target compiledType compileOpt plugin =
 
 (** Helper: Wait for C object files to be ready with fresh modification times.
 
-    Filesystem buffering can cause stat() to return stale mtimes even after the C compiler has
-    finished. Poll until mtimes are fresh rather than using an arbitrary fixed delay. This
-    implements the Phase 4 bug fix. *)
+    Filesystem buffering can cause stat() to return stale mtimes even after the
+    C compiler has finished.  We only need to poll when a C file was actually
+    compiled during the current build run (mtime >= build_start_time).  On a
+    cached build all .o files are older than build_start_time, so the poll is
+    skipped entirely — this is what was causing the ~5 s delay per link mode. *)
 let wait_for_c_objects c_obj_files destTime =
   if c_obj_files <> [] then (
-    (* First wait for files to exist *)
     ignore (wait_for_files c_obj_files);
-    (* Then poll until all files have mtimes newer than destTime *)
-    let max_wait_time = Unix.gettimeofday () +. mtime_poll_timeout_sec in
-    let rec poll_fresh () =
-      if Unix.gettimeofday () > max_wait_time then
-        log Debug "Warning: timeout waiting for C object mtimes to update\n"
-      else
-        let all_fresh =
-          List.for_all
-            (fun obj_file ->
-              try
-                let obj_mtime = Filesystem.get_modification_time obj_file in
-                obj_mtime > destTime
-              with Unix.Unix_error _ -> false)
-            c_obj_files
-        in
-        if not all_fresh then (
-          ignore (Unix.select [] [] [] mtime_poll_interval_sec);
-          poll_fresh ())
+    (* Only poll when at least one .o file was written during this build run. *)
+    let any_recently_compiled =
+      List.exists
+        (fun obj_file ->
+          try Filesystem.get_modification_time obj_file >= !build_start_time
+          with Unix.Unix_error _ -> false)
+        c_obj_files
     in
-    poll_fresh ())
+    if any_recently_compiled then (
+      let max_wait_time = Unix.gettimeofday () +. mtime_poll_timeout_sec in
+      let rec poll_fresh () =
+        if Unix.gettimeofday () > max_wait_time then
+          log Debug "Warning: timeout waiting for C object mtimes to update\n"
+        else
+          let all_fresh =
+            List.for_all
+              (fun obj_file ->
+                try Filesystem.get_modification_time obj_file > destTime
+                with Unix.Unix_error _ -> false)
+              c_obj_files
+          in
+          if not all_fresh then (
+            ignore (Unix.select [] [] [] mtime_poll_interval_sec);
+            poll_fresh ())
+      in
+      poll_fresh ()))
 
 (** Helper: Check if relinking is needed by comparing modification times *)
 let check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt =
@@ -707,11 +720,9 @@ let check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt 
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
 
-  (* Ensure C objects exist before checking their mtimes, but do NOT poll for
-     mtime freshness here: that polling only makes sense right after fresh C
-     compilation, and doing it unconditionally causes ~5 s delays per link mode
-     on cached builds (where .o files are legitimately older than the library). *)
-  ignore (wait_for_files c_obj_files);
+  (* Wait for C objects to have fresh mtimes (skipped automatically on cached
+     builds — see wait_for_c_objects). *)
+  wait_for_c_objects c_obj_files destTime;
 
   (* Check OCaml module files *)
   try
@@ -748,13 +759,6 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
   let depsTime = check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt in
 
   if depsTime <> None then (
-    (* If a C object triggered the relink, poll briefly for mtime freshness to
-       guard against filesystem buffering of newly-compiled .o files.  We skip
-       this when only OCaml sources changed (c_obj_files are legitimately old). *)
-    (match depsTime with
-    | Some changed when List.mem changed c_obj_files ->
-        wait_for_c_objects c_obj_files (Filesystem.get_modification_time dest)
-    | _ -> ());
     let nb_step, nb_step_len = get_nb_step dag in
     let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
     let link_type =
@@ -943,6 +947,7 @@ let check task_index task task_context dag =
  * which will compile all C sources and OCaml modules.
  *)
 let compile (bstate : build_state) task_context dag =
+  build_start_time := Unix.gettimeofday ();
   let taskdep = Helper.Timing.measure_time "Taskdep.init" (fun () -> Taskdep.init dag) in
   (* a compilation task has finished, terminate the process,
    * and process the result *)

@@ -893,8 +893,15 @@ let prepare_target_ bstate buildDir target toplevelModules =
     (* Build the module dependency DAG *)
     build_module_steps_dag modulesDeps target stepsDag;
 
-    (* Add C compilation tasks *)
+    (* Add C compilation tasks and connect them to the link step.
+       CompileC nodes must be dependencies of LinkTarget; otherwise the parallel
+       scheduler can dispatch LinkTarget concurrently with C compilation and
+       check_needs_relink will see stale .o mtimes. *)
     add_c_compilation_tasks cbits buildDir stepsDag filesDag;
+    List.iter (fun cSource ->
+      Dag.add_edge (LinkTarget target) (CompileC cSource) stepsDag;
+      Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+    ) cbits.target_csources;
 
     (* Add cstubs generation tasks if configured *)
     add_cstubs_tasks target stepsDag;

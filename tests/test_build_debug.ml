@@ -130,7 +130,7 @@ let test_c_file_rebuild_debug () =
         dir ^ "/dist/build/lib-test/cbits.c.o";
       ] in
 
-      let c_obj = Compat_common.SafeList.find_opt Sys.file_exists possible_c_obj_paths in
+      let c_obj = Compat.SafeList.find_opt Sys.file_exists possible_c_obj_paths in
       let exe = dir ^ "/dist/build/ctest/ctest" in
 
       Printf.printf "\nC object file: %s\n"
