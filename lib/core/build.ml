@@ -707,8 +707,11 @@ let check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt 
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
 
-  (* Wait for C objects to have fresh mtimes *)
-  wait_for_c_objects c_obj_files destTime;
+  (* Ensure C objects exist before checking their mtimes, but do NOT poll for
+     mtime freshness here: that polling only makes sense right after fresh C
+     compilation, and doing it unconditionally causes ~5 s delays per link mode
+     on cached builds (where .o files are legitimately older than the library). *)
+  ignore (wait_for_files c_obj_files);
 
   (* Check OCaml module files *)
   try
@@ -745,6 +748,13 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
   let depsTime = check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt in
 
   if depsTime <> None then (
+    (* If a C object triggered the relink, poll briefly for mtime freshness to
+       guard against filesystem buffering of newly-compiled .o files.  We skip
+       this when only OCaml sources changed (c_obj_files are legitimately old). *)
+    (match depsTime with
+    | Some changed when List.mem changed c_obj_files ->
+        wait_for_c_objects c_obj_files (Filesystem.get_modification_time dest)
+    | _ -> ());
     let nb_step, nb_step_len = get_nb_step dag in
     let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
     let link_type =
@@ -938,7 +948,8 @@ let compile (bstate : build_state) task_context dag =
    * and process the result *)
   let schedule_finish (task, st) is_done =
     (match Process.terminate (task, st) with
-    | Process.Success (_, warnings, _) ->
+    | Process.Success (_, warnings, duration) ->
+        log Gconf.Debug "[TIMING] %s: %.3fs\n" (string_of_compile_step task) duration;
         (* TODO: store warnings for !isDone and print them if they are different when isDone *)
         if is_done then print_warnings warnings
     | Process.Failure er -> (
@@ -950,7 +961,8 @@ let compile (bstate : build_state) task_context dag =
   in
 
   let dispatch (task_index, task) =
-    match task with
+    let t0 = Unix.gettimeofday () in
+    let result = match task with
     | CompileC m -> compile_c task_index task m bstate task_context dag
     | CompileInterface m -> compile_module task_index task true m bstate task_context dag
     | CompileModule m -> compile_module task_index task false m bstate task_context dag
@@ -962,6 +974,11 @@ let compile (bstate : build_state) task_context dag =
     | RunGenerateBlock gen_block -> run_generate_block task_index task gen_block bstate task_context dag
     | LinkTarget _ -> link task_index task bstate task_context dag
     | CheckTarget _ -> check task_index task task_context dag
+    in
+    let elapsed = Unix.gettimeofday () -. t0 in
+    if elapsed > 0.01 then
+      log Gconf.Debug "[TIMING] dispatch %s: %.3fs\n" (string_of_compile_step task) elapsed;
+    result
   in
 
   let stat =

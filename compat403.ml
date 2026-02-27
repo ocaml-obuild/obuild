@@ -15,4 +15,3 @@ let string_lowercase = String.lowercase_ascii
 let string_uppercase = String.uppercase_ascii
 let char_uppercase = Char.uppercase_ascii
 
-include Compat_common

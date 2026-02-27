@@ -5,7 +5,8 @@ homepage: "https://github.com/ocaml-obuild/obuild"
 bug-reports: "https://github.com/ocaml-obuild/obuild/issues"
 dev-repo: "git+https://github.com/ocaml-obuild/obuild.git"
 authors: ["Vincent Hanquez" "Jerome Maloberti"]
-synopsis: "simple package build system for OCaml"
+synopsis: "Simple package build system for OCaml"
+license: "BSD-2-Clause"
 description: """
 The goal is to make a very simple build system for users and developers
 of OCaml libraries and programs.
@@ -21,4 +22,4 @@ maintainer: "jmaloberti@gmail.com"
 build: [
   ["./bootstrap"]
 ]
-depends: ["ocaml"]
+depends: ["ocaml" "ocamlfind" {build}]
