@@ -1,5 +1,3 @@
-open Lib
-
 let err = ref 0
 let test_count = ref 0
 

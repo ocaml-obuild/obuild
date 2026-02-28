@@ -864,6 +864,34 @@ let get_modules_desc bstate target toplevelModules =
   List.iter (fun m -> loop m) toplevelModules;
   modulesDeps
 
+(* Global registry mapping source file paths to (first_target_name, hier_in_that_target).
+ * Used to warn when the same source file would be compiled with different -for-pack
+ * flags across multiple targets (e.g., once flat and once inside a directory module). *)
+let source_registry : (string, string * Hier.t) Hashtbl.t = Hashtbl.create 64
+
+let warn_source_overlap target modulesDeps =
+  let target_name = Target.get_target_name target in
+  Hashtbl.iter (fun hier mdesc ->
+    match mdesc with
+    | Module.DescFile dfile ->
+        let src_path = fp_to_string dfile.Module.File.path in
+        (match Hashtbl.find_opt source_registry src_path with
+         | Some (other_name, other_hier) when other_name <> target_name ->
+             (* Only warn when the -for-pack context differs: one target nests the file
+              * inside a directory module (Hier.parent <> None) while another doesn't,
+              * or both use different pack parents.  Flat-to-flat sharing is harmless. *)
+             if Hier.parent hier <> Hier.parent other_hier then (
+               log Report "warning: source file '%s' is compiled for both '%s' (as %s) and '%s' (as %s).\n"
+                 src_path other_name (Hier.to_string other_hier)
+                 target_name (Hier.to_string hier);
+               log Report "  These targets use different -for-pack flags, which may cause build failures.\n"
+             )
+         | None ->
+             Hashtbl.add source_registry src_path (target_name, hier)
+         | Some _ -> ())
+    | Module.DescDir _ -> ()
+  ) modulesDeps
+
 (* prepare modules dependencies and various compilation state
  * that is going to be required for compilation and linking.
  *)
@@ -881,6 +909,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
   register_generator_outputs target;
 
   let modulesDeps = get_modules_desc bstate target toplevelModules in
+  warn_source_overlap target modulesDeps;
 
   (* create 2 dags per target
    * - stepsDag is a DAG of all the tasks to achieve the target (compilation only, not linking yet)

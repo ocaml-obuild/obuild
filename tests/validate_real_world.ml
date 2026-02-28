@@ -1,4 +1,3 @@
-open Lib
 open Printf
 
 (** Real-world META file validation script

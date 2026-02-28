@@ -66,13 +66,6 @@ cp lib/core/*.cmi ./
 cp lib/*.cmo ./
 cp lib/*.cmi ./
 
-# Create a minimal Lib.cmo for bootstrap (main.ml expects it)
-echo "CREATING minimal Lib.cmo for bootstrap"
-touch empty.ml
-$OCAMLC -c empty.ml
-$OCAMLC -pack -o Lib.cmo empty.cmo
-rm empty.ml empty.cmo
-
 # then bootstrap the main executable
 # main needs the version number
 

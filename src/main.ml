@@ -4,7 +4,6 @@ open Filepath
 open Types
 open Helper
 open Gconf
-open Lib
 open Cli
 
 (* Pipe operator for OCaml < 4.01 compatibility *)

@@ -1,5 +1,3 @@
-open Lib
-
 let err = ref 0
 
 (* simple dag: a -> b -> c *)

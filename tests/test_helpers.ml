@@ -1,4 +1,3 @@
-open Lib
 open Test_framework
 open Printf
 

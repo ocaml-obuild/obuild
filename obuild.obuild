@@ -57,7 +57,8 @@ library obuild_core
   build-deps: unix, obuild_base
 
 library obuild
-  modules: lib
+  modules: doc, help, init, install, sdist
+  src-dir: lib
   build-deps: unix, obuild_base, obuild_core
 
 # a comment

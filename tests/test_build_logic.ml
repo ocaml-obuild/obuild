@@ -261,6 +261,45 @@ let test_parallel_build () =
       (* (C couldn't build before A and B) *)
     )
 
+(** Test 7: Source file overlap between libraries emits a warning *)
+(** Regression test: reproduces the obuild self-build bug on macOS/OCaml 5.x
+ *  where library obuild had 'modules: lib' (directory module) causing it to
+ *  claim the same .ml files as library obuild_base (flat), leading to
+ *  conflicting -for-pack flags and a hard error in OCaml 5.x. *)
+let test_source_overlap_warning () =
+  with_temp_build_project
+    ~name:"overlap_warning"
+    ~files:[
+      ("helper/utils.ml", "let x = 42\n");
+    ]
+    ~obuild_content:"name: overlap-warning\nversion: 1.0\nobuild-ver: 1\n\nlibrary base_lib\n  modules: Utils\n  src-dir: helper\n\nlibrary top_lib\n  modules: helper\n"
+    ~test_fn:(fun dir ->
+      let (success, _) = run_obuild_command ~project_dir:dir ~command:"configure" ~args:[] in
+      if not success then failwith "configure should succeed";
+
+      (* Build should still succeed: the overlap is a warning, not an error *)
+      let (success, output) = run_obuild_command ~project_dir:dir ~command:"build" ~args:[] in
+      if not success then
+        failwith ("Build should succeed despite overlap warning: " ^ output);
+
+      (* Verify the source overlap warning was emitted *)
+      let string_contains s sub =
+        let n = String.length sub in
+        let m = String.length s in
+        if n = 0 then true
+        else if m < n then false
+        else begin
+          let found = ref false in
+          for i = 0 to m - n do
+            if String.sub s i n = sub then found := true
+          done;
+          !found
+        end
+      in
+      if not (string_contains output "warning: source file") then
+        failwith ("Expected source overlap warning in build output, but got:\n" ^ output);
+    )
+
 (** Run all build logic tests *)
 let () =
   print_endline "";
@@ -281,6 +320,8 @@ let () =
      "Configure change triggers rebuild");
     ("parallel_build", test_parallel_build,
      "Parallel build respects dependencies");
+    ("source_overlap_warning", test_source_overlap_warning,
+     "Source file overlap between libraries emits warning");
   ] in
 
   let run_test (name, test_fn, description) =
