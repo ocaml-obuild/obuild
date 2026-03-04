@@ -126,6 +126,32 @@ let tokenize_line line_num line =
         | [] -> { tok = BLANK; loc; indent }
         | keyword :: args -> { tok = BLOCK (keyword, args); loc; indent })
 
+(** Merge BLOCK tokens that are continuations of a KEY_VALUE into it.
+    A BLOCK token is a continuation when:
+    - It immediately follows a KEY_VALUE token (with no intervening tokens)
+    - Its indentation is strictly greater than the KEY_VALUE's indentation
+    This handles multi-line field values like:
+      modules: A, B,
+               C, D   <- tokenized as BLOCK("C,", ["D"]) but is really a continuation
+*)
+let merge_continuations tokens =
+  let rec loop = function
+    | [] -> []
+    | ({ tok = KEY_VALUE (k, v); indent = kv_indent; _ } as kv_tok) :: rest ->
+        (* Greedily collect BLOCK tokens at strictly higher indentation *)
+        let rec collect v = function
+          | ({ tok = BLOCK (name, args); indent; _ }) :: more when indent > kv_indent ->
+              let cont = String.concat " " (name :: args) in
+              let v' = if v = "" then cont else v ^ " " ^ cont in
+              collect v' more
+          | remaining -> (v, remaining)
+        in
+        let full_v, remaining = collect v rest in
+        { kv_tok with tok = KEY_VALUE (k, full_v) } :: loop remaining
+    | t :: rest -> t :: loop rest
+  in
+  loop tokens
+
 (** Tokenize entire input string *)
 let tokenize input =
   let lines = String_utils.split '\n' input in
@@ -139,7 +165,8 @@ let tokenize input =
         let acc' = if token.tok = BLANK then acc else token :: acc in
         loop (line_num + 1) acc' rest
   in
-  loop 1 [] lines
+  let raw = loop 1 [] lines in
+  merge_continuations raw
 
 (** Tokenize from a file *)
 let tokenize_file path =

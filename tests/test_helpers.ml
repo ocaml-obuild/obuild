@@ -80,20 +80,26 @@ let assert_expr_eval ~expr ~version ~expected ~name =
    We'll create temporary files for testing. *)
 
 let with_temp_project_file content test_func =
-  let temp_file = Filename.temp_file "test_project" ".obuild" in
+  (* Use a unique temp directory so findPath() sees exactly one .obuild file *)
+  let temp_base = Filename.temp_file "test_project_dir" "" in
+  Sys.remove temp_base;
+  Unix.mkdir temp_base 0o700;
+  let temp_file = Filename.concat temp_base "test.obuild" in
+  let old_dir = Sys.getcwd () in
   try
     let oc = open_out temp_file in
     output_string oc content;
     close_out oc;
-    let old_dir = Sys.getcwd () in
-    let temp_dir = Filename.dirname temp_file in
-    Sys.chdir temp_dir;
+    Sys.chdir temp_base;
     let result = test_func () in
     Sys.chdir old_dir;
     Sys.remove temp_file;
+    Unix.rmdir temp_base;
     result
   with exn ->
+    (try Sys.chdir old_dir with _ -> ());
     (try Sys.remove temp_file with _ -> ());
+    (try Unix.rmdir temp_base with _ -> ());
     raise exn
 
 let assert_project_parses ~content ~name =
