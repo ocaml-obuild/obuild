@@ -91,6 +91,8 @@ let initializeSystemStdlib ocamlCfg =
           None)
       stdlibPath
   in
+  let stdlibSet = Hashtbl.create (List.length stdlibLibs) in
+  List.iter (fun f -> Hashtbl.replace stdlibSet f ()) stdlibLibs;
   let libs = list_uniq $ List.map (fun f -> fn_to_string $ Filepath.chop_extension f) stdlibLibs in
   List.iter
     (fun lib ->
@@ -100,12 +102,12 @@ let initializeSystemStdlib ocamlCfg =
         let libCmxa = lib ^ ".cmxa" in
         let libCma = lib ^ ".cma" in
         let archives =
-          (if List.mem (fn libCmxa) stdlibLibs then
+          (if Hashtbl.mem stdlibSet (fn libCmxa) then
              [ ([ Meta.Predicate.Native ], libCmxa) ]
            else
              [])
           @
-          if List.mem (fn libCma) stdlibLibs then
+          if Hashtbl.mem stdlibSet (fn libCma) then
             [ ([ Meta.Predicate.Byte ], libCma) ]
           else
             []

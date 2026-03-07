@@ -62,14 +62,12 @@ let list_filter_map (f : 'a -> 'b option) (l : 'a list) : 'b list =
   (* Use safe implementation from Compat *)
   Compat.SafeList.filter_map f l
 
-let rec list_uniq l =
-  match l with
-  | [] -> []
-  | x :: xs ->
-      if List.mem x xs then
-        list_uniq xs
-      else
-        x :: list_uniq xs
+let list_uniq l =
+  let seen = Hashtbl.create 16 in
+  List.filter (fun x ->
+    if Hashtbl.mem seen x then false
+    else (Hashtbl.replace seen x (); true)
+  ) l
 
 let list_find_map p l =
   (* Use safe implementation from Compat, convert option to exception *)

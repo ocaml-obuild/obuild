@@ -6,8 +6,8 @@ val print_warnings : string -> unit
 val log : Gconf.verbosity_t -> ('a, out_channel, unit, unit) format4 -> 'a
 (** Log message if verbosity level is sufficient *)
 
-val support_color : unit -> bool
-(** Check if terminal supports color output *)
+val support_color : bool
+(** Whether terminal supports color output (computed once at startup) *)
 
 val color_red : unit -> string
 (** Get ANSI red color escape sequence (or empty if no color) *)

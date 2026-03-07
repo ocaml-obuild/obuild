@@ -194,13 +194,20 @@ let get_children_full dag a =
 
 let is_children dag a b = List.mem b (get_children dag a)
 
-let rec is_children_full dag a b =
-    let children = get_children dag a in
-    (* either it's present here, or in one of the kiddy *)
-    List.mem b children ||
-    List.fold_left (fun acc child ->
-        acc || is_children_full dag child b
-    ) false children
+let is_children_full dag a b =
+    let visited = Hashtbl.create 16 in
+    let queue = Queue.create () in
+    List.iter (fun c -> Queue.push c queue) (get_children dag a);
+    let found = ref false in
+    while not (Queue.is_empty queue) && not !found do
+        let node = Queue.pop queue in
+        if node = b then found := true
+        else if not (Hashtbl.mem visited node) then begin
+            Hashtbl.replace visited node ();
+            List.iter (fun c -> Queue.push c queue) (get_children dag node)
+        end
+    done;
+    !found
 
 let subset dag roots =
     let subdag = init () in

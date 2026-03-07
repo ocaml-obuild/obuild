@@ -10,18 +10,18 @@ exception Parser_error of loc * string
 (** Parser error *)
 
 type state = {
-  tokens : located_token list;
+  tokens : located_token array;
   mutable pos : int;
 }
 (** Parser state *)
 
 (** Create parser state from tokens *)
-let make_state tokens = { tokens; pos = 0 }
+let make_state tokens = { tokens = Array.of_list tokens; pos = 0 }
 
 (** Get current token *)
 let current st =
-  if st.pos < List.length st.tokens then
-    List.nth st.tokens st.pos
+  if st.pos < Array.length st.tokens then
+    st.tokens.(st.pos)
   else
     let loc = { line = 0; col = 0 } in
     new_located_token EOF loc 0

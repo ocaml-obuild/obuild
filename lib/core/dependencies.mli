@@ -27,6 +27,13 @@ type dep_opt = {
   dep_pp       : Pp.t;                    (** Preprocessor to use *)
 }
 
+val fill_ocamldep_cache :
+  (string, Modname.t list) Hashtbl.t -> dep_opt -> Filepath.filepath list -> unit
+(** [fill_ocamldep_cache cache dopt ml_files] batch-runs ocamldep on all [ml_files]
+    in one subprocess and stores merged dep lists in [cache] keyed by
+    [Filepath.fp_to_string srcFile].  Silently skips on error so callers can
+    fall back to per-file [run_ocamldep] calls. *)
+
 val run_ocamldep : dep_opt -> Filepath.filepath -> Modname.t list list
 (** [run_ocamldep dopt src_file] analyzes OCaml module dependencies
 

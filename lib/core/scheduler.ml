@@ -33,7 +33,7 @@ type 'a state = {
   mutable waitqueue : ('a * call) list;
   mutable terminate : bool;
   mutable waiting_task : bool;
-  mutable tasks : ('a * 'a task_group) list;
+  tasks : ('a, 'a task_group) Hashtbl.t;
 }
 
 (* wait until a process finish. *)
@@ -43,13 +43,13 @@ let wait_process state =
   let (task_done,_) = proc_done in
   let finished_task =
     try
-      let tg = List.assoc task_done state.tasks in
+      let tg = Hashtbl.find state.tasks task_done in
       tg.completion <- tg.completion - 1;
       if tg.completion = 0
       then (
         match tg.next with
-        | [] -> 
-          state.tasks <- List.filter (fun (t,_) -> t <> task_done) state.tasks;
+        | [] ->
+          Hashtbl.remove state.tasks task_done;
           true
         | g :: gs ->
           tg.completion <- List.length g;
@@ -82,7 +82,7 @@ let rec idle_loop idle_fun on_task_finish_fun state =
          completion = List.length first;
          next       = pss
        } in
-       state.tasks <- (t,tg) :: state.tasks;
+       Hashtbl.replace state.tasks t tg;
        state.waitqueue <- first @ state.waitqueue;
     )
 
@@ -120,7 +120,7 @@ let schedule j taskdep dispatch_fun finish_fun =
     waitqueue = [];
     terminate = false;
     waiting_task = false;
-    tasks = [];
+    tasks = Hashtbl.create 16;
   } in
   let on_task_finish task = Taskdep.mark_done taskdep task in
   let stats = { max_runqueue = 0; nb_processes = 0 } in

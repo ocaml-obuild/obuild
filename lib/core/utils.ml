@@ -34,18 +34,28 @@ let parseCSV value =
     (fun s -> String.length s > 0)
     (List.map String_utils.strip_spaces (String_utils.split ',' value))
 
+let include_path_cache : (string, string list) Hashtbl.t = Hashtbl.create 16
+
 let to_include_path_options paths =
-  let ss = ref StringSet.empty in
-  List.concat
-  $ list_filter_map
-      (fun p ->
-        let ps = fp_to_string p in
-        if ps = "" || StringSet.mem ps !ss || not (Filesystem.exists p) then
-          None
-        else (
-          ss := StringSet.add ps !ss;
-          Some [ "-I"; ps ]))
-      paths
+  let key = String.concat "\000" (List.map fp_to_string paths) in
+  match (try Some (Hashtbl.find include_path_cache key) with Not_found -> None) with
+  | Some result -> result
+  | None ->
+    let ss = ref StringSet.empty in
+    let result =
+      List.concat
+      $ list_filter_map
+          (fun p ->
+            let ps = fp_to_string p in
+            if ps = "" || StringSet.mem ps !ss || not (Filesystem.exists p) then
+              None
+            else (
+              ss := StringSet.add ps !ss;
+              Some [ "-I"; ps ]))
+          paths
+    in
+    Hashtbl.replace include_path_cache key result;
+    result
 
 let showList sep f l = String.concat sep (List.map f l)
 let isWindows = Sys.os_type = "Win32"
