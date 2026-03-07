@@ -242,20 +242,36 @@ let merge dest src =
   List.iter (fun node -> copy_node node) nodes;
   !dups
 
-(* O(v^3) use with care *)
+(* O(v^3) use with care.
+ * Precomputes an adjacency matrix indexed by internal integer IDs so that the
+ * inner loop uses O(1) array reads instead of the 4-hashtable-lookup has_edge. *)
 let transitive_reduction dag =
     let reducedDag = copy dag in
-    let nodes = get_nodes dag in
-    List.iter (fun x ->
-        List.iter (fun y ->
-            List.iter (fun z ->
-                if has_edge x y dag && has_edge y z dag
-                    then del_edge x z reducedDag
-                    else ()
-            ) nodes
-        ) nodes
-    ) nodes;
-    reducedDag
+    let n = dag.next_id in
+    if n = 0 then reducedDag
+    else begin
+        (* Build adjacency matrix from the original dag *)
+        let adj = Array.make_matrix n n false in
+        Hashtbl.iter (fun id node ->
+            IntSet.iter (fun cid -> adj.(id).(cid) <- true) node.children
+        ) dag.nodes;
+        (* Collect node IDs once to avoid repeated Hashtbl.iter *)
+        let ids = Hashtbl.fold (fun id _ acc -> id :: acc) dag.nodes [] in
+        (* Triple loop: if x→y and y→z exist in original, remove x→z from reduced *)
+        List.iter (fun xid ->
+            List.iter (fun yid ->
+                if adj.(xid).(yid) then
+                    List.iter (fun zid ->
+                        if adj.(yid).(zid) then begin
+                            let xval = Hashtbl.find dag.id_to_node xid in
+                            let zval = Hashtbl.find dag.id_to_node zid in
+                            del_edge xval zval reducedDag
+                        end
+                    ) ids
+            ) ids
+        ) ids;
+        reducedDag
+    end
 
 (* this is for debugging the DAG.
  * dump the dag links and node in a textual format *)

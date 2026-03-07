@@ -22,7 +22,7 @@ type annotation_mode =
   | AnnotationBoth  (** Both binary and text annotations *)
 
 (** Pack option *)
-type packopt = Hier.t option
+type pack_opt = Hier.t option
 
 val run_ocaml_compile :
   Prepare.dir_spec ->
@@ -30,7 +30,7 @@ val run_ocaml_compile :
   annotation_mode ->
   Types.ocaml_compilation_mode ->
   Types.ocaml_compilation_option ->
-  packopt ->
+  pack_opt ->
   Pp.t ->
   string list ->
   Hier.t ->
@@ -42,7 +42,7 @@ val run_ocaml_pack :
   Filepath.filepath ->
   annotation_mode ->
   Types.ocaml_compiled_type ->
-  packopt ->
+  pack_opt ->
   Hier.t ->
   Hier.t list ->
   Process.t

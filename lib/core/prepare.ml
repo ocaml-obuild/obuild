@@ -204,9 +204,11 @@ let resolve_module_ppx_flags bstate target =
         | [includePath, ppx_name, ppx_lib] ->
           List.iter
             (fun (_, ss) ->
-              let res = Libname.of_string (List.hd ss) = ppx_lib in
-              if not res then
-                failwith ("Different ppx " ^ ppx_name ^ " <> " ^ List.hd ss))
+              match ss with
+              | [] -> failwith ("ppxopt for " ^ ppx_name ^ " has no arguments")
+              | hd :: _ ->
+                if Libname.of_string hd <> ppx_lib then
+                  failwith ("Different ppx " ^ ppx_name ^ " <> " ^ hd))
             ppxopts;
           full_path includePath ppx_name
           :: List.map

@@ -18,8 +18,13 @@ let parse_file path =
     | Some x -> String_utils.init 1 (String_utils.drop 1 x)
   in
   let kvs = List.map Utils.toKVeq (String_utils.lines_noempty content) in
-  let paths = String_utils.split ':' (unquote (List.assoc "path" kvs)) in
-  let destdir = unquote (List.assoc "destdir" kvs) in
+  let assoc_req key =
+    try List.assoc key kvs
+    with Not_found ->
+      failwith ("findlib config " ^ fp_to_string path ^ ": missing key '" ^ key ^ "'")
+  in
+  let paths = String_utils.split ':' (unquote (assoc_req "path")) in
+  let destdir = unquote (assoc_req "destdir") in
   { _all = kvs; path = List.map fp paths; destdir = Some (fp destdir); _loaded = true }
 
 let get_program_config () =

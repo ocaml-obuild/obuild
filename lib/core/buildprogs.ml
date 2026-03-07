@@ -23,7 +23,7 @@ type annotation_mode =
   | AnnotationText
   | AnnotationBoth
 
-type packopt = Hier.t option
+type pack_opt = Hier.t option
 
 let annotToOpts mode =
   let bin_annot_opts =
@@ -36,29 +36,29 @@ let annotToOpts mode =
   | AnnotationText -> [ "-annot" ]
   | AnnotationBoth -> bin_annot_opts @ [ "-annot" ]
 
-let run_ocaml_compile dirSpec useThread annotMode buildMode compileOpt packopt pp oflags modhier =
-  let dstDir = dirSpec.dst_dir in
+let run_ocaml_compile dirSpec use_thread annot_mode build_mode compileOpt pack_opt pp oflags modhier =
+  let dst_dir = dirSpec.dst_dir in
   let entry = Hier.get_file_entry modhier [ dirSpec.src_dir ] in
   let src_file = Hier.get_src_file dirSpec.src_dir entry in
   let compileOpt =
-    if buildMode = Interface && compileOpt = WithProf then WithDebug else compileOpt
+    if build_mode = Interface && compileOpt = WithProf then WithDebug else compileOpt
   in
-  Filesystem.mkdir_safe_recursive dstDir 0o755;
+  Filesystem.mkdir_safe_recursive dst_dir 0o755;
   let prog, srcFile, dstFile =
-    match buildMode with
+    match build_mode with
     | Interface ->
         ( Prog.get_ocamlc (),
           Hier.ml_to_ext src_file Filetype.FileMLI,
-          Hier.get_dest_file dstDir Filetype.FileCMI modhier )
+          Hier.get_dest_file dst_dir Filetype.FileCMI modhier )
     | Compiled ct ->
         let ext = if ct = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
         ( (if ct = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt ()),
           src_file,
-          Hier.get_dest_file dstDir ext modhier )
+          Hier.get_dest_file dst_dir ext modhier )
   in
   let args =
     [ prog ]
-    @ (match useThread with
+    @ (match use_thread with
       | NoThread -> []
       | WithThread -> [ "-thread" ])
     @ Utils.to_include_path_options dirSpec.include_dirs
@@ -66,35 +66,35 @@ let run_ocaml_compile dirSpec useThread annotMode buildMode compileOpt packopt p
       | Normal -> []
       | WithDebug -> [ "-g" ]
       | WithProf -> [ "-p" ])
-    @ annotToOpts annotMode @ oflags @ gconf.ocaml_extra_args @ Pp.to_params pp
+    @ annotToOpts annot_mode @ oflags @ gconf.ocaml_extra_args @ Pp.to_params pp
     @ maybe []
-        (fun x -> if buildMode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else [])
-        packopt
+        (fun x -> if build_mode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else [])
+        pack_opt
     @ (if gconf.short_path then [ "-short-paths" ] else [])
     @ [ "-o"; fp_to_string dstFile ]
     @ [ "-c"; fp_to_string srcFile ]
   in
   Process.make args
 
-let run_ocaml_pack _srcDir dstDir annotMode buildMode packOpt dest modules =
-  let prog = if buildMode = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt () in
-  let ext = if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
+let run_ocaml_pack _srcDir dst_dir annot_mode build_mode pack_opt dest modules =
+  let prog = if build_mode = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt () in
+  let ext = if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let ext_f = function
     | Filetype.FileML -> ext
     | Filetype.FileMLI -> Filetype.FileCMI
     | _ ->
         (* It should not happen *)
-        if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX
+        if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX
   in
-  Filesystem.mkdir_safe_recursive dstDir 0o755;
+  Filesystem.mkdir_safe_recursive dst_dir 0o755;
   let args =
     [ prog ]
     @ maybe []
-        (fun x -> if buildMode = Native then [ "-for-pack"; Hier.to_string x ] else [])
-        packOpt
-    @ annotToOpts annotMode
-    @ [ "-pack"; "-o"; fp_to_string (Hier.get_dest_file dstDir ext dest) ]
-    @ List.map (fun m -> fp_to_string (Hier.get_dest_file_ext dstDir m ext_f)) modules
+        (fun x -> if build_mode = Native then [ "-for-pack"; Hier.to_string x ] else [])
+        pack_opt
+    @ annotToOpts annot_mode
+    @ [ "-pack"; "-o"; fp_to_string (Hier.get_dest_file dst_dir ext dest) ]
+    @ List.map (fun m -> fp_to_string (Hier.get_dest_file_ext dst_dir m ext_f)) modules
   in
   Process.make args
 
@@ -113,8 +113,8 @@ let run_ocaml_infer srcDir includes pp modname =
 let o_from_cfile file = file <.> "o"
 
 let run_c_compile project dirSpec cflags file =
-  let dstDir = dirSpec.dst_dir in
-  Filesystem.mkdir_safe_recursive dstDir 0o755;
+  let dst_dir = dirSpec.dst_dir in
+  Filesystem.mkdir_safe_recursive dst_dir 0o755;
   let callCCompiler =
     String_utils.words_noempty (Analyze.get_ocaml_config_key "bytecomp_c_compiler" project)
   in
@@ -159,7 +159,7 @@ let run_c_linking sharingMode depfiles dest =
   in
   Process.make args
 
-let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread systhread oflags cclibs libs
+let run_ocaml_linking includeDirs build_mode linking_mode compileType use_thread systhread oflags cclibs libs
     modules dest =
   (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
   let link_maybe linking_mode dest =
@@ -182,19 +182,19 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
               Unix.symlink real basename
   in
   let prog =
-    match buildMode with
+    match build_mode with
     | Native -> Prog.get_ocamlopt ()
     | ByteCode -> Prog.get_ocamlc ()
   in
-  let ext = if buildMode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
+  let ext = if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let args =
     [ prog ]
-    @ (match useThread with
+    @ (match use_thread with
       | NoThreads -> []
       | PosixThread -> [ "-thread" ]
       | VMThread -> [ "-vmthread" ]
       | DefaultThread -> if systhread = "true" then [ "-thread" ] else [ "-vmthread" ])
-    @ (match linkingMode with
+    @ (match linking_mode with
       | LinkingPlugin -> [ "-shared" ]
       | LinkingLibrary -> [ "-a" ]
       | LinkingExecutable ->
@@ -211,7 +211,7 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
         (List.map
            (fun x ->
              [
-               (match buildMode with
+               (match build_mode with
                | Native -> "-cclib"
                | ByteCode -> if String.length x > 1 && x.[1] = 'L' then "-cclib" else "-dllib");
                x;
@@ -220,7 +220,7 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
     @ List.map (fun m -> fp_to_string (Hier.get_dest_file current_dir ext m)) modules
   in
   let res = Process.make args in
-  let () = link_maybe linkingMode dest in
+  let () = link_maybe linking_mode dest in
   res
 
 (* ================================================================
