@@ -80,7 +80,7 @@ let all p s =
   let rec loop i = if i = len then true else if not (p s.[i]) then false else loop (i + 1) in
   loop 0
 
-let escape_ocaml_string s =
+let escape_string ~percent s =
   let buf = Buffer.create (String.length s) in
   for i = 0 to String.length s - 1 do
     match s.[i] with
@@ -89,23 +89,13 @@ let escape_ocaml_string s =
     | '\n' -> Buffer.add_string buf "\\n"
     | '\r' -> Buffer.add_string buf "\\r"
     | '\t' -> Buffer.add_string buf "\\t"
+    | '%' when percent -> Buffer.add_string buf "%%"
     | c    -> Buffer.add_char buf c
   done;
   Buffer.contents buf
 
-let escape_c_string s =
-  let buf = Buffer.create (String.length s) in
-  for i = 0 to String.length s - 1 do
-    match s.[i] with
-    | '\\' -> Buffer.add_string buf "\\\\"
-    | '"'  -> Buffer.add_string buf "\\\""
-    | '\n' -> Buffer.add_string buf "\\n"
-    | '\r' -> Buffer.add_string buf "\\r"
-    | '\t' -> Buffer.add_string buf "\\t"
-    | '%'  -> Buffer.add_string buf "%%"
-    | c    -> Buffer.add_char buf c
-  done;
-  Buffer.contents buf
+let escape_ocaml_string s = escape_string ~percent:false s
+let escape_c_string s = escape_string ~percent:true s
 
 let strip_cr s =
   let len = String.length s in

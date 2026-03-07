@@ -16,9 +16,9 @@ exception DistFileNotFound of string
 
 val set_path : Filepath.filepath -> unit
 val get_path : unit -> Filepath.filepath
-val build_path : Filepath.filepath
-val setup_path : Filepath.filepath
-val configure_path : Filepath.filepath
+val build_path : unit -> Filepath.filepath
+val setup_path : unit -> Filepath.filepath
+val configure_path : unit -> Filepath.filepath
 
 val check_exn : (unit -> unit) -> unit
 (** Check dist directory exists, call function if it doesn't *)

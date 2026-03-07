@@ -404,12 +404,7 @@ let get_all_buildable_targets proj_file user_flags =
 
 let get_all_installable_targets proj_file user_flags =
   get_all_targets_filter proj_file (fun target ->
-      let install = get_val_const_or_var user_flags target.target_installable in
-      let build = get_val_const_or_var user_flags target.target_buildable in
-      Printf.printf "target %s install %b build %b\n"
-        (Target.Name.to_string target.target_name)
-        install build;
-      install)
+      get_val_const_or_var user_flags target.target_installable)
 
 let find_lib proj_file name = Library.find proj_file.libs name
 let find_exe proj_file name = Executable.find proj_file.exes name

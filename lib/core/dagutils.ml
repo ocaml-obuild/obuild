@@ -16,14 +16,14 @@ let iteri f dag =
 
 let linearize dag =
     let tdep = Taskdep.init dag in
-    let rec loop () =
+    let rec loop acc =
         if Taskdep.is_complete tdep
-            then []
+            then List.rev acc
             else (
                 match Taskdep.get_next tdep with
                 | None            -> failwith "taskdep dag next didn't work"
-                | Some (_,task) -> Taskdep.mark_done tdep task; task :: loop ()
+                | Some (_,task) -> Taskdep.mark_done tdep task; loop (task :: acc)
             )
         in
-    loop ()
+    loop []
 

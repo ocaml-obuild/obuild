@@ -56,7 +56,9 @@ let list_iteri f list =
   in
   loop 1 list
 
-let list_eq_noorder (l1 : 'a list) (l2 : 'a list) : bool = List.for_all (fun z -> List.mem z l2) l1
+let list_eq_noorder (l1 : 'a list) (l2 : 'a list) : bool =
+  List.for_all (fun z -> List.mem z l2) l1 &&
+  List.for_all (fun z -> List.mem z l1) l2
 
 let list_filter_map (f : 'a -> 'b option) (l : 'a list) : 'b list =
   (* Use safe implementation from Compat *)

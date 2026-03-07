@@ -30,9 +30,3 @@ let to_cma (compileType : ocaml_compilation_option) lib =
 
 let to_cmca b = if b = Native then to_cmxa else to_cma
 
-(* only used for stdlib stuff *)
-(*
-let of_cmca b file =
-  let suffix = if b = Native then ".cmxa" else ".cma" in
-  Filename.chop_suffix (fn_to_string file) suffix
-*)

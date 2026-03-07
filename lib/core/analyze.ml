@@ -59,8 +59,13 @@ let get_c_pkg cname project =
   with Not_found ->
     failwith (sprintf "C package %s not found in the hashtbl: internal error" cname)
 
-let is_pkg_internal project pkg = Hashtbl.find project.project_dep_data pkg = Internal
-let is_pkg_system project pkg = Hashtbl.find project.project_dep_data pkg = System
+let is_pkg_internal project pkg =
+  try Hashtbl.find project.project_dep_data pkg = Internal
+  with Not_found -> false
+
+let is_pkg_system project pkg =
+  try Hashtbl.find project.project_dep_data pkg = System
+  with Not_found -> false
 
 let get_internal_library_deps project target =
   let internalDeps = Dag.get_children project.project_targets_dag target.target_name in
@@ -131,7 +136,7 @@ let readOcamlMkConfig filename =
         | "" -> None
         | s when s.[0] = '#' -> None
         | s -> Some s)
-      (filename ^ "/Makefile.config")
+      (fp_to_string (fp filename </> fn "Makefile.config"))
   in
   let h = Hashtbl.create 32 in
   List.iter

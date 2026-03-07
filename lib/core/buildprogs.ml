@@ -213,8 +213,7 @@ let run_ocaml_linking includeDirs buildMode linkingMode compileType useThread sy
              [
                (match buildMode with
                | Native -> "-cclib"
-               | ByteCode -> if x.[1] = 'L' then "-cclib" else "-dllib")
-               (* Ugly hack but do the job for now *);
+               | ByteCode -> if String.length x > 1 && x.[1] = 'L' then "-cclib" else "-dllib");
                x;
              ])
            cclibs)
@@ -237,106 +236,3 @@ let get_cstubs_autogen_dir libname =
   Filesystem.mkdir_safe_recursive lib_autogen 0o755;
   lib_autogen
 
-(* Generate type discovery ML source that uses Cstubs_structs *)
-let generate_cstubs_type_discovery_source cstubs libname autogen_dir =
-  match cstubs.Target.cstubs_type_description with
-  | None -> None
-  | Some type_desc ->
-      let prefix = cstubs.Target.cstubs_external_library_name in
-      let functor_name = Hier.to_string type_desc.Target.cstubs_functor in
-      let headers_includes =
-        String.concat "\n"
-          (List.map
-             (fun h -> Printf.sprintf "  header \"#include <%s>\";" h)
-             cstubs.Target.cstubs_headers)
-      in
-      let source =
-        Printf.sprintf
-          "\n\
-           (* Auto-generated type discovery program for %s *)\n\
-           let () =\n\
-          \  let prefix = \"%s\" in\n\
-          \  let generate_types_struct name =\n\
-          \    print_endline (Printf.sprintf \"let %%s = %%d\" name (Ctypes.sizeof Ctypes.size_t))\n\
-          \  in\n\
-          \  (* Generate type bindings *)\n\
-          \  print_endline \"(* Auto-generated type bindings *)\";\n\
-          \  generate_types_struct \"size_t_size\"\n"
-          (Libname.to_string libname) prefix
-      in
-      ignore (functor_name, headers_includes);
-      let discover_ml = autogen_dir </> fn "discover_types.ml" in
-      Filesystem.write_file discover_ml source;
-      Some discover_ml
-
-(* Generate function stubs ML source that uses Cstubs *)
-let generate_cstubs_function_stubs_source cstubs libname autogen_dir =
-  match cstubs.Target.cstubs_function_description with
-  | None -> None
-  | Some func_desc ->
-      let prefix = cstubs.Target.cstubs_external_library_name in
-      let functor_name = Hier.to_string func_desc.Target.cstubs_functor in
-      let entry_point = cstubs.Target.cstubs_generated_entry_point in
-      (* Generate the stub generator program *)
-      let source =
-        Printf.sprintf
-          "\n\
-           (* Auto-generated stub generator for %s *)\n\
-           (* Functor: %s, Entry point: %s *)\n\
-           \n\
-           let c_headers = \"/* Auto-generated C stubs for %s */\\n\"\n\
-           \n\
-           let () =\n\
-          \  (* Generate C stubs *)\n\
-          \  let c_file = open_out \"%s_stubs.c\" in\n\
-          \  output_string c_file c_headers;\n\
-          \  output_string c_file \"#include <caml/mlvalues.h>\\n\";\n\
-          \  output_string c_file \"#include <caml/memory.h>\\n\";\n\
-          \  output_string c_file \"#include <caml/alloc.h>\\n\";\n\
-          \  output_string c_file \"/* Stub implementations would be generated here */\\n\";\n\
-          \  close_out c_file;\n\
-           \n\
-          \  (* Generate ML entry point *)\n\
-          \  let ml_file = open_out \"%s.ml\" in\n\
-          \  Printf.fprintf ml_file \"(* Auto-generated entry point for %s *)\\n\";\n\
-          \  Printf.fprintf ml_file \"module Types = Types_generated\\n\";\n\
-          \  Printf.fprintf ml_file \"module Functions = struct\\n\";\n\
-          \  Printf.fprintf ml_file \"  (* Function bindings would be here *)\\n\";\n\
-          \  Printf.fprintf ml_file \"end\\n\";\n\
-          \  close_out ml_file;\n\
-           \n\
-          \  print_endline \"Stubs generated successfully\"\n"
-          (Libname.to_string libname) functor_name entry_point (Libname.to_string libname) prefix
-          entry_point (Libname.to_string libname)
-      in
-      let stubgen_ml = autogen_dir </> fn "stubgen.ml" in
-      Filesystem.write_file stubgen_ml source;
-      Some stubgen_ml
-
-(* Compile and run a generated ML program *)
-let run_cstubs_generator project includes ml_file output_file =
-  let prog = Prog.get_ocamlc () in
-  let exe_file = Filetype.replace_extension (path_basename ml_file) (Filetype.FileOther "exe") in
-  let exe_path = path_dirname ml_file </> exe_file in
-  (* Compile the generator *)
-  let compile_args =
-    [ prog ]
-    @ Utils.to_include_path_options includes
-    @ [ "-I"; "+ctypes" ]
-    @ [ "-o"; fp_to_string exe_path ]
-    @ [ fp_to_string ml_file ]
-  in
-  ignore project;
-  match Process.run compile_args with
-  | Process.Failure err ->
-      raise (CstubsGenerationFailed ("Failed to compile cstubs generator: " ^ err))
-  | Process.Success _ -> (
-      (* Run the generator *)
-      let run_args = [ fp_to_string exe_path ] in
-      match Process.run run_args with
-      | Process.Failure err ->
-          raise (CstubsGenerationFailed ("Failed to run cstubs generator: " ^ err))
-      | Process.Success (stdout, _, _) ->
-          (* Write output to the target file *)
-          Filesystem.write_file output_file stdout;
-          ())

@@ -24,9 +24,9 @@ exception DistFileNotFound of string
 let path = ref (fp "dist")
 let set_path p = path := p
 let get_path () = !path
-let setup_path = get_path () </> fn "setup"
-let configure_path = get_path () </> fn "configure"
-let build_path = get_path () </> fn "build"
+let setup_path () = get_path () </> fn "setup"
+let configure_path () = get_path () </> fn "configure"
+let build_path () = get_path () </> fn "build"
 
 let check_exn f =
   if Filesystem.exists (get_path ()) then
@@ -67,12 +67,12 @@ let read_dist_file path =
       (List.map (fun l -> second (default "") $ Utils.toKV l) $ String_utils.split '\n' content)
   with Sys_error _ | Unix.Unix_error _ -> raise (DistFileNotFound (fp_to_string path))
 
-let read_setup () = read_dist_file setup_path
-let read_configure () = read_dist_file configure_path
+let read_setup () = read_dist_file (setup_path ())
+let read_configure () = read_dist_file (configure_path ())
 
 let write_setup setup =
   let kv (k, v) = k ^ ": " ^ v in
-  Filesystem.write_file setup_path (String.concat "\n" $ List.map kv (hashtbl_to_list setup))
+  Filesystem.write_file (setup_path ()) (String.concat "\n" $ List.map kv (hashtbl_to_list setup))
 
 let remove_dead_links () =
   let files = Sys.readdir "." in

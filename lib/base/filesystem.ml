@@ -68,14 +68,14 @@ let is_dir path =
  * return false if the directory already exists
  * return true if the directory has been created *)
 let mkdir_safe path perm =
-  if Sys.file_exists (fp_to_string path) then
+  try
+    Unix.mkdir (fp_to_string path) perm;
+    true
+  with Unix.Unix_error (Unix.EEXIST, _, _) ->
     if Sys.is_directory (fp_to_string path) then
       false
     else
       failwith ("directory " ^ fp_to_string path ^ " cannot be created: file already exists")
-  else (
-    Unix.mkdir (fp_to_string path) perm;
-    true)
 
 let mkdir_safe_ path perm =
   let (_ : bool) = mkdir_safe path perm in
