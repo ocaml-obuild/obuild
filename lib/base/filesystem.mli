@@ -52,6 +52,9 @@ val mkdir_safe_recursive : Filepath.filepath -> Unix.file_perm -> unit
 (** Functions for writing/reading to/from a file in a filesystem. *)
 
 val write_file : Filepath.filepath -> string -> unit
+val write_file_if_changed : Filepath.filepath -> string -> unit
+(** Like [write_file] but skips the write when the file already contains
+    identical content, preserving the existing mtime. *)
 val read_file : Filepath.filepath -> string
 
 (** Functions for copying files. *)

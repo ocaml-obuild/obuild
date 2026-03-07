@@ -91,14 +91,15 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
          (* No type description specified *)\n"
         (Libname.to_string lib)
       in
-      Filesystem.write_file target_file content;
+      Filesystem.write_file_if_changed target_file content;
       log Report "  Generated %s (no types)\n%!" (fp_to_string target_file);
       Scheduler.FinishTask task
     | Some type_desc ->
-      (* Get the bindings module name *)
-      let bindings_hier = type_desc.Target.cstubs_functor in
-      let bindings_parts = Hier.to_string bindings_hier in
-      (* Split "Bindings.Types" into module "Bindings" and functor "Types" *)
+      (* Get paths and parse bindings module name *)
+      let ctypes_includes = get_ctypes_includes bstate in
+      let build_dir = cstate.compilation_builddir_ml Normal in
+      let src_dirs = target.target_obits.target_srcdir in
+      let bindings_parts = Hier.to_string type_desc.Target.cstubs_functor in
       let parts = String_utils.split '.' bindings_parts in
       let (bindings_module, types_functor) = match parts with
         | [m; f] -> (m, f)
@@ -107,10 +108,15 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         | [] -> (bindings_parts, "Types")
       in
 
-      (* Get paths *)
-      let ctypes_includes = get_ctypes_includes bstate in
-      let build_dir = cstate.compilation_builddir_ml Normal in
-      let src_dirs = target.target_obits.target_srcdir in
+      (* Skip regeneration if target_file is already newer than the compiled bindings *)
+      let bindings_cmo = build_dir </> fn (Compat.string_uncapitalize bindings_module ^ ".cmo") in
+      let target_mtime = Filesystem.get_modification_time target_file in
+      let bindings_mtime = Filesystem.get_modification_time bindings_cmo in
+      if Filesystem.exists target_file && target_mtime > bindings_mtime && bindings_mtime > 0.0 then begin
+        log Report "[%*d of %d] cstubs types for %s up to date\n%!" nb_step_len task_index nb_step
+          (Libname.to_string lib);
+        Scheduler.FinishTask task
+      end else begin
 
       (* Generate discover.ml that uses Cstubs_structs.write_c to discover type layouts.
          This properly handles structs defined in the user's Types functor. *)
@@ -132,14 +138,13 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         bindings_module
         types_functor
       in
-      Filesystem.write_file discover_ml discover_content;
+      Filesystem.write_file_if_changed discover_ml discover_content;
       log Report "  Generated %s\n%!" (fp_to_string discover_ml);
 
       (* Compile discover.ml - needs ctypes.stubs and the bindings module *)
       let discover_exe = autogen_dir </> fn "discover.byte" in
       let ocamlc = Prog.get_ocamlc () in
       let ctypes_libs = get_ctypes_libs bstate in
-      let bindings_cmo = build_dir </> fn (Compat.string_uncapitalize bindings_module ^ ".cmo") in
       let include_args = List.concat [
         Utils.to_include_path_options ctypes_includes;
         Utils.to_include_path_options [build_dir];
@@ -187,7 +192,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         | Process.Success (c_code, _, _) ->
           (* Write the C program *)
           let discover_c = autogen_dir </> fn "discover.c" in
-          Filesystem.write_file discover_c c_code;
+          Filesystem.write_file_if_changed discover_c c_code;
           log Report "  Generated %s\n%!" (fp_to_string discover_c);
 
           (* Compile the C program - include ctypes directory for ctypes_cstubs_internals.h *)
@@ -228,7 +233,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
               Filesystem.write_file target_file content;
               Scheduler.FinishTask task
             | Process.Success (ml_code, _, _) ->
-              Filesystem.write_file target_file ml_code;
+              Filesystem.write_file_if_changed target_file ml_code;
               log Report "  Generated %s\n%!" (fp_to_string target_file);
               ignore (bindings_module, types_functor);
               Scheduler.FinishTask task
@@ -236,6 +241,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
           )
         )
       )
+      end (* up-to-date check *)
 
 (* Generate ctypes.cstubs function stubs - produces C.ml and stubs.c *)
 let generate_cstubs_functions task_index task lib bstate task_context dag =
@@ -265,10 +271,10 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         (Libname.to_string lib)
         generated_types
       in
-      Filesystem.write_file entry_file entry_content;
+      Filesystem.write_file_if_changed entry_file entry_content;
       (* Generate empty C stubs *)
       let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
-      Filesystem.write_file c_stubs_file
+      Filesystem.write_file_if_changed c_stubs_file
         "/* Auto-generated C stubs - no functions bound */\n\
          #include <caml/mlvalues.h>\n";
       log Report "  Generated %s (no functions)\n%!" (fp_to_string entry_file);
@@ -307,6 +313,18 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
       (* Path to compiled bindings module and generated types module *)
       let bindings_cmo = build_dir </> fn (Compat.string_uncapitalize bindings_module ^ ".cmo") in
       let types_cmo = build_dir </> fn (Compat.string_uncapitalize generated_types ^ ".cmo") in
+
+      (* Skip regeneration if the entry file is already newer than compiled bindings *)
+      let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
+      let entry_mtime = Filesystem.get_modification_time entry_file in
+      let bindings_mtime = Filesystem.get_modification_time bindings_cmo in
+      let types_mtime = Filesystem.get_modification_time types_cmo in
+      let inputs_mtime = max bindings_mtime types_mtime in
+      if Filesystem.exists entry_file && entry_mtime > inputs_mtime && inputs_mtime > 0.0 then begin
+        log Report "[%*d of %d] cstubs functions for %s up to date\n%!" nb_step_len task_index nb_step
+          (Libname.to_string lib);
+        Scheduler.FinishTask task
+      end else begin
 
       (* Generate stubgen.ml *)
       let stubgen_ml = autogen_dir </> fn "stubgen.ml" in
@@ -400,7 +418,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         (Compat.string_capitalize generated_foreign_name)
         (if has_types then "(Types)" else "")
       in
-      Filesystem.write_file stubgen_ml stubgen_content;
+      Filesystem.write_file_if_changed stubgen_ml stubgen_content;
       log Report "  Generated %s\n%!" (fp_to_string stubgen_ml);
 
       (* Compile stubgen.ml *)
@@ -448,7 +466,6 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         log Report "  Warning: Failed to compile stubgen.ml: %s\n%!" err;
         log Report "  Falling back to placeholder stubs\n%!";
         (* Fallback: generate placeholder content *)
-        let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
         let entry_content = Printf.sprintf
           "(* Auto-generated entry point for %s *)\n\
            (* Stub generation failed - placeholder *)\n\
@@ -461,9 +478,9 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
           (Libname.to_string lib)
           generated_types
         in
-        Filesystem.write_file entry_file entry_content;
+        Filesystem.write_file_if_changed entry_file entry_content;
         let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
-        Filesystem.write_file c_stubs_file
+        Filesystem.write_file_if_changed c_stubs_file
           "/* Auto-generated C stubs - placeholder */\n\
            #include <caml/mlvalues.h>\n\
            #include <caml/memory.h>\n\
@@ -477,17 +494,16 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         | Process.Failure (_, err, _) ->
           log Report "  Warning: Failed to run stubgen: %s\n%!" err;
           (* Fallback *)
-          let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in
-          let entry_content = Printf.sprintf
+          let fallback_content = Printf.sprintf
             "(* Auto-generated entry point for %s *)\n\
              module Types = %s\n\
              module Functions = struct end\n"
             (Libname.to_string lib)
             generated_types
           in
-          Filesystem.write_file entry_file entry_content;
+          Filesystem.write_file_if_changed entry_file fallback_content;
           let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
-          Filesystem.write_file c_stubs_file
+          Filesystem.write_file_if_changed c_stubs_file
             "/* Auto-generated C stubs */\n\
              #include <caml/mlvalues.h>\n";
           Scheduler.FinishTask task
@@ -497,6 +513,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
           Scheduler.FinishTask task
         )
       )
+      end (* up-to-date check *)
 
 (* Compile generated ctypes.cstubs C code *)
 let compile_cstubs_c task_index task lib bstate task_context dag =
@@ -521,6 +538,15 @@ let compile_cstubs_c task_index task lib bstate task_context dag =
       src_dir      = autogen_dir
     } in
     let dest = (Filetype.FileO, c_dir_spec.dst_dir </> o_from_cfile c_stubs_file) in
-    log Report "  Compiling %s -> %s\n%!" (fn_to_string c_stubs_file) (fp_to_string (snd dest));
-    (* Use the C compiler to compile the stubs *)
-    Scheduler.AddProcess (task, run_c_compile bstate.bstate_config c_dir_spec [] c_stubs_file)
+    let src_path = autogen_dir </> c_stubs_file in
+    let dest_mtime = Filesystem.get_modification_time (snd dest) in
+    let src_mtime  = Filesystem.get_modification_time src_path in
+    if Filesystem.exists (snd dest) && dest_mtime > src_mtime && src_mtime > 0.0 then begin
+      log Report "[%*d of %d] cstubs C for %s up to date\n%!" nb_step_len task_index nb_step
+        (Libname.to_string lib);
+      Scheduler.FinishTask task
+    end else begin
+      log Report "  Compiling %s -> %s\n%!" (fn_to_string c_stubs_file) (fp_to_string (snd dest));
+      (* Use the C compiler to compile the stubs *)
+      Scheduler.AddProcess (task, run_c_compile bstate.bstate_config c_dir_spec [] c_stubs_file)
+    end

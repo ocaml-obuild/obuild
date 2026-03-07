@@ -1,4 +1,5 @@
 open Test_framework
+open Test_helpers
 open Printf
 
 (* Helper functions *)
@@ -363,4 +364,6 @@ let all_tests =
     make_test "metacache_consistency" test_metacache_consistency;
   ]
 
-let () = run_tests all_tests
+let () =
+  install_cache_reset ();
+  run_tests all_tests

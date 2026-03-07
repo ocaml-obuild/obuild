@@ -15,6 +15,11 @@ let test_count = ref 0
 let failed_count = ref 0
 let failed_tests = ref []
 
+(* Hook called before each test. Test suites that use global caches should set this
+   to reset state between tests, e.g.:
+     Test_framework.before_each := fun () -> Metacache.clear (); Hier.clear () *)
+let before_each : (unit -> unit) ref = ref (fun () -> ())
+
 let assert_equal ~expected ~actual ~name =
   if expected = actual then
     Success
@@ -73,6 +78,7 @@ let assert_exception_message ~test_func ~expected_substring ~name =
                expected_substring msg)
 
 let run_test test_case =
+  !before_each ();
   incr test_count;
   printf "Running test: %s... " test_case.name;
   flush stdout;

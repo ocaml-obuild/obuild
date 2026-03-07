@@ -198,10 +198,9 @@ let run proj_file user_flags user_opts =
     match actualSetup with
     | None -> true
     | Some stp -> (
-        (* TODO harcoded for now till we do all the checks. *)
         try
           comparekvs "setup" stp (hashtbl_to_list currentSetup);
-          (* FORCED should be false *) true
+          false (* no changes detected *)
         with ConfigChanged _ | Not_found -> true)
   in
 

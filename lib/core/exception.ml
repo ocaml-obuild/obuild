@@ -148,6 +148,10 @@ let show exn =
         (Utils.showList "; " fp_to_string ds);
       exit exit_file_not_found
   | Exit -> ()
+  | Failure msg ->
+      (* failwith is reserved for internal programming errors; give a clean message *)
+      error "internal error: %s\n" msg;
+      exit 1
   | e ->
       eprintf "uncaught exception\n";
       raise e

@@ -225,4 +225,6 @@ let all_tests =
     make_test "real_world_non_existent_files" test_real_world_obuild;
   ]
 
-let () = run_tests all_tests
+let () =
+  install_cache_reset ();
+  run_tests all_tests

@@ -123,6 +123,12 @@ let read_file path =
       done;
       Buffer.contents buf)
 
+let write_file_if_changed path s =
+  try
+    let existing = read_file path in
+    if existing <> s then write_file path s
+  with _ -> write_file path s
+
 let copy_file src dst =
   mkdir_safe_recursive (path_dirname dst) 0o755;
   let s = bytes_make 4096 ' ' in

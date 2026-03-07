@@ -284,9 +284,14 @@ let prepare projFile user_flags =
       List.iter
         (fun (cpkg, cconstr) ->
           let ver = Prog.run_pkg_config_version cpkg in
-          (* TODO compare the constraints *)
-          ignore cconstr;
-          ignore ver;
+          maybe ()
+            (fun c ->
+              if not (Expr.eval ver c) then
+                raise
+                  (Dependencies.BuildDepAnalyzeFailed
+                     (cpkg ^ " (" ^ ver ^ ") doesn't match the constraint "
+                    ^ Expr.to_string c)))
+            cconstr;
           let pkgIncludes = List.map fp (Prog.run_pkg_config_includes cpkg) in
           let pkgLibs = Prog.run_pkg_config_libs cpkg in
           let pkgConf = { cpkg_conf_libs = pkgLibs; cpkg_conf_includes = pkgIncludes } in

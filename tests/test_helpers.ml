@@ -1,6 +1,15 @@
 open Test_framework
 open Printf
 
+(** Clear all global caches between tests.
+    Call [install_cache_reset ()] once at the top of any test suite that exercises
+    code paths touching Metacache or Hier (project parsing, META resolution, etc.).
+    This prevents state from one test silently affecting later tests. *)
+let install_cache_reset () =
+  Test_framework.before_each := fun () ->
+    Metacache.clear ();
+    Hier.clear ()
+
 (** Test helpers for parser testing *)
 
 (** {1 META Parser Helpers} *)
