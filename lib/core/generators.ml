@@ -171,7 +171,7 @@ let run dest src modName =
     List.iter (fun arg ->
         match Process.run arg with
         | Process.Success (_, warnings,_) -> print_warnings warnings
-        | Process.Failure er -> raise (GeneratorFailed er)
+        | Process.Failure (_, er, _) -> raise (GeneratorFailed er)
     ) args
   ) gens
 
@@ -203,7 +203,7 @@ let run_custom_multi ~generator_name ~dest ~sources ~extra_args =
   let args = ["sh"; "-c"; cmd] in
   match Process.run args with
   | Process.Success (_, warnings, _) -> print_warnings warnings
-  | Process.Failure er -> raise (GeneratorFailed er)
+  | Process.Failure (_, er, _) -> raise (GeneratorFailed er)
 
 (** Get the output files for a custom generator *)
 let get_custom_outputs (custom : custom) ~src =

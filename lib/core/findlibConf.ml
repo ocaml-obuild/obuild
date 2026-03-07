@@ -24,7 +24,7 @@ let parse_file path =
 
 let get_program_config () =
   match Process.run [ "ocamlfind"; "printconf"; "conf" ] with
-  | Process.Failure err -> failwith ("ocamlfind printconf failed err " ^ err)
+  | Process.Failure (_, err, _) -> failwith ("ocamlfind printconf failed err " ^ err)
   | Process.Success (out, _, _) -> (
       match String_utils.lines_noempty out with
       | [ x ] -> [ fp x ]

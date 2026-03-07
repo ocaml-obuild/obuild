@@ -44,7 +44,7 @@ let run_ocamldep dopt srcFile =
     @ Pp.to_params dopt.dep_pp @ [ "-modules" ] @ files
   in
   match Process.run args with
-  | Process.Failure er -> raise (BuildDepAnalyzeFailed er)
+  | Process.Failure (_, er, _) -> raise (BuildDepAnalyzeFailed er)
   | Process.Success (out, _, _) ->
       List.map snd
         (parse_output_KsemiVs
@@ -129,7 +129,7 @@ let joinLines s =
 let run_ccdep srcDir files : (filename * filepath list) list =
   let args = [ Prog.get_cc (); "-MM" ] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
   match Process.run args with
-  | Process.Failure err -> raise (BuildCDepAnalyzeFailed err)
+  | Process.Failure (_, err, _) -> raise (BuildCDepAnalyzeFailed err)
   | Process.Success (out, _, _) ->
       parse_output_KsemiVs
         (fun _ -> raise (BuildCDepAnalyzeFailed "missing semicolon in gcc dependency output"))

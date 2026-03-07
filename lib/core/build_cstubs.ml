@@ -156,7 +156,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
 
       log Report "  Compiling type discovery program...\n%!";
       (match Process.run compile_args with
-      | Process.Failure err ->
+      | Process.Failure (_, err, _) ->
         log Report "  Warning: Failed to compile discover.ml: %s\n%!" err;
         log Report "  Falling back to static type sizes\n%!";
         (* Fallback: generate static content *)
@@ -174,7 +174,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         (* Run discover to generate C code *)
         log Report "  Running type discovery program...\n%!";
         (match Process.run [fp_to_string discover_exe] with
-        | Process.Failure err ->
+        | Process.Failure (_, err, _) ->
           log Report "  Warning: Failed to run discover: %s\n%!" err;
           let content = Printf.sprintf
             "(* Auto-generated type bindings for %s *)\n\
@@ -203,7 +203,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
 
           log Report "  Compiling C type discovery...\n%!";
           (match Process.run compile_c_args with
-          | Process.Failure err ->
+          | Process.Failure (_, err, _) ->
             log Report "  Warning: Failed to compile discover.c: %s\n%!" err;
             let content = Printf.sprintf
               "(* Auto-generated type bindings for %s *)\n\
@@ -217,7 +217,7 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
             (* Run the C program to get types *)
             log Report "  Running C type discovery...\n%!";
             (match Process.run [fp_to_string discover_c_exe] with
-            | Process.Failure err ->
+            | Process.Failure (_, err, _) ->
               log Report "  Warning: Failed to run C discover: %s\n%!" err;
               let content = Printf.sprintf
                 "(* Auto-generated type bindings for %s *)\n\
@@ -431,7 +431,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         let args = [cc] @ include_args @ ["-o"; fp_to_string dst_file; "-c"; fp_to_string src_file] in
         log Report "  Compiling C source %s for stubgen...\n%!" c_src;
         (match Process.run args with
-         | Process.Failure err -> failwith ("Failed to compile C source " ^ c_src ^ ": " ^ err)
+         | Process.Failure (_, err, _) -> failwith ("Failed to compile C source " ^ c_src ^ ": " ^ err)
          | Process.Success _ -> ());
         fp_to_string dst_file
       ) target.target_cbits.target_csources in
@@ -444,7 +444,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
 
       log Report "  Compiling stub generator...\n%!";
       (match Process.run compile_args with
-      | Process.Failure err ->
+      | Process.Failure (_, err, _) ->
         log Report "  Warning: Failed to compile stubgen.ml: %s\n%!" err;
         log Report "  Falling back to placeholder stubs\n%!";
         (* Fallback: generate placeholder content *)
@@ -474,7 +474,7 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         (* Run stubgen *)
         log Report "  Running stub generator...\n%!";
         (match Process.run [fp_to_string stubgen_exe] with
-        | Process.Failure err ->
+        | Process.Failure (_, err, _) ->
           log Report "  Warning: Failed to run stubgen: %s\n%!" err;
           (* Fallback *)
           let entry_file = autogen_dir </> fn (Compat.string_uncapitalize entry_point_name ^ ".ml") in

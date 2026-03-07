@@ -108,7 +108,7 @@ let run_ocaml_infer srcDir includes pp modname =
   in
   match run args with
   | Success (mli, _, _) -> mli
-  | Process.Failure er -> raise (InferFailed er)
+  | Process.Failure (_, er, _) -> raise (InferFailed er)
 
 let o_from_cfile file = file <.> "o"
 

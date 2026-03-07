@@ -21,13 +21,13 @@ let toKV line =
   match String_utils.split ~limit:2 ':' line with
   | [ k ] -> (String_utils.strip_spaces k, None)
   | [ k; v ] -> (String_utils.strip_spaces k, Some (String_utils.strip_spaces v))
-  | _ -> assert false
+  | _ -> failwith ("internal error: toKV split returned unexpected result for: " ^ line)
 
 let toKVeq line =
   match String_utils.split ~limit:2 '=' line with
   | [ k ] -> (String_utils.strip_spaces k, None)
   | [ k; v ] -> (String_utils.strip_spaces k, Some (String_utils.strip_spaces v))
-  | _ -> assert false
+  | _ -> failwith ("internal error: toKVeq split returned unexpected result for: " ^ line)
 
 let parseCSV value =
   List.filter

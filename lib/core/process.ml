@@ -45,7 +45,7 @@ let make args =
   }
 
 type result = Success of string (* stdout *) * string (* stderr *) * float (* duration *)
-            | Failure of string (* sterr *)
+            | Failure of string (* stdout *) * string (* stderr *) * int (* exit code *)
 
 type call = unit -> t
 
@@ -81,7 +81,7 @@ let wait processes =
         ) !live_processes;
     done;
     match !done_processes with
-    | None -> assert false
+    | None -> failwith "internal error: process_loop exited with no finished process"
     | Some finished -> (finished, remove_from_list finished !live_processes)
   in
   try
@@ -93,9 +93,13 @@ let wait processes =
  *)
 let terminate (_, p) =
   let (_, pstat) = Unix.waitpid [] p.pid in
+  let stdout = Buffer.contents p.out.buf in
+  let stderr = Buffer.contents p.err.buf in
   match pstat with
-  | Unix.WEXITED 0 -> Success (Buffer.contents p.out.buf, Buffer.contents p.err.buf, Unix.gettimeofday () -. p.time)
-  | _              -> Failure (Buffer.contents p.err.buf)
+  | Unix.WEXITED 0   -> Success (stdout, stderr, Unix.gettimeofday () -. p.time)
+  | Unix.WEXITED n   -> Failure (stdout, stderr, n)
+  | Unix.WSIGNALED n -> Failure (stdout, stderr, 128 + n)
+  | Unix.WSTOPPED n  -> Failure (stdout, stderr, 128 + n)
 
 (* simple helper for a single process spawn|process|terminate *)
 let run args =

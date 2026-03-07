@@ -5,8 +5,8 @@ type t
 
 (** Process execution result *)
 type result =
-  | Success of string * string * float  (** stdout, stderr, duration *)
-  | Failure of string                   (** stderr *)
+  | Success of string * string * float        (** stdout, stderr, duration *)
+  | Failure of string * string * int          (** stdout, stderr, exit_code *)
 
 (** Delayed process creation *)
 type call = unit -> t
@@ -35,7 +35,7 @@ val terminate : ('a * t) -> result
     Waits for process to terminate and collects exit status.
 
     @param task process pair
-    @return Success with outputs and duration, or Failure with stderr *)
+    @return Success with outputs and duration, or Failure with stdout, stderr, and exit code *)
 
 val run : string list -> result
 (** [run args] executes a single process synchronously

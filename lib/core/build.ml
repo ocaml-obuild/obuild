@@ -957,10 +957,11 @@ let compile (bstate : build_state) task_context dag =
         log Gconf.Debug "[TIMING] %s: %.3fs\n" (string_of_compile_step task) duration;
         (* TODO: store warnings for !isDone and print them if they are different when isDone *)
         if is_done then print_warnings warnings
-    | Process.Failure er -> (
+    | Process.Failure (out, er, _) -> (
+        let msg = if String.length out > 0 then out ^ "\n" ^ er else er in
         match task with
-        | CompileC _ -> raise (CCompilationFailed er)
-        | _ -> raise (CompilationFailed er)));
+        | CompileC _ -> raise (CCompilationFailed msg)
+        | _ -> raise (CompilationFailed msg)));
     if is_done then
       Taskdep.mark_done taskdep task
   in

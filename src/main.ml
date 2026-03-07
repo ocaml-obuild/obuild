@@ -255,12 +255,23 @@ let cmd_test =
                     (Target.get_target_name test_target);
                   exit 1);
 
-                match Process.run [ fp_to_string exe_path ] with
+                let args = [ fp_to_string exe_path ] @ test.Project.Test.runopt in
+                let run () = Process.run args in
+                let result = match test.Project.Test.rundir with
+                  | None -> run ()
+                  | Some d ->
+                      let saved = Sys.getcwd () in
+                      Unix.chdir (fp_to_string d);
+                      let r = run () in
+                      Unix.chdir saved;
+                      r
+                in
+                match result with
                 | Process.Success (out, _, _) ->
                     if show_test then print_warnings out;
                     (test.Project.Test.name, true)
-                | Process.Failure err ->
-                    print_warnings err;
+                | Process.Failure (out, err, _) ->
+                    print_warnings (if String.length out > 0 then out ^ "\n" ^ err else err);
                     (test.Project.Test.name, false))
               proj_file.Project.tests
           in

@@ -70,7 +70,7 @@ let get_ocaml_config () =
             lines;
           ocaml_config := Some h;
           h
-      | Process.Failure err -> raise (OCamlProgramError ("ocamlc cannot get config " ^ err)))
+      | Process.Failure (_, err, _) -> raise (OCamlProgramError ("ocamlc cannot get config " ^ err)))
   | Some h -> h
 
 let get_camlp4_config () =
@@ -78,19 +78,19 @@ let get_camlp4_config () =
   | Process.Success (s, _, _) ->
       let (l : _) = String_utils.lines_noempty s in
       l
-  | Process.Failure err -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err))
+  | Process.Failure (_, err, _) -> raise (OCamlProgramError ("ocamlopt cannot get config " ^ err))
 
 let get_tar () = get_cache "tar" [ "tar"; "gtar" ]
 
 let run_tar output dir =
   match Process.run [ get_tar (); "czf"; output; dir ] with
   | Process.Success _ -> ()
-  | Process.Failure err -> raise (TarError err)
+  | Process.Failure (_, err, _) -> raise (TarError err)
 
 let run_pkg_config typ name =
   match Process.run [ get_pkg_config (); typ; name ] with
   | Process.Success (s, _, _) -> s
-  | Process.Failure err -> raise (PkgConfigError err)
+  | Process.Failure (_, err, _) -> raise (PkgConfigError err)
 
 let run_pkg_config_version name =
   let output = run_pkg_config "--version" name in

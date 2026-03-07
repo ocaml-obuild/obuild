@@ -42,7 +42,7 @@ let root = function
 
 let parent x =
   match x with
-  | [] -> assert false
+  | [] -> failwith "internal error: hier.parent called on empty hierarchy"
   | [ _ ] -> None
   | l -> Some (list_init l)
 

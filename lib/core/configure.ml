@@ -81,7 +81,7 @@ let execute_configure_script proj_file =
       let args = [ Prog.get_ocaml (); fp_to_string script ] in
       match Process.run args with
       | Process.Success (_, warnings, _) -> print_warnings warnings
-      | Process.Failure er -> raise (ConfigureScriptFailed er))
+      | Process.Failure (_, er, _) -> raise (ConfigureScriptFailed er))
 
 let create_dist project flags =
   log Verbose "configuration changed, deleting dist\n%!";
