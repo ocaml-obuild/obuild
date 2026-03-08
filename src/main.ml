@@ -197,6 +197,7 @@ let cmd_install =
       ~description:"Installs compiled libraries and executables to the system."
       ~run:(fun ctx ->
         let dest_dir_str = Cli.get_string_opt ctx "destdir" in
+        let bin_dir_str = Cli.get_string_opt ctx "bindir" in
         let opam_install = Cli.get_flag ctx "opam" in
 
         Dist.exist ();
@@ -213,12 +214,19 @@ let cmd_install =
               | Some p -> p)
         in
 
-        Install.install_libs proj_file dest_dir opam_install;
+        let bin_dir =
+          match bin_dir_str with
+          | Some d -> fp d
+          | None -> Filepath.path_dirname dest_dir </> fn "bin"
+        in
+
+        Install.install proj_file dest_dir bin_dir opam_install;
         if opam_install then Install.opam_install_file proj_file flags)
       ()
   in
   cmd |> Cli.help_flag
-  |> Cli.option_string "destdir" ~placeholder:"DIR" ~doc:"Override destination where to install"
+  |> Cli.option_string "destdir" ~placeholder:"DIR" ~doc:"Override destination where to install libraries"
+  |> Cli.option_string "bindir" ~placeholder:"DIR" ~doc:"Override destination where to install executables (default: destdir/../bin)"
   |> Cli.flag "opam" ~doc:"Only create the .install file for opam"
 
 (* ===== Test Command ===== *)

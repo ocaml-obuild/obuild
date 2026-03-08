@@ -145,8 +145,24 @@ let install_lib proj_file lib dest_dir =
     (Utils.showList "," fn_to_string (List.concat (List.map snd all_files)));
   copy_files all_files dest_dir dir_name
 
-let install_libs proj_file destdir opam =
-  if not opam then
-    List.iter (fun lib -> install_lib proj_file lib destdir) proj_file.Project.libs
-  else
+let install_exe exe bindir =
+  let target = Project.Executable.to_target exe in
+  let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
+  Build.sanity_check build_dir target;
+  let _, files = list_exe_files target build_dir in
+  log Report "installing executable %s\n" exe.Project.Executable.name;
+  Filesystem.mkdir_safe_recursive bindir 0o755 ;
+  List.iter
+    (fun file ->
+      let src = build_dir </> file in
+      let dst = bindir </> file in
+      Filesystem.copy_file src dst;
+      Unix.chmod (fp_to_string dst) 0o755)
+    files
+
+let install proj_file destdir bindir opam =
+  if not opam then begin
+    List.iter (fun lib -> install_lib proj_file lib destdir) proj_file.Project.libs;
+    List.iter (fun exe -> install_exe exe bindir) proj_file.Project.exes
+  end else
     List.iter (fun lib -> write_lib_meta proj_file lib) proj_file.Project.libs
