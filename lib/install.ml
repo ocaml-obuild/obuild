@@ -43,10 +43,17 @@ let opam_install_file proj_file flags =
       let print_target_files target list_files_fun =
         let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
         let _, files = list_files_fun target build_dir in
+        (* Library files go into a per-library subdirectory so each library
+           is a distinct findlib sub-package (e.g. ozzy/ozzy_core/META). *)
+        let dest_prefix = match target.Target.target_name with
+          | Name.Lib l -> Libname.to_string l ^ "/"
+          | _ -> ""
+        in
         List.iter
           (fun file ->
             let file_str = fn_to_string file in
-            add (sprintf "  \"%s/%s\" {\"%s\"}\n" (fp_to_string build_dir) file_str file_str))
+            add (sprintf "  \"%s/%s\" {\"%s%s\"}\n"
+              (fp_to_string build_dir) file_str dest_prefix file_str))
           files
       in
       add (sprintf "%s: [\n" "lib");
