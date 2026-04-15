@@ -3,7 +3,7 @@
 # Ensure we run from the repository root regardless of where the script is called from
 cd "$(dirname "$0")" || exit 1
 
-libs="unix.cma"
+libs="unix.cma str.cma"
 
 OCAMLC="ocamlc -g -I +unix"
 OCAMLVER=$($OCAMLC -version)

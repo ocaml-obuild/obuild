@@ -192,7 +192,40 @@ let generate_cstubs_types task_index task lib bstate task_context dag =
         | Process.Success (c_code, _, _) ->
           (* Write the C program *)
           let discover_c = autogen_dir </> fn "discover.c" in
-          Filesystem.write_file_if_changed discover_c c_code;
+          (* Post-process C code to fix anonymous struct/enum compatibility:
+             Replace offsetof(struct Foo, ...) with offsetof(Foo, ...)
+             Replace sizeof(struct Foo) with sizeof(Foo)
+             Replace sizeof(enum Foo) with sizeof(Foo)
+             Replace "struct { ... struct Foo x; }" with "struct { ... Foo x; }"
+             Replace "(enum Foo)" casts with "(Foo)"
+             This makes it work with both named and anonymous types *)
+          let step1 = Str.global_replace
+            (Str.regexp "offsetof(struct \\([A-Za-z_][A-Za-z0-9_]*\\),")
+            "offsetof(\\1,"
+            c_code
+          in
+          let step2 = Str.global_replace
+            (Str.regexp "sizeof(struct \\([A-Za-z_][A-Za-z0-9_]*\\))")
+            "sizeof(\\1)"
+            step1
+          in
+          let step3 = Str.global_replace
+            (Str.regexp "sizeof(enum \\([A-Za-z_][A-Za-z0-9_]*\\))")
+            "sizeof(\\1)"
+            step2
+          in
+          let step4 = Str.global_replace
+            (Str.regexp "struct { char c; struct \\([A-Za-z_][A-Za-z0-9_]*\\) x; }")
+            "struct { char c; \\1 x; }"
+            step3
+          in
+          (* Fix enum casts: (enum Foo) -> (Foo) *)
+          let fixed_c_code = Str.global_replace
+            (Str.regexp "(enum \\([A-Za-z_][A-Za-z0-9_]*\\))")
+            "(\\1)"
+            step4
+          in
+          Filesystem.write_file_if_changed discover_c fixed_c_code;
           log Report "  Generated %s\n%!" (fp_to_string discover_c);
 
           (* Compile the C program - include ctypes directory for ctypes_cstubs_internals.h *)
@@ -510,6 +543,28 @@ let generate_cstubs_functions task_index task lib bstate task_context dag =
         | Process.Success (output, _, _) ->
           log Report "  %s\n%!" output;
           log Report "  Stubs generated successfully\n%!";
+          (* Post-process generated C stubs for anonymous struct/enum compatibility *)
+          let c_stubs_file = autogen_dir </> fn (c_lib_name ^ "_stubs.c") in
+          if Filesystem.exists c_stubs_file then begin
+            let c_content = Filesystem.read_file c_stubs_file in
+            let step1 = Str.global_replace
+              (Str.regexp "struct \\([A-Za-z_][A-Za-z0-9_]*\\)\\*")
+              "\\1*"
+              c_content
+            in
+            let step2 = Str.global_replace
+              (Str.regexp "struct \\([A-Za-z_][A-Za-z0-9_]*\\) ")
+              "\\1 "
+              step1
+            in
+            let fixed_content = Str.global_replace
+              (Str.regexp "(enum \\([A-Za-z_][A-Za-z0-9_]*\\))")
+              "(\\1)"
+              step2
+            in
+            Filesystem.write_file_if_changed c_stubs_file fixed_content;
+            log Report "  Post-processed C stubs for compatibility\n%!";
+          end;
           Scheduler.FinishTask task
         )
       )

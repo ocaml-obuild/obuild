@@ -54,7 +54,7 @@ library obuild_base
 library obuild_core
   modules: analyze, build, build_cstubs, buildprogs, configure, dag, dagutils, dependencies, dist, exception, expr, filetype, findlibConf, gconf, generators, helper, hier, libname, meta, metacache, modname, obuild_lexer, obuild_ast, obuild_parser, obuild_validate, pp, prepare_types, ppx_resolver, prepare, process, prog, project, project_read, scheduler, target, taskdep, types, utils
   src-dir: lib/core
-  build-deps: unix, obuild_base
+  build-deps: unix, obuild_base, str
 
 library obuild
   modules: doc, help, init, install, sdist
