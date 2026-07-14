@@ -656,7 +656,14 @@ let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadL
                  let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
                  List.fold_left
                    (fun acc (_, a) ->
-                     let files = String_utils.split ' ' a in
+                     (* A virtual/meta package declares [archive(...) = ""] (empty),
+                        equivalent to having no archive: it contributes nothing to
+                        the link line (but its [requires] are still followed). The
+                        split then yields empty tokens — drop them so [fn] is never
+                        handed "" (which raises Filepath.EmptyFilename). *)
+                     let files =
+                       List.filter (fun f -> f <> "") (String_utils.split ' ' a)
+                     in
                      acc @ List.map (fun f -> libDir </> fn f) files)
                    [] archives
                else
