@@ -264,6 +264,7 @@ type t = {
   examples : Example.t list;
   extra_srcs : Filepath.filepath list;
   extra_tools : Filepath.filename list;
+  vendor_dirs : Filepath.filepath list;
   configure_script : Filepath.filepath option;
   ocaml_extra_args : string list option;
 }

@@ -396,6 +396,7 @@ let convert (proj : project) : Project.t =
     examples = List.map convert_example proj.project_examples;
     extra_srcs = List.map fp proj.project_extra_srcs;
     extra_tools = List.map fn proj.project_extra_tools;
+    vendor_dirs = List.map fp proj.project_vendor_dirs;
     configure_script = Compat.Option.map fp proj.project_configure_script;
     ocaml_extra_args =
       (match proj.project_ocaml_extra_args with

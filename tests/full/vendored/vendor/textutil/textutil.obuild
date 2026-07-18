@@ -1,0 +1,6 @@
+name: textutil
+version: 0.1
+obuild-ver: 1
+library textutil
+  modules: Caseit
+  src-dir: src

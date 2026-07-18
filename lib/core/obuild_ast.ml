@@ -187,6 +187,7 @@ type project = {
   (* Build configuration *)
   project_extra_srcs: string list;
   project_extra_tools: string list;
+  project_vendor_dirs: string list;
   project_configure_script: string option;
   project_ocaml_ver: string option;      (* version constraint expr *)
   project_ocaml_extra_args: string list;

@@ -1,0 +1,8 @@
+name: greeter
+version: 0.1
+obuild-ver: 1
+library greeter
+  modules: Hello
+  src-dir: src
+  build-deps: textutil
+  pack: true

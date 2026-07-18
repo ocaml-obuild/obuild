@@ -222,6 +222,7 @@ type t = {
   examples : Example.t list;
   extra_srcs : filepath list;
   extra_tools : filename list;
+  vendor_dirs : filepath list;
   configure_script : filepath option;
   ocaml_extra_args : string list option;
 }
@@ -247,6 +248,7 @@ let make =
     benchs = [];
     examples = [];
     extra_srcs = [];
+    vendor_dirs = [];
     configure_script = None;
     ocaml_extra_args = None;
   }

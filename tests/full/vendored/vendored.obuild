@@ -1,0 +1,9 @@
+name: vendored
+version: 1.0
+obuild-ver: 1
+synopsis: vendored sub-projects test — vendor-dirs with cross-vendor deps and pack
+vendor-dirs: vendor
+
+executable main
+  main-is: main.ml
+  build-deps: greeter
