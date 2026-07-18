@@ -233,7 +233,7 @@ let resolve_module_ppx_flags bstate target =
     @param pp preprocessor settings
     @param file_search_paths search paths for finding modules
     @return (internal_deps, external_deps, use_thread_flag) *)
-let analyze_module_dependencies dep_cache srcFile hier pp file_search_paths =
+let analyze_module_dependencies ?pack_members dep_cache srcFile hier pp file_search_paths =
   let cache_key = fp_to_string srcFile in
   let allDeps =
     match (try Some (Hashtbl.find dep_cache cache_key) with Not_found -> None) with
@@ -248,17 +248,23 @@ let analyze_module_dependencies dep_cache srcFile hier pp file_search_paths =
   log Debug "  %s depends on %s\n%!" (Hier.to_string hier)
     (String.concat "," (List.map Modname.to_string allDeps));
 
-  (* Partition dependencies into internal (same directory) vs external *)
+  (* Partition dependencies into internal (same directory) vs external.
+     For pack: true libraries the membership is known from the declared module
+     list; probing the global hier registry would pollute it with unqualified
+     names and defeat the namespacing. *)
   let cwdDepsInDir, otherDeps =
-    List.partition
-      (fun dep ->
-        try
-          let entry = Hier.get_file_entry (Hier.of_modname dep) (file_search_paths hier) in
-          match entry with
-          | Hier.DirectoryEntry (p, _) | Hier.FileEntry (p, _) | Hier.GeneratedFileEntry (p, _, _)
-            -> List.mem p (file_search_paths hier)
-        with Not_found -> false)
-      allDeps
+    match pack_members with
+    | Some members -> List.partition (fun dep -> List.mem dep members) allDeps
+    | None ->
+        List.partition
+          (fun dep ->
+            try
+              let entry = Hier.get_file_entry (Hier.of_modname dep) (file_search_paths hier) in
+              match entry with
+              | Hier.DirectoryEntry (p, _) | Hier.FileEntry (p, _) | Hier.GeneratedFileEntry (p, _, _)
+                -> List.mem p (file_search_paths hier)
+            with Not_found -> false)
+          allDeps
   in
 
   log Debug "  %s internally depends on %s\n%!" (Hier.to_string hier)
@@ -735,9 +741,82 @@ let get_modules_desc bstate target toplevelModules =
       { dep_includes = flat_includes; dep_pp = targetPP }
       ml_files;
 
+  (* pack: true — wrap the library's declared modules under a virtual top-level
+     module named after the library.  Members are pre-registered in the hier
+     registry pointing at their physical sources (which live directly in
+     src-dir, not in a subdirectory named after the pack), and the pack root is
+     described as a directory module so the existing -pack machinery applies.
+     Synthetic modules (cstubs, generate blocks) stay unpacked at top level. *)
+  let pack_info =
+    if not target.target_pack then
+      None
+    else
+      match target.target_name with
+      | Target.Name.Lib lname ->
+          let raw = Libname.to_string lname in
+          let sanitized = String.map (fun c -> if c = '.' || c = '-' then '_' else c) raw in
+          let pack_mod = Modname.of_string (Compat.string_capitalize sanitized) in
+          let is_synthetic h =
+            is_cstubs_generated_module h
+            || find_generate_block_for_module h <> None
+            || is_globally_generated_module h
+          in
+          let declared, synthetic =
+            List.partition (fun h -> not (is_synthetic h)) toplevelModules
+          in
+          let srcdirs = target.target_obits.target_srcdir in
+          let pack_hier = Hier.make [ pack_mod ] in
+          let pack_dirname = fn (Compat.string_uncapitalize (Modname.to_string pack_mod)) in
+          (match srcdirs with
+          | dir :: _ -> Hier.register_directory_entry pack_hier dir (dir </> pack_dirname)
+          | [] -> ());
+          let find_source m =
+            let base = Modname.to_string m in
+            let rec try_dirs = function
+              | [] -> None
+              | dir :: rest ->
+                  let f1 = dir </> (fn (Compat.string_uncapitalize base) <.> "ml") in
+                  let f2 = dir </> (fn base <.> "ml") in
+                  if Filesystem.exists f1 then Some (dir, f1)
+                  else if Filesystem.exists f2 then Some (dir, f2)
+                  else try_dirs rest
+            in
+            try_dirs srcdirs
+          in
+          let member_hiers =
+            List.map
+              (fun h ->
+                if Hier.lvl h > 0 then
+                  failwith
+                    (Printf.sprintf
+                       "pack: true library %s: nested module %s is not supported, only flat \
+                        module lists"
+                       raw (Hier.to_string h));
+                let m = Hier.root h in
+                let wrapped = Hier.make [ pack_mod; m ] in
+                match find_source m with
+                | Some (dir, file) ->
+                    Hier.register_synthetic_entry wrapped dir file;
+                    wrapped
+                | None -> raise (Module.NotFound (srcdirs, h)))
+              declared
+          in
+          Some (pack_mod, pack_hier, member_hiers, List.map Hier.root declared, synthetic)
+      | _ -> None
+  in
+  let toplevelModules =
+    match pack_info with
+    | None -> toplevelModules
+    | Some (_, pack_hier, _, _, synthetic) -> pack_hier :: synthetic
+  in
+
   let get_one hier =
     let moduleName = Hier.to_string hier in
     log Verbose "Analysing %s\n%!" moduleName;
+    match pack_info with
+    | Some (_, pack_hier, member_hiers, _, _) when hier = pack_hier ->
+        Module.make_dir current_dir member_hiers
+    | _ ->
     (* For cstubs-generated modules, return a minimal description without file analysis *)
     if is_cstubs_generated_module hier then (
       (* Get library-specific autogen dir for cstubs generated files *)
@@ -835,8 +914,15 @@ let get_modules_desc bstate target toplevelModules =
             log Debug "  %s has interface (mtime=%f)\n%!" moduleName intfModTime;
 
           (* Analyze module dependencies *)
+          let pack_members =
+            match pack_info with
+            | Some (pack_mod, _, _, member_mods, _)
+              when Hier.lvl hier > 0 && Hier.root hier = pack_mod ->
+                Some member_mods
+            | _ -> None
+          in
           let cwdDeps, otherDeps, use_thread =
-            analyze_module_dependencies dep_cache srcFile hier pp file_search_paths
+            analyze_module_dependencies ?pack_members dep_cache srcFile hier pp file_search_paths
           in
 
           (* Filter out modules that are generated by OTHER targets - they come from library deps.

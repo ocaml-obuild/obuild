@@ -188,6 +188,7 @@ let convert_target_common name typ ?cstubs (tc : target_common) : Target.target 
     target_extras = List.map convert_per tc.per;
     target_buildable = convert_runtime_bool tc.buildable;
     target_installable = convert_runtime_bool tc.installable;
+    target_pack = false;
   }
 
 (* ============================================================ *)
@@ -200,6 +201,7 @@ let rec convert_library (lib : library) : Project.Library.t =
   let target =
     convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target
   in
+  let target = { target with Target.target_pack = lib.lib_pack } in
 
   (* Auto-add cstubs generated modules if present *)
   let base_modules = List.map module_name_to_hier lib.lib_modules in
@@ -241,6 +243,7 @@ and convert_sublibrary parent_name (lib : library) : Project.Library.t =
   let target =
     convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target
   in
+  let target = { target with Target.target_pack = lib.lib_pack } in
 
   (* Auto-add cstubs generated modules if present *)
   let base_modules = List.map module_name_to_hier lib.lib_modules in

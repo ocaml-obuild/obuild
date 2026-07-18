@@ -296,9 +296,9 @@ let check_modules_exists target modules =
     (fun m ->
       (* Skip validation for cstubs-generated modules *)
       if not (List.mem m cstubs_generated_modules) then
-        try
-          ignore (Hier.get_file_entry m srcdir)
-        with Not_found -> raise (ModuleNotFound (target, m)))
+        (* side-effect-free probe: validation must not register entries in the
+           global hier table (pack: true libraries may reuse bare module names) *)
+        if not (Hier.source_exists m srcdir) then raise (ModuleNotFound (target, m)))
     modules
 
 (** Validate project configuration

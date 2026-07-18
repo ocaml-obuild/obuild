@@ -21,6 +21,10 @@ type file_entry =
 exception EmptyModuleHierarchy
 (** Raised when attempting to create an empty module hierarchy *)
 
+exception ModuleCollision of (string * Filepath.filepath * Filepath.filepath)
+(** Raised when a module name resolves to different source files in different
+    targets: (module name, already-registered source, conflicting source) *)
+
 (** {1 Construction and Conversion} *)
 
 val make : Modname.t list -> t
@@ -119,12 +123,22 @@ val get_dest_file_ext : Filepath.filepath -> t -> (Filetype.t -> Filetype.t) -> 
     using [ext_fn] to transform the source file type.
     @raise Not_found if hierarchy not cached *)
 
+val source_exists : t -> Filepath.filepath list -> bool
+(** [source_exists hier paths] checks whether a source file (ml, mli, directory
+    or generator input) provides this module in one of [paths], without
+    registering anything in the global registry. Used by project validation. *)
+
 val register_synthetic_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
 (** [register_synthetic_entry hier root_path full_path] registers a synthetic file entry
     for modules that will be generated during build (e.g., cstubs-generated modules,
     generate-block modules). This allows get_dest_file to work for these modules even
     before the source file exists. Replaces any existing entry (which may have been
     cached during dependency analysis before the module was identified as synthetic). *)
+
+val register_directory_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
+(** [register_directory_entry hier root_path full_path] registers a directory entry
+    for virtual pack modules ([pack: true] libraries). The full path's basename
+    determines the pack's artifact names and does not need to exist on disk. *)
 
 val register_generated_entry : t -> Filepath.filepath -> Filepath.filepath -> Filepath.filename -> unit
 (** [register_generated_entry hier root_path src_path output_file] registers a generated

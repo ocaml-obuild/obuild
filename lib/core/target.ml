@@ -151,6 +151,7 @@ type target = {
   target_extras : target_extra list;
   target_buildable : runtime_bool;
   target_installable : runtime_bool;
+  target_pack : bool;  (* library modules wrapped under one pack module *)
 }
 
 let new_target_cbits =
@@ -196,6 +197,7 @@ let new_target n ty buildable installable =
     target_obits = new_target_obits;
     target_cstubs = None;
     target_generates = [];
+    target_pack = false;
   }
 
 let new_target_extra objs =

@@ -134,6 +134,7 @@ type target = {
   target_extras      : target_extra list;
   target_buildable   : runtime_bool;
   target_installable : runtime_bool;
+  target_pack        : bool;  (** library modules wrapped under one pack module *)
 }
 
 val new_target_cbits : target_cbits

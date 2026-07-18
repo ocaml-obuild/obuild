@@ -29,18 +29,37 @@ let build_start_time = ref 0.0
  * if not valid gives the filepath that has changed.
  *)
 let check_destination_valid_with srcs (_, dest) =
+  let src_paths = List.map snd srcs in
   if Filesystem.exists dest then
-    let dest_time = Filesystem.get_modification_time dest in
-    try
-      Some
-        (List.find
-           (fun (_, path) ->
-             let mtime = Filesystem.get_modification_time path in
-             dest_time < mtime)
-           srcs)
-    with Not_found -> None
-  else
+    match Digests.check dest src_paths with
+    | Digests.Unchanged -> None
+    | Digests.Changed p ->
+        Digests.record_pending dest src_paths;
+        Some (try List.find (fun (_, sp) -> sp = p) srcs with Not_found -> (Filetype.FileO, p))
+    | Digests.InputSetChanged ->
+        Digests.record_pending dest src_paths;
+        Some (Filetype.FileO, current_dir)
+    | Digests.NoRecord -> (
+        (* no digest record yet: fall back to mtime comparison *)
+        let dest_time = Filesystem.get_modification_time dest in
+        try
+          let changed =
+            List.find
+              (fun (_, path) ->
+                let mtime = Filesystem.get_modification_time path in
+                dest_time < mtime)
+              srcs
+          in
+          Digests.record_pending dest src_paths;
+          Some changed
+        with Not_found ->
+          (* valid by mtime: create the record so future builds use digests *)
+          Digests.record_now dest src_paths;
+          None)
+  else begin
+    Digests.record_pending dest src_paths;
     Some (Filetype.FileO, current_dir)
+  end
 
 (* same as before but the list of sources is automatically determined
  * from the file DAG
@@ -352,11 +371,27 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
         List.map
           (fun (build_mode, comp_opt) ->
             let path = cstate.compilation_builddir_ml comp_opt in
-            let dest = (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h) in
+            (* the pack object embeds member implementations, so member objects
+               are inputs too — a .cmi-only check misses implementation-only
+               changes.  Use the per-mode object as dest so bytecode and native
+               don't share one staleness record. *)
+            let obj_ty = if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
+            let dest = (obj_ty, Hier.get_dest_file path obj_ty h) in
             let mdeps =
-              List.map
-                (fun m -> (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI m))
-                modules
+              List.concat
+                (List.map
+                   (fun m ->
+                     (* .cmx is only an approximation of the implementation:
+                        the native code lives in the companion .o, which must
+                        be tracked for implementation-only changes *)
+                     [ (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI m);
+                       (obj_ty, Hier.get_dest_file path obj_ty m) ]
+                     @
+                     if build_mode = Native then
+                       [ (Filetype.FileO, Hier.get_dest_file path Filetype.FileO m) ]
+                     else
+                       [])
+                   modules)
             in
             let dir = cstate.compilation_builddir_ml comp_opt in
             let fcompile =
@@ -406,10 +441,12 @@ let check_compilation_needed is_intf dep_descs dir_spec use_thread annot_mode pa
               run_ocaml_compile r_dir_spec use_thread annot_mode build_mode comp_opt pack_opt use_pp
                 oflags h )
         in
-        if invalid then
+        if invalid then begin
+          (* rebuilt because an earlier mode was invalid: snapshot inputs too *)
+          Digests.record_pending (snd dest) (List.map snd srcs);
           let _, ys = check invalid xs in
           (Some "", fcompile :: ys)
-        else
+        end else
           match
             check_destination_valid_with srcs dest
           with
@@ -722,7 +759,7 @@ let wait_for_c_objects c_obj_files destTime =
       poll_fresh ()))
 
 (** Helper: Check if relinking is needed by comparing modification times *)
-let check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt =
+let check_needs_relink cstate compiled c_obj_files dep_archives dest compiledType compileOpt =
   let destTime = Filesystem.get_modification_time dest in
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
@@ -731,16 +768,42 @@ let check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt 
      builds — see wait_for_c_objects). *)
   wait_for_c_objects c_obj_files destTime;
 
-  (* Check OCaml module files *)
-  try
-    Some
-      (List.find
-         (fun p -> destTime < Filesystem.get_modification_time p)
-         (List.map (fun m -> Hier.get_dest_file path ext m) compiled))
-  with Not_found -> (
-    (* Also check C object files *)
-    try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p) c_obj_files)
-    with Not_found -> None)
+  let srcs =
+    (* .cmx files are only implementation approximations: track the .o
+       companions so implementation-only changes trigger a relink *)
+    List.concat
+      (List.map
+         (fun m ->
+           Hier.get_dest_file path ext m
+           :: (if compiledType = Native then [ Hier.get_dest_file path Filetype.FileO m ] else []))
+         compiled)
+    @ c_obj_files @ dep_archives
+  in
+  if not (Filesystem.exists dest) then begin
+    Digests.record_pending dest srcs;
+    Some dest
+  end else
+    match Digests.check dest srcs with
+    | Digests.Unchanged -> None
+    | Digests.Changed p ->
+        Digests.record_pending dest srcs;
+        Some p
+    | Digests.InputSetChanged ->
+        (* e.g. a module or C source was removed: the link is stale even
+           though no remaining input is newer than the destination *)
+        Digests.record_pending dest srcs;
+        Some dest
+    | Digests.NoRecord -> (
+        match
+          (try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p) srcs)
+           with Not_found -> None)
+        with
+        | Some p ->
+            Digests.record_pending dest srcs;
+            Some p
+        | None ->
+            Digests.record_now dest srcs;
+            None)
 
 (** Main linking function - orchestrates dependency resolution, freshness checking, and linking *)
 let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType
@@ -763,7 +826,35 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       cstate.compilation_csources
   in
 
-  let depsTime = check_needs_relink cstate compiled c_obj_files dest compiledType compileOpt in
+  (* archives of internal library dependencies are linked into executables:
+     the link is stale when one of them changed, even if none of this
+     target's own modules did *)
+  let internal_dep_archives =
+    if is_lib target then
+      []
+    else
+      List.fold_left
+        (fun acc dep ->
+          match Hashtbl.find bstate.bstate_config.project_dep_data dep with
+          | Internal ->
+              let dir = Dist.get_build_exn (Dist.Target (Name.Lib dep)) in
+              let archive = dir </> Libname.to_cmca compiledType compileOpt dep in
+              (* .cmxa is only an index: native implementations live in the .a *)
+              let impls =
+                if compiledType = Native then
+                  [ dir </> fn (Libname.to_libstring dep ^ extDP compileOpt ^ ".a") ]
+                else
+                  []
+              in
+              (archive :: impls) @ acc
+          | System -> acc)
+        [] pkgDeps
+  in
+
+  let depsTime =
+    check_needs_relink cstate compiled c_obj_files internal_dep_archives dest compiledType
+      compileOpt
+  in
 
   if depsTime <> None then (
     let nb_step, nb_step_len = get_nb_step dag in
@@ -955,7 +1046,10 @@ let check task_index task task_context dag =
  *)
 let compile (bstate : build_state) task_context dag =
   build_start_time := Unix.gettimeofday ();
+  Digests.load ();
   let taskdep = Helper.Timing.measure_time "Taskdep.init" (fun () -> Taskdep.init dag) in
+  (* input digests snapshotted while dispatching each task, committed on success *)
+  let task_groups = Hashtbl.create initial_task_context_size in
   (* a compilation task has finished, terminate the process,
    * and process the result *)
   let schedule_finish (task, st) is_done =
@@ -963,7 +1057,10 @@ let compile (bstate : build_state) task_context dag =
     | Process.Success (_, warnings, duration) ->
         log Gconf.Debug "[TIMING] %s: %.3fs\n" (string_of_compile_step task) duration;
         (* TODO: store warnings for !isDone and print them if they are different when isDone *)
-        if is_done then print_warnings warnings
+        if is_done then begin
+          print_warnings warnings;
+          try Digests.commit_group (Hashtbl.find task_groups task) with Not_found -> ()
+        end
     | Process.Failure (out, er, _) -> (
         let msg = if String.length out > 0 then out ^ "\n" ^ er else er in
         match task with
@@ -975,6 +1072,7 @@ let compile (bstate : build_state) task_context dag =
 
   let dispatch (task_index, task) =
     let t0 = Unix.gettimeofday () in
+    Digests.begin_group ();
     let result = match task with
     | CompileC m -> compile_c task_index task m bstate task_context dag
     | CompileInterface m -> compile_module task_index task true m bstate task_context dag
@@ -988,6 +1086,7 @@ let compile (bstate : build_state) task_context dag =
     | LinkTarget _ -> link task_index task bstate task_context dag
     | CheckTarget _ -> check task_index task task_context dag
     in
+    Hashtbl.replace task_groups task (Digests.take_group ());
     let elapsed = Unix.gettimeofday () -. t0 in
     if elapsed > 0.01 then
       log Gconf.Debug "[TIMING] dispatch %s: %.3fs\n" (string_of_compile_step task) elapsed;
@@ -995,12 +1094,74 @@ let compile (bstate : build_state) task_context dag =
   in
 
   let stat =
-    Helper.Timing.measure_time "Scheduler.schedule" (fun () ->
-        Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish)
+    try
+      Helper.Timing.measure_time "Scheduler.schedule" (fun () ->
+          Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish)
+    with e ->
+      Digests.save ();
+      raise e
   in
+  Digests.save ();
   log Verbose "schedule finished: #processes=%d max_concurrency=%d\n"
     stat.Scheduler.nb_processes stat.Scheduler.max_runqueue;
   ()
+
+(* Extensions of per-module compilation artifacts that the stale sweep may
+   delete.  Link products (.cma, .cmxa, .a, .cmxs, executables) are never
+   touched. *)
+let sweep_extensions = [ "cmi"; "cmo"; "cmx"; "o"; "cmt"; "cmti"; "annot"; "spot"; "spit" ]
+
+(* Remove compilation artifacts in the target's build directories that the
+   current DAG no longer produces (module removed, renamed, or no longer
+   referenced).  Stale .cmi files otherwise stay visible through -I and can
+   mask errors or corrupt linking until a clean build. *)
+let sweep_stale_artifacts cstate =
+  let expected = Hashtbl.create 128 in
+  (* expected stems are full paths without the artifact extension; C objects
+     are named <file>.c.o so their stem is the .c path itself *)
+  List.iter
+    (fun comp_opt ->
+      let dir = cstate.compilation_builddir_ml comp_opt in
+      List.iter
+        (fun step ->
+          match step with
+          | CompileModule h | CompileInterface h | CompileDirectory h -> (
+              try
+                let dest = fp_to_string (Hier.get_dest_file dir Filetype.FileCMI h) in
+                Hashtbl.replace expected (String.sub dest 0 (String.length dest - 4)) ()
+              with Not_found -> ())
+          | _ -> ())
+        (Dag.get_nodes cstate.compilation_dag))
+    [ Normal; WithDebug; WithProf ];
+  List.iter
+    (fun c -> Hashtbl.replace expected (fp_to_string (cstate.compilation_builddir_c </> c)) ())
+    cstate.compilation_csources;
+  let ext_of s =
+    try
+      let i = String.rindex s '.' in
+      if String.contains_from s i '/' then None else Some (String.sub s (i + 1) (String.length s - i - 1))
+    with Not_found -> None
+  in
+  let rec walk dir =
+    Filesystem.iterate
+      (fun entry ->
+        let p = dir </> entry in
+        if Filesystem.is_dir p then
+          walk p
+        else
+          let s = fp_to_string p in
+          match ext_of s with
+          | Some ext when List.mem ext sweep_extensions ->
+              let stem = String.sub s 0 (String.length s - String.length ext - 1) in
+              if not (Hashtbl.mem expected stem) then begin
+                log Verbose "removing stale artifact %s\n" s;
+                try Sys.remove s with Sys_error _ -> ()
+              end
+          | _ -> ())
+      dir
+  in
+  let root = cstate.compilation_builddir_ml Normal in
+  if Filesystem.is_dir root then walk root
 
 let build_exe bstate exe =
   let target = Project.Executable.to_target exe in
@@ -1008,6 +1169,7 @@ let build_exe bstate exe =
   let task_context = Hashtbl.create initial_task_context_size in
   let build_dir = Dist.create_build (Dist.Target target.target_name) in
   let cstate = prepare_target bstate build_dir target modules in
+  sweep_stale_artifacts cstate;
   List.iter
     (fun n -> Hashtbl.add task_context n (cstate, target))
     (Dag.get_nodes cstate.compilation_dag);
@@ -1054,6 +1216,8 @@ let build_dag bstate proj_file targets_dag =
           Helper.Timing.measure_time "prepare_target" (fun () ->
               prepare_target bstate build_dir target modules)
         in
+        Helper.Timing.measure_time "stale artifact sweep" (fun () ->
+            sweep_stale_artifacts cstate);
         List.iter
           (fun n -> Hashtbl.add task_context n (cstate, target))
           (Dag.get_nodes cstate.compilation_dag);
@@ -1100,7 +1264,10 @@ let build_dag bstate proj_file targets_dag =
                 if Hashtbl.mem targets_deps ntask then begin
                   let children = Dag.get_leaves cur_dag in
                   let children = select_leaves children dups cur_dag in
-                  let roots = Hashtbl.find targets_deps ntask in
+                  (* find_all: a target may depend on several internal libraries,
+                     each registered with a separate Hashtbl.add — plain find
+                     would order this target against only the last one *)
+                  let roots = List.concat (Hashtbl.find_all targets_deps ntask) in
                   List.iter
                     (fun child -> List.iter (fun root -> Dag.add_edge child root dag) roots)
                     children

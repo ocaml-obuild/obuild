@@ -4,6 +4,9 @@ open Compat
 
 exception EmptyModuleHierarchy
 
+(* module name resolves to different source files in different targets *)
+exception ModuleCollision of (string * filepath * filepath)
+
 type t = Modname.t list
 
 (* first filepath is the source path, second is the actual path *)
@@ -110,7 +113,33 @@ let check_modname path modname ext =
 
 let get_filepath root_path hier ext : file_entry option =
   match SafeHashtbl.find_opt hiers hier with
-  | Some entry -> Some entry
+  | Some entry ->
+      (* the module already resolved through another root; if this root also
+         provides a source for it, the module name is ambiguous: the cached
+         entry would silently shadow the other source *)
+      let entry_root =
+        match entry with
+        | FileEntry (r, _) | GeneratedFileEntry (r, _, _) | DirectoryEntry (r, _) -> r
+      in
+      if entry_root <> root_path then begin
+        let path = add_prefix root_path hier in
+        match check_modname path (Modname.to_string (leaf hier)) ext with
+        | Some name ->
+            let conflicting =
+              if ext <> Filetype.FileOther "" then
+                path </> (fn name <.> Filetype.to_string ext)
+              else
+                path </> fn name
+            in
+            let existing =
+              match entry with
+              | FileEntry (_, f) | DirectoryEntry (_, f) | GeneratedFileEntry (_, f, _) -> f
+            in
+            if conflicting <> existing then
+              raise (ModuleCollision (to_string hier, existing, conflicting))
+        | None -> ()
+      end;
+      Some entry
   | None -> (
       let path = add_prefix root_path hier in
       let modname = Modname.to_string (leaf hier) in
@@ -209,7 +238,26 @@ let get_file_entry_maybe hier = SafeHashtbl.find_opt hiers hier
 
 let get_file_entry hier paths =
   match SafeHashtbl.find_opt hiers hier with
-  | Some entry -> entry
+  | Some entry ->
+      (* the module already resolved elsewhere (usually another target); if one
+         of this target's search paths also provides a source for it, the name
+         is ambiguous and the cached entry would silently shadow it *)
+      let entry_root, entry_file =
+        match entry with
+        | FileEntry (r, f) | GeneratedFileEntry (r, f, _) | DirectoryEntry (r, f) -> (r, f)
+      in
+      List.iter
+        (fun path ->
+          if path <> entry_root then
+            let prefixed = add_prefix path hier in
+            match check_modname prefixed (Modname.to_string (leaf hier)) Filetype.FileML with
+            | Some name ->
+                let conflicting = prefixed </> (fn name <.> Filetype.to_string Filetype.FileML) in
+                if conflicting <> entry_file then
+                  raise (ModuleCollision (to_string hier, entry_file, conflicting))
+            | None -> ())
+        paths;
+      entry
   | None ->
       list_find_map
         (fun path ->
@@ -219,6 +267,29 @@ let get_file_entry hier paths =
                  (fun lookup -> lookup hier path)
                  [ to_filename; to_directory; to_generators; to_interface ])
           with Not_found -> None)
+        paths
+
+(* Side-effect-free existence probe: check whether a source (ml, mli, directory
+   or generator input) provides this module in one of the given paths, WITHOUT
+   registering anything in the global hiers table.  Used by project validation,
+   which must not pollute the registry: for pack: true libraries the same bare
+   module name may legitimately exist in several targets. *)
+let source_exists hier paths =
+  match SafeHashtbl.find_opt hiers hier with
+  | Some _ -> true
+  | None ->
+      let name = Modname.to_string (leaf hier) in
+      List.exists
+        (fun path ->
+          let prefixed = add_prefix path hier in
+          check_modname prefixed name Filetype.FileML <> None
+          || check_modname prefixed name Filetype.FileMLI <> None
+          || check_modname prefixed name (Filetype.FileOther "") <> None
+          || List.exists
+               (fun gen ->
+                 let gname = Modname.to_string (gen.Generators.modname (leaf hier)) in
+                 check_modname prefixed gname (Filetype.FileOther gen.Generators.suffix) <> None)
+               (Generators.get_all ()))
         paths
 
 (* Register a synthetic file entry for modules that will be generated during build
@@ -237,6 +308,12 @@ let register_synthetic_entry hier root_path full_path =
    - output_file: the generated output filename (e.g., ollama_t.ml) *)
 let register_generated_entry hier root_path src_path output_file =
   Hashtbl.replace hiers hier (GeneratedFileEntry (root_path, src_path, output_file))
+
+(* Register a directory entry for virtual pack modules (pack: true libraries).
+   The full path's basename determines the pack's artifact names (<name>.cmi/.cmo/.cmx)
+   and does not need to exist on disk. *)
+let register_directory_entry hier root_path full_path =
+  Hashtbl.replace hiers hier (DirectoryEntry (root_path, full_path))
 
 let of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in

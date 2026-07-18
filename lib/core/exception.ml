@@ -42,6 +42,12 @@ let show exn =
   | Project.ModuleListEmpty l ->
       error "library %s doesn't have any modules defined.\n" (Libname.to_string l);
       exit exit_project_error
+  | Hier.ModuleCollision (m, existing, conflicting) ->
+      error "module %s is defined by multiple sources:\n" m;
+      eprintf "\t%s\n\t%s\n" (fp_to_string existing) (fp_to_string conflicting);
+      eprintf "  a module name can only be defined once per project.\n";
+      eprintf "  rename one of the files, or namespace a library with 'pack: true'\n";
+      exit exit_project_error
   | Project.InvalidConfFile c ->
       error "configuration file appears invalid: %s\n" c;
       exit exit_project_error
