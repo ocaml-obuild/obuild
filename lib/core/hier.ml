@@ -15,7 +15,11 @@ type file_entry =
   | GeneratedFileEntry of (filepath * filepath * filename)
     (* root_path, full_path, generated_path *)
   | DirectoryEntry of (filepath * filepath)
-(* root_path, full_path *)
+    (* root_path, full_path *)
+  | AliasedFileEntry of (filepath * filepath)
+(* root_path, full_path — like FileEntry, but destination artifact names are
+   derived from the hier leaf instead of the source file basename, so a source
+   like util.ml can compile to the unit Mylib__Util (module-alias wrapping) *)
 
 let file_entry_to_string = function
   | FileEntry (p, f) -> Printf.sprintf "FileEntry %s %s" (fp_to_string p) (fp_to_string f)
@@ -23,6 +27,8 @@ let file_entry_to_string = function
   | GeneratedFileEntry (p, f, n) ->
       Printf.sprintf "GeneratedFileEntry %s %s %s" (fp_to_string p) (fp_to_string f)
         (fn_to_string n)
+  | AliasedFileEntry (p, f) ->
+      Printf.sprintf "AliasedFileEntry %s %s" (fp_to_string p) (fp_to_string f)
 
 let hiers : (t, file_entry) Hashtbl.t = Hashtbl.create 128
 
@@ -119,7 +125,8 @@ let get_filepath root_path hier ext : file_entry option =
          entry would silently shadow the other source *)
       let entry_root =
         match entry with
-        | FileEntry (r, _) | GeneratedFileEntry (r, _, _) | DirectoryEntry (r, _) -> r
+        | FileEntry (r, _) | GeneratedFileEntry (r, _, _) | DirectoryEntry (r, _)
+        | AliasedFileEntry (r, _) -> r
       in
       if entry_root <> root_path then begin
         let path = add_prefix root_path hier in
@@ -133,7 +140,8 @@ let get_filepath root_path hier ext : file_entry option =
             in
             let existing =
               match entry with
-              | FileEntry (_, f) | DirectoryEntry (_, f) | GeneratedFileEntry (_, f, _) -> f
+              | FileEntry (_, f) | DirectoryEntry (_, f) | GeneratedFileEntry (_, f, _)
+              | AliasedFileEntry (_, f) -> f
             in
             if conflicting <> existing then
               raise (ModuleCollision (to_string hier, existing, conflicting))
@@ -191,6 +199,11 @@ let get_src_file dst_dir = function
   | FileEntry (_, f) -> f
   | GeneratedFileEntry (_, _, fn) -> dst_dir </> fn
   | DirectoryEntry (_, f) -> f
+  | AliasedFileEntry (_, f) -> f
+
+(* destination basename for an aliased entry: the (uncapitalized) hier leaf,
+   so the -o file name makes the compiler use the mangled unit name *)
+let aliased_dest_name hier = fn (string_uncapitalize (Modname.to_string (leaf hier)))
 
 let get_dest_file dst_dir ext hier =
   let entry =
@@ -210,6 +223,9 @@ let get_dest_file dst_dir ext hier =
       let filename = path_basename f in
       let path = add_prefix dst_dir hier in
       path </> (filename <.> Filetype.to_string ext)
+  | AliasedFileEntry (_, _) ->
+      let path = add_prefix dst_dir hier in
+      path </> (aliased_dest_name hier <.> Filetype.to_string ext)
 
 let get_dest_file_ext dst_dir hier ext_f =
   let entry =
@@ -232,6 +248,10 @@ let get_dest_file_ext dst_dir hier ext_f =
       let path = add_prefix dst_dir hier in
       let filetype = Filetype.of_filepath f in
       path </> (filename <.> Filetype.to_string (ext_f filetype))
+  | AliasedFileEntry (_, f) ->
+      let path = add_prefix dst_dir hier in
+      let filetype = Filetype.of_filepath f in
+      path </> (aliased_dest_name hier <.> Filetype.to_string (ext_f filetype))
 
 let to_interface hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
 let get_file_entry_maybe hier = SafeHashtbl.find_opt hiers hier
@@ -244,7 +264,8 @@ let get_file_entry hier paths =
          is ambiguous and the cached entry would silently shadow it *)
       let entry_root, entry_file =
         match entry with
-        | FileEntry (r, f) | GeneratedFileEntry (r, f, _) | DirectoryEntry (r, f) -> (r, f)
+        | FileEntry (r, f) | GeneratedFileEntry (r, f, _) | DirectoryEntry (r, f)
+        | AliasedFileEntry (r, f) -> (r, f)
       in
       List.iter
         (fun path ->
@@ -314,6 +335,11 @@ let register_generated_entry hier root_path src_path output_file =
    and does not need to exist on disk. *)
 let register_directory_entry hier root_path full_path =
   Hashtbl.replace hiers hier (DirectoryEntry (root_path, full_path))
+
+(* Register an aliased file entry: the source compiles under the unit name of
+   the hier leaf (e.g. util.ml as Mylib__Util) for module-alias wrapping. *)
+let register_aliased_entry hier root_path full_path =
+  Hashtbl.replace hiers hier (AliasedFileEntry (root_path, full_path))
 
 let of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in

@@ -262,6 +262,7 @@ let analyze_module_dependencies ?pack_members dep_cache srcFile hier pp file_sea
               let entry = Hier.get_file_entry (Hier.of_modname dep) (file_search_paths hier) in
               match entry with
               | Hier.DirectoryEntry (p, _) | Hier.FileEntry (p, _) | Hier.GeneratedFileEntry (p, _, _)
+              | Hier.AliasedFileEntry (p, _)
                 -> List.mem p (file_search_paths hier)
             with Not_found -> false)
           allDeps
@@ -678,6 +679,38 @@ let register_generator_outputs target =
 (* get every module description
  * and their relationship with each other
  *)
+(* wrapping mechanism for pack: true libraries *)
+type pack_mode =
+  | PackObj    (* -pack based, works on every OCaml version *)
+  | PackAlias  (* module-alias based, OCaml >= 4.02 *)
+
+type pack_desc = {
+  pd_mode : pack_mode;
+  pd_root_hier : Hier.t;            (* [Mylib] *)
+  pd_members : Hier.t list;         (* [Mylib.Util]... (PackObj) or [Mylib__Util]... (PackAlias) *)
+  pd_member_mods : Modname.t list;  (* original member names, for dep classification *)
+  pd_alias_prefix : string;         (* "Mylib" *)
+  pd_alias_file : Filepath.filepath; (* generated alias module source (PackAlias) *)
+  pd_synthetic : Hier.t list;       (* cstubs/generate-block modules, kept unpacked *)
+}
+
+let ocaml_supports_module_aliases bstate =
+  let version = get_ocaml_config_key "version" bstate.bstate_config in
+  let digits s =
+    let b = Buffer.create 4 in
+    (try String.iter (fun c -> if c >= '0' && c <= '9' then Buffer.add_char b c else raise Exit) s
+     with Exit -> ());
+    Buffer.contents b
+  in
+  match String_utils.split '.' version with
+  | maj :: minor :: _ -> (
+      try
+        let m = int_of_string (digits maj) in
+        let n = int_of_string (digits minor) in
+        m > 4 || (m = 4 && n >= 2)
+      with _ -> true)
+  | _ -> true
+
 let get_modules_desc bstate target toplevelModules =
   let autogenDir = Dist.get_build_exn Dist.Autogen in
   let modulesDeps = Hashtbl.create 64 in
@@ -741,11 +774,14 @@ let get_modules_desc bstate target toplevelModules =
       { dep_includes = flat_includes; dep_pp = targetPP }
       ml_files;
 
-  (* pack: true — wrap the library's declared modules under a virtual top-level
-     module named after the library.  Members are pre-registered in the hier
-     registry pointing at their physical sources (which live directly in
-     src-dir, not in a subdirectory named after the pack), and the pack root is
-     described as a directory module so the existing -pack machinery applies.
+  (* pack: true — wrap the library's declared modules under a single top-level
+     module named after the library.  Two mechanisms, selected by compiler
+     version:
+     - PackAlias (OCaml >= 4.02): members compile as flat mangled units
+       (Mylib__Util) plus a generated alias module (module Util = Mylib__Util),
+       dune-style.  Cheap incremental builds, no pack object.
+     - PackObj (older OCaml): members are wrapped under a virtual directory
+       level and combined with -pack via the existing directory machinery.
      Synthetic modules (cstubs, generate blocks) stay unpacked at top level. *)
   let pack_info =
     if not target.target_pack then
@@ -755,7 +791,8 @@ let get_modules_desc bstate target toplevelModules =
       | Target.Name.Lib lname ->
           let raw = Libname.to_string lname in
           let sanitized = String.map (fun c -> if c = '.' || c = '-' then '_' else c) raw in
-          let pack_mod = Modname.of_string (Compat.string_capitalize sanitized) in
+          let pack_str = Compat.string_capitalize sanitized in
+          let pack_mod = Modname.of_string pack_str in
           let is_synthetic h =
             is_cstubs_generated_module h
             || find_generate_block_for_module h <> None
@@ -766,10 +803,6 @@ let get_modules_desc bstate target toplevelModules =
           in
           let srcdirs = target.target_obits.target_srcdir in
           let pack_hier = Hier.make [ pack_mod ] in
-          let pack_dirname = fn (Compat.string_uncapitalize (Modname.to_string pack_mod)) in
-          (match srcdirs with
-          | dir :: _ -> Hier.register_directory_entry pack_hier dir (dir </> pack_dirname)
-          | [] -> ());
           let find_source m =
             let base = Modname.to_string m in
             let rec try_dirs = function
@@ -783,7 +816,7 @@ let get_modules_desc bstate target toplevelModules =
             in
             try_dirs srcdirs
           in
-          let member_hiers =
+          let member_mods =
             List.map
               (fun h ->
                 if Hier.lvl h > 0 then
@@ -792,30 +825,97 @@ let get_modules_desc bstate target toplevelModules =
                        "pack: true library %s: nested module %s is not supported, only flat \
                         module lists"
                        raw (Hier.to_string h));
-                let m = Hier.root h in
-                let wrapped = Hier.make [ pack_mod; m ] in
-                match find_source m with
-                | Some (dir, file) ->
-                    Hier.register_synthetic_entry wrapped dir file;
-                    wrapped
-                | None -> raise (Module.NotFound (srcdirs, h)))
+                Hier.root h)
               declared
           in
-          Some (pack_mod, pack_hier, member_hiers, List.map Hier.root declared, synthetic)
+          if ocaml_supports_module_aliases bstate then begin
+            let builddir = Dist.create_build (Dist.Target target.target_name) in
+            let members =
+              List.map
+                (fun m ->
+                  match find_source m with
+                  | None -> raise (Module.NotFound (srcdirs, Hier.make [ m ]))
+                  | Some (dir, file) ->
+                      let mangled = Modname.of_string (pack_str ^ "__" ^ Modname.to_string m) in
+                      let mh = Hier.make [ mangled ] in
+                      Hier.register_aliased_entry mh dir file;
+                      mh)
+                member_mods
+            in
+            let alias_file = builddir </> (fn (Compat.string_uncapitalize pack_str) <.> "ml") in
+            let content =
+              "(* generated by obuild: module aliases for pack:true library " ^ raw ^ " *)\n"
+              ^ String.concat ""
+                  (List.map
+                     (fun m ->
+                       Printf.sprintf "module %s = %s__%s\n" (Modname.to_string m) pack_str
+                         (Modname.to_string m))
+                     member_mods)
+            in
+            Filesystem.write_file_if_changed alias_file content;
+            Hier.register_synthetic_entry pack_hier builddir alias_file;
+            Some
+              {
+                pd_mode = PackAlias;
+                pd_root_hier = pack_hier;
+                pd_members = members;
+                pd_member_mods = member_mods;
+                pd_alias_prefix = pack_str;
+                pd_alias_file = alias_file;
+                pd_synthetic = synthetic;
+              }
+          end
+          else begin
+            let pack_dirname = fn (Compat.string_uncapitalize pack_str) in
+            (match srcdirs with
+            | dir :: _ -> Hier.register_directory_entry pack_hier dir (dir </> pack_dirname)
+            | [] -> ());
+            let members =
+              List.map
+                (fun m ->
+                  match find_source m with
+                  | None -> raise (Module.NotFound (srcdirs, Hier.make [ m ]))
+                  | Some (dir, file) ->
+                      let wrapped = Hier.make [ pack_mod; m ] in
+                      Hier.register_synthetic_entry wrapped dir file;
+                      wrapped)
+                member_mods
+            in
+            Some
+              {
+                pd_mode = PackObj;
+                pd_root_hier = pack_hier;
+                pd_members = members;
+                pd_member_mods = member_mods;
+                pd_alias_prefix = pack_str;
+                pd_alias_file = current_dir;
+                pd_synthetic = synthetic;
+              }
+          end
       | _ -> None
   in
   let toplevelModules =
     match pack_info with
     | None -> toplevelModules
-    | Some (_, pack_hier, _, _, synthetic) -> pack_hier :: synthetic
+    | Some pd -> (
+        match pd.pd_mode with
+        | PackObj -> pd.pd_root_hier :: pd.pd_synthetic
+        | PackAlias -> (pd.pd_root_hier :: pd.pd_members) @ pd.pd_synthetic)
   in
 
   let get_one hier =
     let moduleName = Hier.to_string hier in
     log Verbose "Analysing %s\n%!" moduleName;
     match pack_info with
-    | Some (_, pack_hier, member_hiers, _, _) when hier = pack_hier ->
-        Module.make_dir current_dir member_hiers
+    | Some pd when hier = pd.pd_root_hier && pd.pd_mode = PackObj ->
+        Module.make_dir current_dir pd.pd_members
+    | Some pd when hier = pd.pd_root_hier && pd.pd_mode = PackAlias ->
+        (* generated alias module: no dependency analysis — its aliases must
+           not become compile-time deps (that would invert the build order);
+           -no-alias-deps makes member cmis unnecessary when compiling it *)
+        let mtime = Filesystem.get_modification_time pd.pd_alias_file in
+        Module.make_file NoThread pd.pd_alias_file mtime SimpleModule None Pp.none
+          [ "-no-alias-deps"; "-w"; "-49" ] [] []
     | _ ->
     (* For cstubs-generated modules, return a minimal description without file analysis *)
     if is_cstubs_generated_module hier then (
@@ -850,7 +950,8 @@ let get_modules_desc bstate target toplevelModules =
       in
       let _srcPath, srcDir =
         match file_entry with
-        | Hier.FileEntry (s, d) | Hier.DirectoryEntry (s, d) | Hier.GeneratedFileEntry (s, d, _) ->
+        | Hier.FileEntry (s, d) | Hier.DirectoryEntry (s, d) | Hier.GeneratedFileEntry (s, d, _)
+        | Hier.AliasedFileEntry (s, d) ->
             (s, d)
       in
       let module_desc_ty =
@@ -859,7 +960,8 @@ let get_modules_desc bstate target toplevelModules =
         else
           let _srcPath, srcFile, intfFile =
             match file_entry with
-            | Hier.FileEntry (path, file) -> (path, file, Hier.ml_to_ext file Filetype.FileMLI)
+            | Hier.FileEntry (path, file) | Hier.AliasedFileEntry (path, file) ->
+                (path, file, Hier.ml_to_ext file Filetype.FileMLI)
             | Hier.DirectoryEntry (path, file) -> (path, file, Hier.ml_to_ext file Filetype.FileMLI)
             | Hier.GeneratedFileEntry (_path, file, generated) ->
                 let src_file = path_basename file in
@@ -916,13 +1018,30 @@ let get_modules_desc bstate target toplevelModules =
           (* Analyze module dependencies *)
           let pack_members =
             match pack_info with
-            | Some (pack_mod, _, _, member_mods, _)
-              when Hier.lvl hier > 0 && Hier.root hier = pack_mod ->
-                Some member_mods
+            | Some pd when List.mem hier pd.pd_members -> Some pd.pd_member_mods
             | _ -> None
           in
           let cwdDeps, otherDeps, use_thread =
             analyze_module_dependencies ?pack_members dep_cache srcFile hier pp file_search_paths
+          in
+          (* alias-wrapped members: sibling deps map to their mangled units and
+             every member depends on the generated alias module, which is opened
+             at compile time so bare sibling names resolve *)
+          let cwdDeps, alias_oflags =
+            match pack_info with
+            | Some pd when pd.pd_mode = PackAlias && List.mem hier pd.pd_members ->
+                let mangle d =
+                  if Hier.lvl d = 0 && List.mem (Hier.root d) pd.pd_member_mods then
+                    Hier.make
+                      [ Modname.of_string
+                          (pd.pd_alias_prefix ^ "__" ^ Modname.to_string (Hier.root d)) ]
+                  else
+                    d
+                in
+                ( pd.pd_root_hier
+                  :: List.filter (fun d -> d <> hier) (List.map mangle cwdDeps),
+                  [ "-open"; pd.pd_alias_prefix; "-w"; "-49" ] )
+            | _ -> (cwdDeps, [])
           in
 
           (* Filter out modules that are generated by OTHER targets - they come from library deps.
@@ -942,7 +1061,7 @@ let get_modules_desc bstate target toplevelModules =
           in
           Module.make_file use_thread srcFile modTime
             (match file_entry with
-            | Hier.FileEntry _ -> SimpleModule
+            | Hier.FileEntry _ | Hier.AliasedFileEntry _ -> SimpleModule
             | Hier.GeneratedFileEntry _ -> GeneratedModule
             | Hier.DirectoryEntry _ -> failwith "unexpected DirectoryEntry in get_modules_desc")
             intfDesc pp
@@ -951,7 +1070,7 @@ let get_modules_desc bstate target toplevelModules =
                  (List.map
                     (fun x -> x.target_extra_oflags)
                     (find_extra_matching target (Hier.to_string hier))))
-            @ ppx)
+            @ ppx @ alias_oflags)
             cwdDeps otherDeps
       in
       module_desc_ty

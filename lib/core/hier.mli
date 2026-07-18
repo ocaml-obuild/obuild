@@ -15,6 +15,9 @@ type file_entry =
     (** Generated source file: (root_path, full_path, generated_filename) *)
   | DirectoryEntry of (Filepath.filepath * Filepath.filepath)
     (** Directory representing a module: (root_path, full_path) *)
+  | AliasedFileEntry of (Filepath.filepath * Filepath.filepath)
+    (** Source file compiled under the hier leaf's unit name instead of the
+        file basename (module-alias wrapping): (root_path, full_path) *)
 
 (** {1 Exceptions} *)
 
@@ -139,6 +142,11 @@ val register_directory_entry : t -> Filepath.filepath -> Filepath.filepath -> un
 (** [register_directory_entry hier root_path full_path] registers a directory entry
     for virtual pack modules ([pack: true] libraries). The full path's basename
     determines the pack's artifact names and does not need to exist on disk. *)
+
+val register_aliased_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
+(** [register_aliased_entry hier root_path full_path] registers a source file that
+    compiles under the unit name of the hier leaf (e.g. util.ml as Mylib__Util),
+    used for module-alias wrapping of [pack: true] libraries on OCaml >= 4.02. *)
 
 val register_generated_entry : t -> Filepath.filepath -> Filepath.filepath -> Filepath.filename -> unit
 (** [register_generated_entry hier root_path src_path output_file] registers a generated
