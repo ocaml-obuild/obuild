@@ -15,3 +15,6 @@ let string_lowercase = String.lowercase_ascii
 let string_uppercase = String.uppercase_ascii
 let char_uppercase = Char.uppercase_ascii
 
+
+(* sub-second sleep, portable including native Windows *)
+let sleepf = Unix.sleepf

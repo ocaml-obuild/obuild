@@ -610,7 +610,7 @@ let wait_for_files cdep_files =
         in
         if still_missing = [] then true
         else begin
-          ignore (Unix.select [] [] [] poll_interval_sec);
+          Compat.sleepf poll_interval_sec;
           loop still_missing
         end
   in
@@ -753,57 +753,41 @@ let wait_for_c_objects c_obj_files destTime =
               c_obj_files
           in
           if not all_fresh then (
-            ignore (Unix.select [] [] [] mtime_poll_interval_sec);
+            Compat.sleepf mtime_poll_interval_sec;
             poll_fresh ())
       in
       poll_fresh ()))
 
 (** Helper: Check if relinking is needed by comparing modification times *)
 let check_needs_relink cstate compiled c_obj_files dep_archives dest compiledType compileOpt =
-  let destTime = Filesystem.get_modification_time dest in
   let ext = if compiledType = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let path = cstate.compilation_builddir_ml compileOpt in
 
   (* Wait for C objects to have fresh mtimes (skipped automatically on cached
      builds — see wait_for_c_objects). *)
-  wait_for_c_objects c_obj_files destTime;
+  wait_for_c_objects c_obj_files (Filesystem.get_modification_time dest);
 
   let srcs =
     (* .cmx files are only implementation approximations: track the .o
-       companions so implementation-only changes trigger a relink *)
+       companions so implementation-only changes trigger a relink.
+       Dep archives cover removed-input staleness via the input-set check. *)
     List.concat
       (List.map
          (fun m ->
-           Hier.get_dest_file path ext m
-           :: (if compiledType = Native then [ Hier.get_dest_file path Filetype.FileO m ] else []))
+           (ext, Hier.get_dest_file path ext m)
+           :: (if compiledType = Native then
+                 [ (Filetype.FileO, Hier.get_dest_file path Filetype.FileO m) ]
+               else
+                 []))
          compiled)
-    @ c_obj_files @ dep_archives
+    @ List.map (fun p -> (Filetype.FileO, p)) c_obj_files
+    @ List.map (fun p -> (Filetype.of_filepath p, p)) dep_archives
   in
-  if not (Filesystem.exists dest) then begin
-    Digests.record_pending dest srcs;
-    Some dest
-  end else
-    match Digests.check dest srcs with
-    | Digests.Unchanged -> None
-    | Digests.Changed p ->
-        Digests.record_pending dest srcs;
-        Some p
-    | Digests.InputSetChanged ->
-        (* e.g. a module or C source was removed: the link is stale even
-           though no remaining input is newer than the destination *)
-        Digests.record_pending dest srcs;
-        Some dest
-    | Digests.NoRecord -> (
-        match
-          (try Some (List.find (fun p -> destTime < Filesystem.get_modification_time p) srcs)
-           with Not_found -> None)
-        with
-        | Some p ->
-            Digests.record_pending dest srcs;
-            Some p
-        | None ->
-            Digests.record_now dest srcs;
-            None)
+  (* all staleness logic (digests, input sets, mtime fallback, recording)
+     lives in check_destination_valid_with, shared with every other step *)
+  match check_destination_valid_with srcs (Filetype.of_filepath dest, dest) with
+  | None -> None
+  | Some (_, p) -> Some p
 
 (** Main linking function - orchestrates dependency resolution, freshness checking, and linking *)
 let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs compiledType
@@ -1264,10 +1248,9 @@ let build_dag bstate proj_file targets_dag =
                 if Hashtbl.mem targets_deps ntask then begin
                   let children = Dag.get_leaves cur_dag in
                   let children = select_leaves children dups cur_dag in
-                  (* find_all: a target may depend on several internal libraries,
-                     each registered with a separate Hashtbl.add — plain find
-                     would order this target against only the last one *)
-                  let roots = List.concat (Hashtbl.find_all targets_deps ntask) in
+                  (* explicitly list-valued table: a target accumulates the
+                     roots of every internal library it depends on *)
+                  let roots = try Hashtbl.find targets_deps ntask with Not_found -> [] in
                   List.iter
                     (fun child -> List.iter (fun root -> Dag.add_edge child root dag) roots)
                     children
@@ -1275,7 +1258,9 @@ let build_dag bstate proj_file targets_dag =
                 let roots = Dag.get_roots cur_dag in
                 (* should be LinkTarget *)
                 List.iter
-                  (fun p -> Hashtbl.add targets_deps p roots)
+                  (fun p ->
+                    let existing = try Hashtbl.find targets_deps p with Not_found -> [] in
+                    Hashtbl.replace targets_deps p (roots @ existing))
                   (Dag.get_parents targets_dag ntask);
                 Taskdep.mark_done taskdep ntask
           done);

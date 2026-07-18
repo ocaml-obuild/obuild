@@ -15,3 +15,6 @@ let string_lowercase = String.lowercase
 let string_uppercase = String.uppercase
 let char_uppercase = Char.uppercase
 
+
+(* sub-second sleep; select-based (works on Unix; native Windows needs >= 4.03) *)
+let sleepf d = ignore (Unix.select [] [] [] d)

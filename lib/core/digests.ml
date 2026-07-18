@@ -52,6 +52,29 @@ let db_path () = Dist.get_path () </> fn "digests"
 
 let find_opt tbl k = try Some (Hashtbl.find tbl k) with Not_found -> None
 
+(* hex encoding done locally: Digest.to_hex/from_hex only exist on OCaml >= 4.00
+   and obuild supports 3.x *)
+let digest_to_hex (d : Digest.t) =
+  let b = Buffer.create 32 in
+  String.iter (fun c -> Buffer.add_string b (Printf.sprintf "%02x" (Char.code c))) (d :> string);
+  Buffer.contents b
+
+let digest_of_hex s : Digest.t =
+  let v c =
+    match c with
+    | '0' .. '9' -> Char.code c - Char.code '0'
+    | 'a' .. 'f' -> Char.code c - Char.code 'a' + 10
+    | 'A' .. 'F' -> Char.code c - Char.code 'A' + 10
+    | _ -> raise (Invalid_argument "digest_of_hex")
+  in
+  let n = String.length s / 2 in
+  let b = Buffer.create n in
+  for i = 0 to n - 1 do
+    Buffer.add_char b (Char.chr ((v s.[2 * i] * 16) + v s.[(2 * i) + 1]))
+  done;
+  Buffer.contents b
+
+
 let file_digest path =
   let s = fp_to_string path in
   let mtime = Filesystem.get_modification_time path in
@@ -146,21 +169,21 @@ let load () =
                   let ht, rest = split_first rest in
                   let hex, p = split_first rest in
                   Hashtbl.replace stat_cache p
-                    (float_of_string mt, float_of_string ht, Digest.from_hex hex)
+                    (float_of_string mt, float_of_string ht, digest_of_hex hex)
               | 'D' ->
                   flush_dest !inputs;
                   inputs := [];
                   cur_dest := Some rest
               | 'I' ->
                   let hex, p = split_first rest in
-                  inputs := (p, Digest.from_hex hex) :: !inputs
+                  inputs := (p, digest_of_hex hex) :: !inputs
               | _ -> ())
           (String_utils.lines_noempty content);
         flush_dest !inputs
       with _ ->
         (* unreadable or corrupted: start fresh, callers fall back to mtimes *)
-        Hashtbl.reset stat_cache;
-        Hashtbl.reset records
+        Hashtbl.clear stat_cache;
+        Hashtbl.clear records
   end
 
 let save () =
@@ -169,13 +192,13 @@ let save () =
     Hashtbl.iter
       (fun p (mt, ht, d) ->
         Buffer.add_string buf
-          (Printf.sprintf "F %.17g %.17g %s %s\n" mt ht (Digest.to_hex d) p))
+          (Printf.sprintf "F %.17g %.17g %s %s\n" mt ht (digest_to_hex d) p))
       stat_cache;
     Hashtbl.iter
       (fun dest inputs ->
         Buffer.add_string buf ("D " ^ dest ^ "\n");
         List.iter
-          (fun (p, d) -> Buffer.add_string buf ("I " ^ Digest.to_hex d ^ " " ^ p ^ "\n"))
+          (fun (p, d) -> Buffer.add_string buf ("I " ^ digest_to_hex d ^ " " ^ p ^ "\n"))
           inputs)
       records;
     Filesystem.write_file (db_path ()) (Buffer.contents buf);

@@ -1,0 +1,313 @@
+#!/bin/bash
+# Incremental-build regression suite.
+#
+# Each scenario builds a small project, mutates it, rebuilds, and asserts:
+#   - the resulting program output (catches under-rebuild / stale linking)
+#   - presence/absence of specific build steps (catches over-rebuild and
+#     missing-cutoff regressions)
+#   - convergence: a follow-up build must do nothing
+#
+# These lock in the digest-based staleness behavior: mtime races, early
+# cutoff, implementation-vs-interface propagation, artifact sweeping,
+# pack/alias wrapping and vendored projects.
+
+OBUILD=$(cd "$(dirname "$0")/../.." && pwd)/dist/build/obuild/obuild
+if [ ! -x "${OBUILD}" ]; then
+	echo "obuild has not been built"
+	exit 1
+fi
+
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+BLUE="\033[1;34m"
+WHITE="\033[0m"
+
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/obuild-incr.XXXXXX")
+trap 'rm -rf "${WORK}"' EXIT
+
+FAILED=0
+PASSED=0
+CURRENT=""
+LOG=""
+
+fail() {
+	echo -e "${RED}FAIL${WHITE}: ${CURRENT}: $1"
+	if [ -n "${LOG}" ] && [ -f "${LOG}" ]; then
+		sed 's/^/    | /' "${LOG}" | tail -20
+	fi
+	FAILED=$((FAILED+1))
+	# non-zero marker so the scenario function can bail out
+	return 1
+}
+
+scenario() {
+	CURRENT="$1"
+	echo -e "${BLUE} ==== ${CURRENT} ====${WHITE}"
+	DIR="${WORK}/${CURRENT}"
+	mkdir -p "${DIR}"
+	cd "${DIR}" || exit 1
+	LOG="${DIR}/build.log"
+}
+
+ok() {
+	echo -e "${GREEN}PASS${WHITE}: ${CURRENT}"
+	PASSED=$((PASSED+1))
+}
+
+# build, log output; fails the scenario if obuild fails
+build() {
+	if ! ${OBUILD} build > "${LOG}" 2>&1; then
+		fail "build failed"
+		return 1
+	fi
+}
+
+# build that is expected to fail
+build_should_fail() {
+	if ${OBUILD} build > "${LOG}" 2>&1; then
+		fail "build unexpectedly succeeded"
+		return 1
+	fi
+}
+
+configure() {
+	if ! ${OBUILD} configure > /dev/null 2>&1; then
+		fail "configure failed"
+		return 1
+	fi
+}
+
+# number of Compiling/Packing/Linking/Intfing steps in the last build log
+steps() {
+	grep -cE "\] (Compiling|Packing|Linking|Intfing)" "${LOG}"
+}
+
+expect_steps() {
+	local n
+	n=$(steps)
+	[ "$n" -eq "$1" ] || fail "expected $1 build steps, got $n"
+}
+
+expect_step() {
+	grep -E "\] (Compiling|Packing|Linking|Intfing)" "${LOG}" | grep -q "$1" \
+		|| fail "expected a step matching '$1'"
+}
+
+expect_no_step() {
+	if grep -E "\] (Compiling|Packing|Linking|Intfing)" "${LOG}" | grep -q "$1"; then
+		fail "unexpected step matching '$1'"
+	fi
+}
+
+expect_output() {
+	local out
+	out=$(./dist/build/main/main 2>&1)
+	[ "$out" = "$1" ] || fail "expected output '$1', got '$out'"
+}
+
+expect_converged() {
+	build || return 1
+	expect_steps 0
+}
+
+# common project: lib mylib (Api with mli, Impl without) + exe main
+write_lib_project() {
+	cat > p.obuild <<-'EOF'
+	name: incr
+	version: 1.0
+	obuild-ver: 1
+	library mylib
+	  modules: Api, Impl
+	  src-dir: lib
+	executable main
+	  main-is: main.ml
+	  build-deps: mylib
+	EOF
+	mkdir -p lib
+	echo 'let base = "one"' > lib/impl.ml
+	echo 'let msg () = "v-" ^ Impl.base' > lib/api.ml
+	echo 'val msg : unit -> string' > lib/api.mli
+	echo 'let () = print_endline (Api.msg ())' > main.ml
+}
+
+# ----------------------------------------------------------------------
+
+scenario touch-is-noop
+write_lib_project
+configure && build && expect_output "v-one" && {
+	touch lib/api.ml lib/impl.ml main.ml
+	build && expect_steps 0 && ok
+}
+
+scenario impl-change-propagates-in-one-build
+write_lib_project
+configure && build && {
+	echo 'let base = "two"' > lib/impl.ml
+	build && expect_output "v-two" && expect_converged && ok
+}
+
+scenario comment-change-cuts-off
+write_lib_project
+configure && build && {
+	echo '(* comment *)' >> lib/impl.ml
+	build && expect_step "Impl" && expect_no_step "Compiling Main" && expect_output "v-one" && expect_converged && ok
+}
+
+scenario interface-change-cascades
+write_lib_project
+configure && build && {
+	# add a value to the interface: dependents of api.cmi must recompile
+	echo 'val extra : int' >> lib/api.mli
+	echo 'let extra = 1' >> lib/api.ml
+	build && expect_step "Intfing Api" && expect_step "Compiling Api" && expect_output "v-one" && expect_converged && ok
+}
+
+scenario exe-relinks-on-lib-change
+write_lib_project
+configure && build && {
+	echo 'let base = "three"' > lib/impl.ml
+	build && expect_step "Linking executable" && expect_output "v-three" && ok
+}
+
+scenario module-removal-sweeps-artifacts
+write_lib_project
+configure && build && {
+	cat > p.obuild <<-'EOF'
+	name: incr
+	version: 1.0
+	obuild-ver: 1
+	library mylib
+	  modules: Api
+	  src-dir: lib
+	executable main
+	  main-is: main.ml
+	  build-deps: mylib
+	EOF
+	echo 'let msg () = "no-impl"' > lib/api.ml
+	rm lib/impl.ml
+	build && expect_output "no-impl" && {
+		if ls dist/build/lib-mylib/impl.cm* > /dev/null 2>&1; then
+			fail "stale impl artifacts not swept"
+		else
+			expect_converged && ok
+		fi
+	}
+}
+
+scenario removed-module-still-referenced-errors
+write_lib_project
+configure && build && {
+	rm lib/impl.ml
+	cat > p.obuild <<-'EOF'
+	name: incr
+	version: 1.0
+	obuild-ver: 1
+	library mylib
+	  modules: Api
+	  src-dir: lib
+	executable main
+	  main-is: main.ml
+	  build-deps: mylib
+	EOF
+	# api.ml still references Impl: must fail, not link against a stale cmi
+	build_should_fail && grep -q "Unbound module Impl" "${LOG}" && ok
+}
+
+scenario module-rename
+write_lib_project
+configure && build && {
+	git init -q . 2>/dev/null # not required; just ensures mv doesn't confuse anything
+	mv lib/impl.ml lib/core.ml
+	sed -i 's/Impl\.base/Core.base/' lib/api.ml
+	sed -i 's/modules: Api, Impl/modules: Api, Core/' p.obuild
+	build && expect_output "v-one" && {
+		if ls dist/build/lib-mylib/impl.cm* > /dev/null 2>&1; then
+			fail "stale impl artifacts not swept after rename"
+		else
+			expect_converged && ok
+		fi
+	}
+}
+
+scenario packed-lib-impl-change
+scenario_packed() {
+	cat > p.obuild <<-'EOF'
+	name: incr
+	version: 1.0
+	obuild-ver: 1
+	library wrapped
+	  modules: Util, Front
+	  src-dir: lib
+	  pack: true
+	executable main
+	  main-is: main.ml
+	  build-deps: wrapped
+	EOF
+	mkdir -p lib
+	echo 'let name = "w1"' > lib/util.ml
+	echo 'let who () = Util.name' > lib/front.ml
+	echo 'let () = print_endline (Wrapped.Front.who ())' > main.ml
+}
+scenario_packed
+configure && build && expect_output "w1" && {
+	echo 'let name = "w2"' > lib/util.ml
+	build && expect_output "w2" && expect_converged && ok
+}
+
+scenario vendored-change-propagates
+mkdir -p vendor/dep/src
+cat > p.obuild <<-'EOF'
+name: incr
+version: 1.0
+obuild-ver: 1
+vendor-dirs: vendor
+executable main
+  main-is: main.ml
+  build-deps: veldep
+EOF
+cat > vendor/dep/veldep.obuild <<-'EOF'
+name: veldep
+version: 0.1
+obuild-ver: 1
+library veldep
+  modules: V
+  src-dir: src
+EOF
+echo 'let v = "vend1"' > vendor/dep/src/v.ml
+echo 'let () = print_endline V.v' > main.ml
+configure && build && expect_output "vend1" && {
+	echo 'let v = "vend2"' > vendor/dep/src/v.ml
+	build && expect_output "vend2" && expect_converged && ok
+}
+
+scenario duplicate-module-is-an-error
+mkdir -p a b
+cat > p.obuild <<-'EOF'
+name: incr
+version: 1.0
+obuild-ver: 1
+library liba
+  modules: Util
+  src-dir: a
+library libb
+  modules: Util
+  src-dir: b
+executable main
+  main-is: main.ml
+  build-deps: liba, libb
+EOF
+echo 'let x = 1' > a/util.ml
+echo 'let x = 2' > b/util.ml
+echo 'let () = ()' > main.ml
+configure
+if ${OBUILD} build > "${LOG}" 2>&1; then
+	fail "collision build unexpectedly succeeded"
+else
+	grep -q "defined by multiple sources" "${LOG}" && ok
+fi
+
+# ----------------------------------------------------------------------
+cd /
+echo
+echo -e "passed: ${GREEN}${PASSED}${WHITE}  failed: ${RED}${FAILED}${WHITE}"
+[ "${FAILED}" -eq 0 ]
