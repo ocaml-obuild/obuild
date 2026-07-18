@@ -89,20 +89,38 @@ let execute_configure_script proj_file =
    the shell is about to invoke.  Identity is compared by (device, inode) so
    no realpath (OCaml 4.13+) is needed. *)
 let remove_build_content_keep_self () =
+  (* identity by (device, inode) on Unix.  On native Windows Unix.stat
+     reports 0 for both fields, so fall back to comparing normalized paths
+     (case-insensitive, / and \ equivalent). *)
+  let normalize p =
+    let p = if Filename.is_relative p then Filename.concat (Sys.getcwd ()) p else p in
+    let b = Buffer.create (String.length p) in
+    String.iter
+      (fun c ->
+        let c = if c = '/' then '\\' else c in
+        let c = if c >= 'A' && c <= 'Z' then Char.chr (Char.code c + 32) else c in
+        Buffer.add_char b c)
+      p;
+    Buffer.contents b
+  in
   let self_id =
     try
       let st = Unix.stat Sys.executable_name in
-      Some (st.Unix.st_dev, st.Unix.st_ino)
+      if st.Unix.st_ino = 0 then None else Some (st.Unix.st_dev, st.Unix.st_ino)
     with _ -> None
   in
+  let self_path = try Some (normalize Sys.executable_name) with _ -> None in
   let is_self path =
     match self_id with
-    | None -> false
     | Some id -> (
         try
           let st = Unix.stat (fp_to_string path) in
           (st.Unix.st_dev, st.Unix.st_ino) = id
         with _ -> false)
+    | None -> (
+        match self_path with
+        | Some sp -> (try normalize (fp_to_string path) = sp with _ -> false)
+        | None -> false)
   in
   let rec remove_content dir =
     Filesystem.iterate

@@ -175,11 +175,12 @@ let run_ocaml_linking includeDirs build_mode linking_mode compileType use_thread
         if not (Gconf.get_target_option_typed Executable_as_obj) then
           let real = fp_to_string dest in
           let basename = Filename.basename real in
-          if not (file_or_link_exists basename) then
-            if Utils.isWindows then
-              Filesystem.copy_file dest (fp basename)
-            else
-              Unix.symlink real basename
+          if Utils.isWindows then
+            (* a copy goes stale where a symlink doesn't: refresh it on every
+               link.  May fail if the copy is currently running (file in use) *)
+            (try Filesystem.copy_file dest (fp basename) with _ -> ())
+          else if not (file_or_link_exists basename) then
+            Unix.symlink real basename
   in
   let prog =
     match build_mode with
