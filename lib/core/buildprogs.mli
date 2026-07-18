@@ -25,7 +25,7 @@ type annotation_mode =
 type pack_opt = Hier.t option
 
 val run_ocaml_compile :
-  Prepare.dir_spec ->
+  Hier.registry -> Prepare.dir_spec ->
   Prepare.use_thread_flag ->
   annotation_mode ->
   Types.ocaml_compilation_mode ->
@@ -38,7 +38,7 @@ val run_ocaml_compile :
 (** Compile an OCaml module *)
 
 val run_ocaml_pack :
-  Filepath.filepath ->
+  Hier.registry -> Filepath.filepath ->
   Filepath.filepath ->
   annotation_mode ->
   Types.ocaml_compiled_type ->
@@ -49,7 +49,7 @@ val run_ocaml_pack :
 (** Pack multiple OCaml modules into one *)
 
 val run_ocaml_infer :
-  Filepath.filepath ->
+  Hier.registry -> Filepath.filepath ->
   Filepath.filepath list ->
   Pp.t ->
   Hier.t ->
@@ -79,14 +79,14 @@ val run_ranlib :
 (** Run ranlib on static archive *)
 
 val run_c_linking :
-  c_linking_mode ->
+  Gconf.t -> c_linking_mode ->
   Filepath.filepath list ->
   Filepath.filepath ->
   Process.t
 (** Link C object files *)
 
 val run_ocaml_linking :
-  Filepath.filepath list ->
+  Hier.registry -> Filepath.filepath list ->
   Types.ocaml_compiled_type ->
   linking_mode ->
   Types.ocaml_compilation_option ->

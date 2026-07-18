@@ -105,6 +105,7 @@ val string_of_compile_step : compile_step -> string
 
 (** Compilation state for a single target *)
 type compilation_state = {
+  compilation_hier : Hier.registry;
   compilation_modules  : (Hier.t, Module.t) Hashtbl.t;
   compilation_csources : Filepath.filename list;
   compilation_dag      : compile_step Dag.t;

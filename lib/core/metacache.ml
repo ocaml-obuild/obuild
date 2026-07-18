@@ -3,7 +3,11 @@ open Helper
 
 let initial_cache_size = 128
 
-let pkgs_cache : (string, Meta.t) Hashtbl.t = Hashtbl.create initial_cache_size
+(* META cache, one per build invocation (carried in Analyze.project_config).
+   No global state: caching is scoped to the build that populated it. *)
+type t = (string, Meta.t) Hashtbl.t
+
+let create () : t = Hashtbl.create initial_cache_size
 
 let get_from_disk name =
   log Debug "  fetching META %s\n%!" name;
@@ -12,28 +16,26 @@ let get_from_disk name =
   with Meta.LibraryNotFound n ->
     raise (Dependencies.DependencyMissing n)
 
-let get name =
+let get cache name =
   try
-    Hashtbl.find pkgs_cache name
+    Hashtbl.find cache name
   with Not_found ->
     let r = get_from_disk name in
-    Hashtbl.add pkgs_cache name r;
+    Hashtbl.add cache name r;
     r
 
-let get_from_cache lib =
+let get_from_cache cache lib =
   try
-    let (fp,pkg) = Hashtbl.find pkgs_cache lib.Libname.main_name in
+    let (fp,pkg) = Hashtbl.find cache lib.Libname.main_name in
     (* Always return the root package - let callers do subpackage resolution *)
     (fp,pkg)
   with Not_found ->
     failwith (Printf.sprintf "package %s not found in the hashtbl: internal error" (Libname.to_string lib))
 
-let add name meta =
-  Hashtbl.add pkgs_cache name meta
+let add cache name meta =
+  Hashtbl.add cache name meta
 
-let find name =
+let find cache name =
   try
-    Some (Hashtbl.find pkgs_cache name)
+    Some (Hashtbl.find cache name)
   with Not_found -> None
-
-let clear () = Hashtbl.clear pkgs_cache

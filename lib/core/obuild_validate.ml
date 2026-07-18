@@ -287,10 +287,10 @@ let convert_executable (exe : executable) : Project.Executable.t =
 (* Convert test *)
 (* ============================================================ *)
 
-let convert_test (t : test) : Project.Test.t =
+let convert_test conf (t : test) : Project.Test.t =
   let target_name = Target.Name.Test t.test_name in
   let target = convert_target_common target_name Target.Typ.Test t.test_target in
-  Project.Test.make
+  Project.Test.make conf
     ~name:t.test_name
     ~main:(fn t.test_main)
     ~target
@@ -301,19 +301,19 @@ let convert_test (t : test) : Project.Test.t =
 (* Convert benchmark *)
 (* ============================================================ *)
 
-let convert_benchmark (b : benchmark) : Project.Bench.t =
+let convert_benchmark conf (b : benchmark) : Project.Bench.t =
   let target_name = Target.Name.Bench b.bench_name in
   let target = convert_target_common target_name Target.Typ.Bench b.bench_target in
-  Project.Bench.make ~name:b.bench_name ~main:(fn b.bench_main) ~target
+  Project.Bench.make conf ~name:b.bench_name ~main:(fn b.bench_main) ~target
 
 (* ============================================================ *)
 (* Convert example *)
 (* ============================================================ *)
 
-let convert_example (ex : example) : Project.Example.t =
+let convert_example conf (ex : example) : Project.Example.t =
   let target_name = Target.Name.Example ex.example_name in
   let target = convert_target_common target_name Target.Typ.Test ex.example_target in
-  Project.Example.make ~name:ex.example_name ~main:(fn ex.example_main) ~target
+  Project.Example.make conf ~name:ex.example_name ~main:(fn ex.example_main) ~target
 
 (* ============================================================ *)
 (* Convert flag *)
@@ -370,7 +370,7 @@ let validate_targets (proj : project) =
 (* ============================================================ *)
 
 (** Convert and validate AST project to Project.t *)
-let convert (proj : project) : Project.t =
+let convert conf (proj : project) : Project.t =
   (* Validate first *)
   validate_required_fields proj;
   validate_targets proj;
@@ -391,9 +391,9 @@ let convert (proj : project) : Project.t =
     generators = List.map convert_generator proj.project_generators;
     libs = List.map convert_library proj.project_libs;
     exes = List.map convert_executable proj.project_exes;
-    tests = List.map convert_test proj.project_tests;
-    benchs = List.map convert_benchmark proj.project_benchs;
-    examples = List.map convert_example proj.project_examples;
+    tests = List.map (convert_test conf) proj.project_tests;
+    benchs = List.map (convert_benchmark conf) proj.project_benchs;
+    examples = List.map (convert_example conf) proj.project_examples;
     extra_srcs = List.map fp proj.project_extra_srcs;
     extra_tools = List.map fn proj.project_extra_tools;
     vendor_dirs = List.map fp proj.project_vendor_dirs;
@@ -405,11 +405,11 @@ let convert (proj : project) : Project.t =
   }
 
 (** Parse and convert from string *)
-let parse_and_convert input : Project.t =
+let parse_and_convert conf input : Project.t =
   let ast = Obuild_parser.parse input in
-  convert ast
+  convert conf ast
 
 (** Parse and convert from file *)
-let parse_and_convert_file path : Project.t =
+let parse_and_convert_file conf path : Project.t =
   let ast = Obuild_parser.parse_file path in
-  convert ast
+  convert conf ast

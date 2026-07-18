@@ -39,17 +39,23 @@ type custom = {
   custom_module_name : string option;     (** Module name pattern if different from base *)
 }
 
-val get_all : unit -> t list
+(** The set of generators available to a build (no global state) *)
+type set
+
+val make_set : custom list -> set
+(** Build the generator set from the project's custom generator definitions *)
+
+val get_all : set -> t list
 (** Get list of all registered generators (built-in + custom) *)
 
-val is_generator_ext : string -> bool
+val is_generator_ext : set -> string -> bool
 (** Check if file extension has a registered generator *)
 
-val get_generator : Filepath.filepath -> t
+val get_generator : set -> Filepath.filepath -> t
 (** Get generator for filepath based on extension
     @raise GeneratorNotFound if no generator found *)
 
-val run : Filepath.filepath -> Filepath.filepath -> string -> unit
+val run : set -> Filepath.filepath -> Filepath.filepath -> string -> unit
 (** Run generator for source file
     @param dest Destination filepath
     @param src Source filepath
@@ -58,18 +64,13 @@ val run : Filepath.filepath -> Filepath.filepath -> string -> unit
 
 (** {2 Custom Generator Registration} *)
 
-val register_custom : custom -> unit
-(** Register a custom generator from project file *)
 
-val register_customs : custom list -> unit
-(** Register multiple custom generators *)
 
-val clear_custom_generators : unit -> unit
-(** Clear all custom generators (useful for testing) *)
 
 (** {2 Multi-Input Generators (for generate blocks)} *)
 
 val run_custom_multi :
+  set ->
   generator_name:string ->
   dest:Filepath.filepath ->
   sources:Filepath.filepath list ->
@@ -86,7 +87,7 @@ val run_custom_multi :
 val get_custom_outputs : custom -> src:Filepath.filepath -> Filepath.filename list
 (** Get the output files for a custom generator given a source file *)
 
-val find_generator_by_name : string -> custom option
+val find_generator_by_name : set -> string -> custom option
 (** Find a custom generator by name *)
 
 (** {2 Variable Substitution} *)

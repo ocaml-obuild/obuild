@@ -20,7 +20,7 @@ type flag_action =
   | SetFlag of string     (** Enable a flag *)
   | ClearFlag of string   (** Disable a flag *)
 
-val run : Project.t -> flag_action list -> (string * bool) list -> unit
+val run : Hier.registry -> Project.t -> flag_action list -> (string * bool) list -> unit
 (** [run proj_file user_flags user_opts] configures the project
 
     Performs configuration including:
@@ -35,7 +35,7 @@ val run : Project.t -> flag_action list -> (string * bool) list -> unit
     @param user_flags flags to set or clear
     @param user_opts additional options to set *)
 
-val check : Project.t -> bool -> (string, string) Hashtbl.t -> (string * bool) list
+val check : Hier.registry -> Project.t -> bool -> (string, string) Hashtbl.t -> (string * bool) list
 (** [check proj_file reconf setup] checks configuration and potentially reconfigures
 
     Validates that:
@@ -48,5 +48,5 @@ val check : Project.t -> bool -> (string, string) Hashtbl.t -> (string * bool) l
     @param setup the existing setup hashtable
     @return list of (flag_name, flag_value) pairs *)
 
-val set_opts : (string, string) Hashtbl.t -> unit
+val set_opts : Gconf.t -> (string, string) Hashtbl.t -> unit
 (** [set_opts hashtable] sets target options from configuration hashtable *)

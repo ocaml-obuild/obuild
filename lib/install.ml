@@ -7,15 +7,15 @@ open Target
 open Helper
 open Gconf
 
-let list_target_files_pred target pred =
+let list_target_files_pred conf target pred =
   let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
-  Build.sanity_check build_dir target;
+  Build.sanity_check conf build_dir target;
   (* don't play with matches *)
   let matches = Filesystem.list_dir_pred pred build_dir in
   (build_dir, matches)
 
-let list_lib_files lib build_dir =
-  list_target_files_pred lib (fun f ->
+let list_lib_files conf lib build_dir =
+  list_target_files_pred conf lib (fun f ->
       if fn_to_string f = "META" then
         true
       else
@@ -30,13 +30,13 @@ let list_lib_files lib build_dir =
         | Filetype.FileCMTI -> true
         | _ -> false)
 
-let list_exe_files lib build_dir =
-  list_target_files_pred lib (fun f ->
+let list_exe_files conf lib build_dir =
+  list_target_files_pred conf lib (fun f ->
       match Filetype.of_filepath (build_dir </> f) with
       | Filetype.FileEXE -> true
       | _ -> false)
 
-let opam_install_file proj_file flags =
+let opam_install_file conf proj_file flags =
   let install_path = fp (proj_file.name ^ ".install") in
   Utils.generateFile install_path (fun add ->
       let all_targets = Project.get_all_installable_targets proj_file flags in
@@ -60,7 +60,7 @@ let opam_install_file proj_file flags =
       List.iter
         (fun target ->
           match target.target_name with
-          | Name.Lib _ -> print_target_files target list_lib_files
+          | Name.Lib _ -> print_target_files target (list_lib_files conf)
           | _ -> ())
         all_targets;
       add "]\n";
@@ -68,12 +68,12 @@ let opam_install_file proj_file flags =
       List.iter
         (fun target ->
           match target.target_name with
-          | Name.Exe _ -> print_target_files target list_exe_files
+          | Name.Exe _ -> print_target_files target (list_exe_files conf)
           | _ -> ())
         all_targets;
       add "]\n")
 
-let lib_to_meta proj_file lib =
+let lib_to_meta conf proj_file lib =
   let requires_of_lib lib =
     let deps = lib.Library.target.target_obits.target_builddeps in
     [ ([], List.map (fun d -> fst d) deps) ]
@@ -102,7 +102,7 @@ let lib_to_meta proj_file lib =
            ([ Meta.Predicate.Native ], fn_to_string (Libname.to_cmca Native Normal lib.Library.name));
          ]
         @
-        if Gconf.get_target_option_typed Gconf.Library_plugin then
+        if Gconf.get_target_option_typed conf Gconf.Library_plugin then
           [
             ( [ Meta.Predicate.Native; Meta.Predicate.Plugin ],
               fn_to_string (Libname.to_cmxs Normal lib.Library.name) );
@@ -121,10 +121,10 @@ let lib_to_meta proj_file lib =
   let pkg = set_meta_field_from_lib (Meta.Pkg.make "") lib in
   { pkg with Meta.Pkg.version = proj_file.version; Meta.Pkg.subs = subPkgs }
 
-let write_lib_meta projFile lib =
+let write_lib_meta conf projFile lib =
   let dir = Dist.get_build_exn (Dist.Target lib.Library.target.target_name) in
   let metadir_path = dir </> fn "META" in
-  let pkg = lib_to_meta projFile lib in
+  let pkg = lib_to_meta conf projFile lib in
   Meta.Pkg.write metadir_path pkg
 
 let copy_files files dest_dir dir_name =
@@ -136,14 +136,14 @@ let copy_files files dest_dir dir_name =
         build_files)
     files
 
-let install_lib proj_file lib dest_dir =
-  write_lib_meta proj_file lib;
+let install_lib conf proj_file lib dest_dir =
+  write_lib_meta conf proj_file lib;
   let all_files =
     List.map
       (fun target ->
         let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
-        Build.sanity_check build_dir target;
-        list_lib_files target build_dir)
+        Build.sanity_check conf build_dir target;
+        list_lib_files conf target build_dir)
       (Project.Library.to_targets lib)
   in
   let dir_name = fn (Libname.to_string lib.Project.Library.name) in
@@ -152,11 +152,11 @@ let install_lib proj_file lib dest_dir =
     (Utils.showList "," fn_to_string (List.concat (List.map snd all_files)));
   copy_files all_files dest_dir dir_name
 
-let install_exe exe bindir =
+let install_exe conf exe bindir =
   let target = Project.Executable.to_target exe in
   let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
-  Build.sanity_check build_dir target;
-  let _, files = list_exe_files target build_dir in
+  Build.sanity_check conf build_dir target;
+  let _, files = list_exe_files conf target build_dir in
   log Report "installing executable %s\n" exe.Project.Executable.name;
   Filesystem.mkdir_safe_recursive bindir 0o755 ;
   List.iter
@@ -167,9 +167,9 @@ let install_exe exe bindir =
       Unix.chmod (fp_to_string dst) 0o755)
     files
 
-let install proj_file destdir bindir opam =
+let install conf proj_file destdir bindir opam =
   if not opam then begin
-    List.iter (fun lib -> install_lib proj_file lib destdir) proj_file.Project.libs;
-    List.iter (fun exe -> install_exe exe bindir) proj_file.Project.exes
+    List.iter (fun lib -> install_lib conf proj_file lib destdir) proj_file.Project.libs;
+    List.iter (fun exe -> install_exe conf exe bindir) proj_file.Project.exes
   end else
-    List.iter (fun lib -> write_lib_meta proj_file lib) proj_file.Project.libs
+    List.iter (fun lib -> write_lib_meta conf proj_file lib) proj_file.Project.libs

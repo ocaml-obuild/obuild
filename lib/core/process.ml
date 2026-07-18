@@ -27,7 +27,7 @@ let make args =
   let escape s = try
       let _ = String.index s ' ' in "\"" ^ s ^ "\""
     with Not_found -> s in
-  if Gconf.gconf.Gconf.verbosity >= Gconf.Trace then
+  if Gconf.console.Gconf.verbosity >= Gconf.Trace then
     log Trace "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
   let out_file = Filename.temp_file "obuild" ".out" in
   let err_file = Filename.temp_file "obuild" ".err" in

@@ -322,7 +322,7 @@ let test_metacache_consistency () =
   try
     (* First populate cache using Metacache.get *)
     let libname = Libname.of_string "ppx_stable_witness.stable_witness" in
-    let _, cached_meta = Metacache.get libname.Libname.main_name in
+    let _, cached_meta = Metacache.get (Metacache.create ()) libname.Libname.main_name in
 
     (* Then try to get subpackage *)
     let cached_pkg = Meta.Pkg.find libname.Libname.subnames cached_meta in

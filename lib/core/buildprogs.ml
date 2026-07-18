@@ -25,9 +25,9 @@ type annotation_mode =
 
 type pack_opt = Hier.t option
 
-let annotToOpts mode =
+let annotToOpts conf mode =
   let bin_annot_opts =
-    if gconf.bin_annot_occurrences then [ "-bin-annot"; "-bin-annot-occurrences" ]
+    if conf.Gconf.bin_annot_occurrences then [ "-bin-annot"; "-bin-annot-occurrences" ]
     else [ "-bin-annot" ]
   in
   match mode with
@@ -36,9 +36,10 @@ let annotToOpts mode =
   | AnnotationText -> [ "-annot" ]
   | AnnotationBoth -> bin_annot_opts @ [ "-annot" ]
 
-let run_ocaml_compile dirSpec use_thread annot_mode build_mode compileOpt pack_opt pp oflags modhier =
+let run_ocaml_compile reg dirSpec use_thread annot_mode build_mode compileOpt pack_opt pp oflags modhier =
+  let conf = Hier.conf reg in
   let dst_dir = dirSpec.dst_dir in
-  let entry = Hier.get_file_entry modhier [ dirSpec.src_dir ] in
+  let entry = Hier.get_file_entry reg modhier [ dirSpec.src_dir ] in
   let src_file = Hier.get_src_file dirSpec.src_dir entry in
   let compileOpt =
     if build_mode = Interface && compileOpt = WithProf then WithDebug else compileOpt
@@ -49,12 +50,12 @@ let run_ocaml_compile dirSpec use_thread annot_mode build_mode compileOpt pack_o
     | Interface ->
         ( Prog.get_ocamlc (),
           Hier.ml_to_ext src_file Filetype.FileMLI,
-          Hier.get_dest_file dst_dir Filetype.FileCMI modhier )
+          Hier.get_dest_file reg dst_dir Filetype.FileCMI modhier )
     | Compiled ct ->
         let ext = if ct = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
         ( (if ct = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt ()),
           src_file,
-          Hier.get_dest_file dst_dir ext modhier )
+          Hier.get_dest_file reg dst_dir ext modhier )
   in
   let args =
     [ prog ]
@@ -66,17 +67,18 @@ let run_ocaml_compile dirSpec use_thread annot_mode build_mode compileOpt pack_o
       | Normal -> []
       | WithDebug -> [ "-g" ]
       | WithProf -> [ "-p" ])
-    @ annotToOpts annot_mode @ oflags @ gconf.ocaml_extra_args @ Pp.to_params pp
+    @ annotToOpts conf annot_mode @ oflags @ conf.Gconf.ocaml_extra_args @ Pp.to_params pp
     @ maybe []
         (fun x -> if build_mode = Compiled Native then [ "-for-pack"; Hier.to_string x ] else [])
         pack_opt
-    @ (if gconf.short_path then [ "-short-paths" ] else [])
+    @ (if conf.Gconf.short_path then [ "-short-paths" ] else [])
     @ [ "-o"; fp_to_string dstFile ]
     @ [ "-c"; fp_to_string srcFile ]
   in
   Process.make args
 
-let run_ocaml_pack _srcDir dst_dir annot_mode build_mode pack_opt dest modules =
+let run_ocaml_pack reg _srcDir dst_dir annot_mode build_mode pack_opt dest modules =
+  let conf = Hier.conf reg in
   let prog = if build_mode = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt () in
   let ext = if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
   let ext_f = function
@@ -92,14 +94,14 @@ let run_ocaml_pack _srcDir dst_dir annot_mode build_mode pack_opt dest modules =
     @ maybe []
         (fun x -> if build_mode = Native then [ "-for-pack"; Hier.to_string x ] else [])
         pack_opt
-    @ annotToOpts annot_mode
-    @ [ "-pack"; "-o"; fp_to_string (Hier.get_dest_file dst_dir ext dest) ]
-    @ List.map (fun m -> fp_to_string (Hier.get_dest_file_ext dst_dir m ext_f)) modules
+    @ annotToOpts conf annot_mode
+    @ [ "-pack"; "-o"; fp_to_string (Hier.get_dest_file reg dst_dir ext dest) ]
+    @ List.map (fun m -> fp_to_string (Hier.get_dest_file_ext reg dst_dir m ext_f)) modules
   in
   Process.make args
 
-let run_ocaml_infer srcDir includes pp modname =
-  let entry = Hier.get_file_entry modname [ srcDir ] in
+let run_ocaml_infer reg srcDir includes pp modname =
+  let entry = Hier.get_file_entry reg modname [ srcDir ] in
   let args =
     [ Prog.get_ocamlc (); "-i" ]
     @ Pp.to_params pp
@@ -135,9 +137,9 @@ let run_ar dest deps =
 
 let run_ranlib dest = Process.make [ Prog.get_ranlib (); fp_to_string dest ]
 
-let run_c_linking sharingMode depfiles dest =
+let run_c_linking conf sharingMode depfiles dest =
   let args =
-    if gconf.ocamlmklib then
+    if conf.Gconf.ocamlmklib then
       [ Prog.get_ocamlmklib () ]
       @ (match sharingMode with
         | LinkingStatic -> [ "-custom" ]
@@ -159,8 +161,9 @@ let run_c_linking sharingMode depfiles dest =
   in
   Process.make args
 
-let run_ocaml_linking includeDirs build_mode linking_mode compileType use_thread systhread oflags cclibs libs
+let run_ocaml_linking reg includeDirs build_mode linking_mode compileType use_thread systhread oflags cclibs libs
     modules dest =
+  let conf = Hier.conf reg in
   (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
   let link_maybe linking_mode dest =
     let file_or_link_exists fn =
@@ -172,7 +175,7 @@ let run_ocaml_linking includeDirs build_mode linking_mode compileType use_thread
     match linking_mode with
     | LinkingPlugin | LinkingLibrary -> ()
     | LinkingExecutable ->
-        if not (Gconf.get_target_option_typed Executable_as_obj) then
+        if not (Gconf.get_target_option_typed conf Executable_as_obj) then
           let real = fp_to_string dest in
           let basename = Filename.basename real in
           if Utils.isWindows then
@@ -199,7 +202,7 @@ let run_ocaml_linking includeDirs build_mode linking_mode compileType use_thread
       | LinkingPlugin -> [ "-shared" ]
       | LinkingLibrary -> [ "-a" ]
       | LinkingExecutable ->
-          if Gconf.get_target_option_typed Executable_as_obj then [ "-output-obj" ] else [])
+          if Gconf.get_target_option_typed conf Executable_as_obj then [ "-output-obj" ] else [])
     @ [ "-o"; fp_to_string dest ]
     @ (match compileType with
       | Normal -> []
@@ -218,7 +221,7 @@ let run_ocaml_linking includeDirs build_mode linking_mode compileType use_thread
                x;
              ])
            cclibs)
-    @ List.map (fun m -> fp_to_string (Hier.get_dest_file current_dir ext m)) modules
+    @ List.map (fun m -> fp_to_string (Hier.get_dest_file reg current_dir ext m)) modules
   in
   let res = Process.make args in
   let () = link_maybe linking_mode dest in

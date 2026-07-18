@@ -36,11 +36,11 @@ let generateCFile project file flags =
           add (sprintf "#define PROJECT_FLAG_%s %d\n" (string_uppercase name) (if v then 1 else 0)))
         flags)
 
-let makeSetup digestKV project flags =
+let makeSetup conf digestKV project flags =
   hashtbl_from_list
     (digestKV
     @ hashtbl_to_list project.Analyze.project_ocamlcfg
-    @ List.map (fun (opt, v) -> (opt, string_of_bool v)) (Gconf.get_target_options ())
+    @ List.map (fun (opt, v) -> (opt, string_of_bool v)) (Gconf.get_target_options conf)
     @ List.map (fun (flagname, flagval) -> ("flag-" ^ flagname, string_of_bool flagval)) flags)
 
 let sanityCheck ?(needs_c_toolchain=false) () =
@@ -196,12 +196,12 @@ let bool_of_opt hashtable k =
   let v = get_opt k in
   try bool_of_string v with Failure _ -> raise (ConfigurationTypeMismatch (k, "bool", v))
 
-let set_opts hashtable =
+let set_opts conf hashtable =
   (* load the environment *)
   let opts = Gconf.get_target_options_keys () in
-  List.iter (fun k -> Gconf.set_target_options k (bool_of_opt hashtable k)) opts
+  List.iter (fun k -> Gconf.set_target_options conf k (bool_of_opt hashtable k)) opts
 
-let check_ocaml () =
+let check_ocaml conf =
   let ocamlCfg = Prog.get_ocaml_config () in
   let ocaml_ver = Hashtbl.find ocamlCfg "version" in
   let ver = String_utils.split '.' ocaml_ver in
@@ -209,21 +209,22 @@ let check_ocaml () =
   | major :: minor :: _ ->
       let maj = int_of_string major in
       let min = int_of_string minor in
-      if maj < 4 then gconf.bin_annot <- false;
-      if maj > 4 || (maj = 4 && min > 1) then gconf.short_path <- true;
-      if maj > 5 || (maj = 5 && min >= 2) then gconf.bin_annot_occurrences <- true
-  | _ -> gconf.bin_annot <- false);
+      if maj < 4 then conf.Gconf.bin_annot <- false;
+      if maj > 4 || (maj = 4 && min > 1) then conf.Gconf.short_path <- true;
+      if maj > 5 || (maj = 5 && min >= 2) then conf.Gconf.bin_annot_occurrences <- true
+  | _ -> conf.Gconf.bin_annot <- false);
   ocamlCfg
 
-let run proj_file user_flags user_opts =
+let run hier_registry proj_file user_flags user_opts =
+  let conf = Hier.conf hier_registry in
   Dist.create_maybe ();
-  let _ = check_ocaml () in
+  let _ = check_ocaml conf in
   (* Auto-detect CPU count and set default parallelism *)
   let cpu_count = Utils.get_cpu_count () in
   log Report "Detected %d CPU core%s, setting default parallelism to %d\n" cpu_count
     (if cpu_count = 1 then "" else "s")
     cpu_count;
-  gconf.parallel_jobs <- cpu_count;
+  conf.Gconf.parallel_jobs <- cpu_count;
   let digestKV = getDigestKV () in
   execute_configure_script proj_file;
   let configure = try Some (Dist.read_configure ()) with Dist.DistFileNotFound _ -> None in
@@ -235,7 +236,7 @@ let run proj_file user_flags user_opts =
         Hashtbl.iter
           (fun k _ ->
             if not (String_utils.startswith "flag-" k) then
-              Gconf.set_target_options k (bool_of_opt h k))
+              Gconf.set_target_options conf k (bool_of_opt h k))
           h;
         get_flags h
   in
@@ -244,9 +245,9 @@ let run proj_file user_flags user_opts =
     (Utils.showList "," (fun (n, v) -> n ^ "=" ^ string_of_bool v) flags);
   check_extra_tools proj_file;
   (* Set the user opts BEFORE analyzing the project *)
-  List.iter (fun (o, v) -> Gconf.set_target_options o v) user_opts;
-  let project = Analyze.prepare proj_file flags in
-  let currentSetup = makeSetup digestKV project flags in
+  List.iter (fun (o, v) -> Gconf.set_target_options conf o v) user_opts;
+  let project = Analyze.prepare proj_file flags hier_registry in
+  let currentSetup = makeSetup conf digestKV project flags in
   let actualSetup = try Some (Dist.read_setup ()) with Dist.DistFileNotFound _ -> None in
   let projectSystemChanged =
     match actualSetup with
@@ -264,8 +265,9 @@ let run proj_file user_flags user_opts =
     log Verbose "Writing new setup\n%!";
     Dist.write_setup currentSetup)
 
-let check proj_file reconf setup =
-  let ocamlCfg = check_ocaml () in
+let check hier_registry proj_file reconf setup =
+  let conf = Hier.conf hier_registry in
+  let ocamlCfg = check_ocaml conf in
   let digestKV = getDigestKV () in
   (* check if the environment changed. *)
   comparekvs_hashtbl "ocaml config" setup ocamlCfg;
@@ -286,10 +288,10 @@ let check proj_file reconf setup =
     log Debug "  configure flag: [%s]\n"
       (Utils.showList "," (fun (n, v) -> n ^ "=" ^ string_of_bool v) flags);
     check_extra_tools proj_file;
-    let project = Analyze.prepare proj_file flags in
+    let project = Analyze.prepare proj_file flags hier_registry in
     create_dist project flags;
     (* write setup file *)
     log Verbose "Writing new setup\n%!";
-    let current_setup = makeSetup digestKV project flags in
+    let current_setup = makeSetup conf digestKV project flags in
     Dist.write_setup current_setup);
   flags

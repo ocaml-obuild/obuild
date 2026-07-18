@@ -26,6 +26,8 @@ type cpkg_config = {
 
 (* this is a read only config of the project for configuring and building. *)
 type project_config = {
+  project_hier_registry : Hier.registry; (* module resolution context for this build *)
+  project_metacache : Metacache.t; (* META cache for this build *)
   project_dep_data : (Libname.t, dep_type) Hashtbl.t;
   project_pkgdeps_dag : dependency_tag Dag.t;
   project_targets_dag : Name.t Dag.t;
@@ -83,7 +85,7 @@ let get_internal_library_deps project target =
  * it allows to bootstrap better when ocamlfind has not been yet installed or
  * to detect difference of opinions of where the stdlib is, between ocamlfind and ocamlc.
  *)
-let initializeSystemStdlib ocamlCfg =
+let initializeSystemStdlib metacache ocamlCfg =
   let ocaml_ver = Hashtbl.find (Prog.get_ocaml_config ()) "version" in
   let stdlibPath = fp (get_ocaml_config_key_hashtbl "standard_library" ocamlCfg) in
   let stdlibLibs =
@@ -126,7 +128,7 @@ let initializeSystemStdlib ocamlCfg =
             Meta.Pkg.archives;
           }
         in
-        Metacache.add lib (stdlibPath </> fn ("META-" ^ lib), meta)))
+        Metacache.add metacache lib (stdlibPath </> fn ("META-" ^ lib), meta)))
     libs
 
 let readOcamlMkConfig filename =
@@ -148,7 +150,9 @@ let readOcamlMkConfig filename =
 
 (* get all the dependencies required
  * and prepare the global bstate.of value *)
-let prepare projFile user_flags =
+let prepare projFile user_flags hier_registry =
+  let hier_registry_conf = Hier.conf hier_registry in
+  let metacache = Metacache.create () in
   log Verbose "analyzing project\n%!";
   let ocamlCfg = Prog.get_ocaml_config () in
   let ocamlMkCfg = readOcamlMkConfig (Hashtbl.find ocamlCfg "standard_library") in
@@ -160,7 +164,7 @@ let prepare projFile user_flags =
 
   let missingDeps = ref StringSet.empty in
 
-  initializeSystemStdlib ocamlCfg;
+  initializeSystemStdlib metacache ocamlCfg;
 
   (* check for findlib / ocaml configuration mismatch *)
   let () =
@@ -220,7 +224,7 @@ let prepare projFile user_flags =
         Internal)
       else
         try
-          let _, meta = Metacache.get dep.Libname.main_name in
+          let _, meta = Metacache.get metacache dep.Libname.main_name in
           Dag.add_node (Dependency dep) depsDag;
           let pkg =
             try Meta.Pkg.find dep.Libname.subnames meta with
@@ -266,7 +270,7 @@ let prepare projFile user_flags =
         (fun (dep, constr) ->
           maybe_unit
             (fun c ->
-              let _, pkg = Metacache.get dep.Libname.main_name in
+              let _, pkg = Metacache.get metacache dep.Libname.main_name in
               if not (Expr.eval pkg.Meta.Pkg.version c) then
                 raise
                   (Dependencies.BuildDepAnalyzeFailed
@@ -299,7 +303,7 @@ let prepare projFile user_flags =
         target.target_cbits.target_cpkgs)
     allTargets;
 
-  if gconf.dump_dot then (
+  if hier_registry_conf.Gconf.dump_dot then (
     let dotDir = Dist.create_build Dist.Dot in
     let path = dotDir </> fn "dependencies.dot" in
     let toString t =
@@ -316,6 +320,8 @@ let prepare projFile user_flags =
   {
     project_dep_data = depsTable;
     project_pkgdeps_dag = depsDag;
+    project_hier_registry = hier_registry;
+    project_metacache = metacache;
     project_targets_dag = targetsDag;
     project_all_deps =
       List.concat $ List.map (fun target -> target.target_obits.target_builddeps) allTargets;

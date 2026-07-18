@@ -23,7 +23,13 @@ type custom = {
 }
 
 (** Custom generators registered from project file *)
-let custom_generators : custom list ref = ref []
+(* The set of generators available to a build, derived from the project's
+   custom generator definitions.  No global state: the set travels in the
+   per-invocation Hier.registry. *)
+type set = {
+  set_all : t list;         (* suffix-based generators (for auto-detection) *)
+  set_customs : custom list; (* raw custom definitions (for generate blocks) *)
+}
 
 (** Find substring in string, returns index or raises Not_found *)
 let find_substring str sub =
@@ -123,48 +129,41 @@ let custom_to_builtin (custom : custom) : t =
   in
   { suffix; modname; commands; generated_files }
 
-(** Register a custom generator from project file *)
-let register_custom (gen : custom) =
-  custom_generators := gen :: !custom_generators
-
-(** Register multiple custom generators *)
-let register_customs (gens : custom list) =
-  List.iter register_custom gens
-
-(** Clear all custom generators (useful for testing) *)
-let clear_custom_generators () =
-  custom_generators := []
+(** Build the generator set from the project's custom generator definitions *)
+let make_set customs =
+  {
+    (* only generators with a non-empty suffix participate in auto-detection *)
+    set_all = List.filter (fun gen -> gen.suffix <> "") (List.map custom_to_builtin customs);
+    set_customs = customs;
+  }
 
 (** Get all generators with suffixes (for automatic detection) *)
-let get_all () =
-  let custom_as_builtin = List.map custom_to_builtin !custom_generators in
-  (* Only include generators with non-empty suffix for automatic detection *)
-  List.filter (fun gen -> gen.suffix <> "") custom_as_builtin
+let get_all gset = gset.set_all
 
 (** Check if a file extension has a registered generator *)
-let is_generator_ext ext =
+let is_generator_ext gset ext =
   let ext_with_dot = "." ^ ext in
-  List.exists (fun gen -> gen.suffix = ext || gen.suffix = ext_with_dot) (get_all ())
+  List.exists (fun gen -> gen.suffix = ext || gen.suffix = ext_with_dot) gset.set_all
 
 (** Get ALL generators for filepath based on extension *)
-let get_generators fp =
+let get_generators gset fp =
   let ext = Filetype.of_filepath fp in
   match ext with
   | Filetype.FileOther s ->
       let s_with_dot = "." ^ s in
-      List.filter (fun gen -> gen.suffix = s || gen.suffix = s_with_dot) (get_all ())
+      List.filter (fun gen -> gen.suffix = s || gen.suffix = s_with_dot) gset.set_all
   | _ -> []
 
 (** Get single generator for filepath (for backward compatibility) *)
-let get_generator fp =
-  match get_generators fp with
+let get_generator gset fp =
+  match get_generators gset fp with
   | [] -> raise (GeneratorNotFound (fp_to_string fp))
   | gen :: _ -> gen
 
 (** Run ALL generators for source file *)
-let run dest src modName =
+let run gset dest src modName =
   log Debug "  generator dest = %s src = %s\n%!" (fp_to_string dest) (fp_to_string src);
-  let gens = get_generators src in
+  let gens = get_generators gset src in
   if gens = [] then raise (GeneratorNotFound (fp_to_string src));
   List.iter (fun gen ->
     let args = gen.commands src dest modName in
@@ -176,15 +175,15 @@ let run dest src modName =
   ) gens
 
 (** Find a custom generator by name *)
-let find_generator_by_name name =
-  try Some (List.find (fun (g : custom) -> g.custom_name = name) !custom_generators)
+let find_generator_by_name gset name =
+  try Some (List.find (fun (g : custom) -> g.custom_name = name) gset.set_customs)
   with Not_found -> None
 
 (** Run a generator with multiple inputs (for generate blocks) *)
-let run_custom_multi ~generator_name ~dest ~sources ~extra_args =
+let run_custom_multi gset ~generator_name ~dest ~sources ~extra_args =
   (* Find the custom generator by name *)
   let custom =
-    match find_generator_by_name generator_name with
+    match find_generator_by_name gset generator_name with
     | Some g -> g
     | None -> raise (GeneratorNotFound generator_name)
   in

@@ -70,12 +70,12 @@ let static_lib_name clib_name =
   if isWindows then clib_name ^ ".lib"
   else "lib" ^ clib_name ^ ".a"
 
-let to_exe_name mode build name =
+let to_exe_name conf mode build name =
   let ext = extDP mode in
   let ext2 =
     match build with
     | ByteCode -> ".byte"
-    | Native -> if Gconf.get_target_option_typed Gconf.Executable_as_obj then ".o" else ""
+    | Native -> if Gconf.get_target_option_typed conf Gconf.Executable_as_obj then ".o" else ""
   in
   fn (name ^ ext ^ ext2 ^ if isWindows then ".exe" else "")
 

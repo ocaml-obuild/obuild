@@ -27,8 +27,6 @@ let assumeRaises testname f =
     err := !err + 1)
 
 let () =
-  (* Clean state before each run *)
-  Generators.clear_custom_generators ();
 
   (* --- substitute_variables tests --- *)
   let src = Filepath.fp "src/parser.mly" in
@@ -92,9 +90,7 @@ let () =
     ~src:(Filepath.fp "foo.atd") "version_info.ml" in
   assumeEq "output pattern literal" "version_info.ml" result;
 
-  (* --- register_custom / get_all / find_generator_by_name tests --- *)
-  Generators.clear_custom_generators ();
-
+  (* --- make_set / get_all / find_generator_by_name tests --- *)
   let gen_menhir : Generators.custom = {
     custom_name = "menhir";
     custom_suffix = Some "mly";
@@ -102,8 +98,6 @@ let () =
     custom_outputs = ["${base}.ml"; "${base}.mli"];
     custom_module_name = None;
   } in
-  Generators.register_custom gen_menhir;
-
   let gen_lex : Generators.custom = {
     custom_name = "ocamllex";
     custom_suffix = Some "mll";
@@ -111,33 +105,30 @@ let () =
     custom_outputs = ["${base}.ml"];
     custom_module_name = None;
   } in
-  Generators.register_custom gen_lex;
-
-  let all = Generators.get_all () in
+  let gset = Generators.make_set [ gen_menhir; gen_lex ] in
+  let all = Generators.get_all gset in
   assumeEq "get_all count" "2" (string_of_int (List.length all));
 
   (* --- is_generator_ext tests --- *)
-  assumeTrue "is_generator_ext mly" (Generators.is_generator_ext "mly");
-  assumeTrue "is_generator_ext mll" (Generators.is_generator_ext "mll");
-  assumeTrue "is_generator_ext unknown" (not (Generators.is_generator_ext "xyz"));
-  assumeTrue "is_generator_ext ml" (not (Generators.is_generator_ext "ml"));
+  assumeTrue "is_generator_ext mly" (Generators.is_generator_ext gset "mly");
+  assumeTrue "is_generator_ext mll" (Generators.is_generator_ext gset "mll");
+  assumeTrue "is_generator_ext unknown" (not (Generators.is_generator_ext gset "xyz"));
+  assumeTrue "is_generator_ext ml" (not (Generators.is_generator_ext gset "ml"));
 
   (* --- find_generator_by_name tests --- *)
-  (match Generators.find_generator_by_name "menhir" with
+  (match Generators.find_generator_by_name gset "menhir" with
   | Some g -> assumeEq "find_by_name menhir" "menhir" g.Generators.custom_name
   | None ->
       Printf.printf "FAILED find_by_name menhir: Expected Some, Got None\n";
       incr test_count; err := !err + 1);
 
-  (match Generators.find_generator_by_name "nonexistent" with
+  (match Generators.find_generator_by_name gset "nonexistent" with
   | None -> Printf.printf "SUCCESS find_by_name nonexistent\n"; incr test_count
   | Some _ ->
       Printf.printf "FAILED find_by_name nonexistent: Expected None, Got Some\n";
       incr test_count; err := !err + 1);
 
   (* --- Generator without suffix (generate-block-only) --- *)
-  Generators.clear_custom_generators ();
-
   let gen_no_suffix : Generators.custom = {
     custom_name = "embed-version";
     custom_suffix = None;
@@ -145,24 +136,21 @@ let () =
     custom_outputs = ["version_info.ml"];
     custom_module_name = Some "version_info";
   } in
-  Generators.register_custom gen_no_suffix;
+  let gset_ns = Generators.make_set [ gen_no_suffix ] in
 
   (* Generator without suffix should not appear in get_all (auto-detection) *)
-  let all_no_suffix = Generators.get_all () in
+  let all_no_suffix = Generators.get_all gset_ns in
   assumeEq "no suffix not in get_all" "0" (string_of_int (List.length all_no_suffix));
 
   (* But should be findable by name *)
-  (match Generators.find_generator_by_name "embed-version" with
+  (match Generators.find_generator_by_name gset_ns "embed-version" with
   | Some _ -> Printf.printf "SUCCESS find no-suffix by name\n"; incr test_count
   | None ->
       Printf.printf "FAILED find no-suffix by name: Expected Some, Got None\n";
       incr test_count; err := !err + 1);
 
   (* --- get_all returns builtin type with correct suffix --- *)
-  Generators.clear_custom_generators ();
-  Generators.register_custom gen_menhir;
-
-  let builtin = List.hd (Generators.get_all ()) in
+  let builtin = List.hd (Generators.get_all (Generators.make_set [ gen_menhir ])) in
   assumeEq "builtin suffix" "mly" builtin.Generators.suffix;
 
   (* modname identity (no custom_module_name) *)
@@ -182,23 +170,17 @@ let () =
   assumeEq "custom_outputs second" "parser.mli"
     (Filepath.fn_to_string (List.nth outputs 1));
 
-  (* --- clear_custom_generators test --- *)
-  Generators.register_custom gen_menhir;
-  Generators.register_custom gen_lex;
-  Generators.clear_custom_generators ();
-  let all_after_clear = Generators.get_all () in
+  (* --- empty set --- *)
+  let all_after_clear = Generators.get_all (Generators.make_set []) in
   assumeEq "clear generators" "0" (string_of_int (List.length all_after_clear));
 
   (* --- get_generator raises on unknown extension --- *)
-  Generators.clear_custom_generators ();
   assumeRaises "get_generator not found"
-    (fun () -> ignore (Generators.get_generator (Filepath.fp "foo.xyz")));
+    (fun () -> ignore (Generators.get_generator (Generators.make_set []) (Filepath.fp "foo.xyz")));
 
-  (* --- register_customs (batch registration) --- *)
-  Generators.clear_custom_generators ();
-  Generators.register_customs [gen_menhir; gen_lex];
-  let all_batch = Generators.get_all () in
-  assumeEq "register_customs count" "2" (string_of_int (List.length all_batch));
+  (* --- make_set (batch) --- *)
+  let all_batch = Generators.get_all (Generators.make_set [ gen_menhir; gen_lex ]) in
+  assumeEq "make_set count" "2" (string_of_int (List.length all_batch));
 
   (* --- Summary --- *)
   Printf.printf "\n%d tests run, %d failures\n" !test_count !err;

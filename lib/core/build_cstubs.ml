@@ -15,17 +15,17 @@ let get_ctypes_includes bstate =
   (* Find ctypes package paths *)
   try
     (* Get integers library path *)
-    let (integers_path, integers_pkg) = Metacache.get "integers" in
+    let (integers_path, integers_pkg) = Metacache.get bstate.bstate_config.project_metacache "integers" in
     let integers_dir = Meta.get_include_dir stdlib (integers_path, integers_pkg) in
 
     (* Get str library path *)
-    let (str_path, str_pkg) = Metacache.get "str" in
+    let (str_path, str_pkg) = Metacache.get bstate.bstate_config.project_metacache "str" in
     let str_dir = Meta.get_include_dir stdlib (str_path, str_pkg) in
 
-    let (path, pkg) = Metacache.get "ctypes" in
+    let (path, pkg) = Metacache.get bstate.bstate_config.project_metacache "ctypes" in
     let ctypes_dir = Meta.get_include_dir stdlib (path, pkg) in
     let ctypes_stubs_lib = Libname.of_string "ctypes.stubs" in
-    let (stubs_path, stubs_root_pkg) = Metacache.get "ctypes" in
+    let (stubs_path, stubs_root_pkg) = Metacache.get bstate.bstate_config.project_metacache "ctypes" in
     let stubs_pkg = Meta.Pkg.find ctypes_stubs_lib.Libname.subnames stubs_root_pkg in
     let stubs_dir = Meta.get_include_dir stdlib (stubs_path, stubs_pkg) in
     [integers_dir; str_dir; ctypes_dir; stubs_dir]
@@ -36,23 +36,23 @@ let get_ctypes_libs bstate =
   let stdlib = fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config) in
   try
     (* Get integers library (required by ctypes) *)
-    let (integers_path, integers_pkg) = Metacache.get "integers" in
+    let (integers_path, integers_pkg) = Metacache.get bstate.bstate_config.project_metacache "integers" in
     let integers_dir = Meta.get_include_dir stdlib (integers_path, integers_pkg) in
     let integers_cma = integers_dir </> fn "integers.cma" in
 
     (* Get str library (required by ctypes.stubs) *)
-    let (str_path, str_pkg) = Metacache.get "str" in
+    let (str_path, str_pkg) = Metacache.get bstate.bstate_config.project_metacache "str" in
     let str_dir = Meta.get_include_dir stdlib (str_path, str_pkg) in
     let str_cma = str_dir </> fn "str.cma" in
 
     (* Get ctypes library *)
-    let (path, pkg) = Metacache.get "ctypes" in
+    let (path, pkg) = Metacache.get bstate.bstate_config.project_metacache "ctypes" in
     let ctypes_dir = Meta.get_include_dir stdlib (path, pkg) in
     let ctypes_cma = ctypes_dir </> fn "ctypes.cma" in
 
     (* Get ctypes.stubs library *)
     let ctypes_stubs_lib = Libname.of_string "ctypes.stubs" in
-    let (stubs_path, stubs_root_pkg) = Metacache.get "ctypes" in
+    let (stubs_path, stubs_root_pkg) = Metacache.get bstate.bstate_config.project_metacache "ctypes" in
     let stubs_pkg = Meta.Pkg.find ctypes_stubs_lib.Libname.subnames stubs_root_pkg in
     let stubs_dir = Meta.get_include_dir stdlib (stubs_path, stubs_pkg) in
     let stubs_cma = stubs_dir </> fn "ctypes_stubs.cma" in

@@ -53,7 +53,7 @@ let test_basic_conversion () =
 name: test\n\
 version: 1.0\n\
 obuild-ver: 1\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq "name" "test" proj.Project.name;
       assert_eq "version" "1.0" proj.Project.version;
       assert_eq_int "obuild-ver" 1 proj.Project.obuild_ver);
@@ -69,7 +69,7 @@ license: MIT\n\
 homepage: https://example.com\n\
 authors: Alice, Bob\n"
       in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq "synopsis" "A test project" proj.Project.synopsis;
       assert_eq "description" "Longer description" proj.Project.description;
       assert_eq "license" "MIT" proj.Project.license;
@@ -87,7 +87,7 @@ let test_library_conversion () =
 
   test "simple library" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A, B, C\n  src-dir: lib\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq_int "libs count" 1 (List.length proj.Project.libs);
       let lib = List.hd proj.Project.libs in
       assert_eq "lib name" "mylib" (Libname.to_string lib.Project.Library.name);
@@ -97,14 +97,14 @@ let test_library_conversion () =
 
   test "library with build-deps" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  build-deps: unix, str\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let lib = List.hd proj.Project.libs in
       let deps = lib.Project.Library.target.Target.target_obits.Target.target_builddeps in
       assert_eq_int "deps count" 2 (List.length deps));
 
   test "library with C settings" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  c-dir: csrc\n  c-sources: foo.c\n  c-flags: -O2\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let lib = List.hd proj.Project.libs in
       let cbits = lib.Project.Library.target.Target.target_cbits in
       assert_eq_int "c-sources" 1 (List.length cbits.Target.target_csources);
@@ -112,7 +112,7 @@ let test_library_conversion () =
 
   test "library with pack" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: A\n  pack: true\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let lib = List.hd proj.Project.libs in
       assert_true "pack" lib.Project.Library.pack);
 
@@ -127,7 +127,7 @@ let test_executable_conversion () =
 
   test "simple executable" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable myexe\n  main-is: main.ml\n  src-dir: src\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq_int "exes count" 1 (List.length proj.Project.exes);
       let exe = List.hd proj.Project.exes in
       assert_eq "name" "myexe" exe.Project.Executable.name;
@@ -135,7 +135,7 @@ let test_executable_conversion () =
 
   test "executable with deps" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable myexe\n  main-is: main.ml\n  build-deps: unix, cmdliner\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let exe = List.hd proj.Project.exes in
       let deps = exe.Project.Executable.target.Target.target_obits.Target.target_builddeps in
       assert_eq_int "deps" 2 (List.length deps));
@@ -151,7 +151,7 @@ let test_test_conversion () =
 
   test "simple test" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\ntest mytest\n  main-is: test_main.ml\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq_int "tests count" 1 (List.length proj.Project.tests);
       let t = List.hd proj.Project.tests in
       assert_eq "name" "mytest" t.Project.Test.name;
@@ -159,7 +159,7 @@ let test_test_conversion () =
 
   test "test with rundir" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\ntest mytest\n  main-is: test.ml\n  run-dir: fixtures\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let t = List.hd proj.Project.tests in
       assert_true "rundir is some" (option_is_some t.Project.Test.rundir));
 
@@ -174,7 +174,7 @@ let test_cstubs_conversion () =
 
   test "library with cstubs" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: Bindings, C\n  build-deps: ctypes\n\n  cstubs\n    external-library-name: mylib_stubs\n    type-description: Bindings.Types -> Types_gen\n    function-description: Bindings.Functions -> Funcs_gen\n    headers: string.h\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let lib = List.hd proj.Project.libs in
       assert_true "cstubs present" (option_is_some lib.Project.Library.target.Target.target_cstubs);
       let cstubs = option_get lib.Project.Library.target.Target.target_cstubs in
@@ -185,7 +185,7 @@ let test_cstubs_conversion () =
 
   test "cstubs auto-adds generated module" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  modules: Bindings\n\n  cstubs\n    external-library-name: foo\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       let lib = List.hd proj.Project.libs in
       (* Should have Bindings + auto-generated Foo_generated + C + Types_generated *)
       assert_eq_int "modules" 4 (List.length lib.Project.Library.modules));
@@ -200,7 +200,7 @@ let test_flag_conversion () =
 
   test "flag definition" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nflag debug\n  description: Enable debug mode\n  default: true\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq_int "flags" 1 (List.length proj.Project.flags);
       let flag = List.hd proj.Project.flags in
       assert_eq "flag name" "debug" flag.Project.Flag.name;
@@ -219,27 +219,27 @@ let test_validation_errors () =
       let input = "\
 version: 1.0\n\
 obuild-ver: 1\n" in
-      assert_raises "missing name" (fun () -> ignore (parse_and_convert input)));
+      assert_raises "missing name" (fun () -> ignore (parse_and_convert (Gconf.create ()) input)));
 
   test "missing version" (fun () ->
       let input = "\
 name: x\n\
 obuild-ver: 1\n" in
-      assert_raises "missing version" (fun () -> ignore (parse_and_convert input)));
+      assert_raises "missing version" (fun () -> ignore (parse_and_convert (Gconf.create ()) input)));
 
   test "missing obuild-ver" (fun () ->
       let input = "\
 name: x\n\
 version: 1.0\n" in
-      assert_raises "missing obuild-ver" (fun () -> ignore (parse_and_convert input)));
+      assert_raises "missing obuild-ver" (fun () -> ignore (parse_and_convert (Gconf.create ()) input)));
 
   test "library with no modules" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nlibrary mylib\n  src-dir: lib\n" in
-      assert_raises "no modules" (fun () -> ignore (parse_and_convert input)));
+      assert_raises "no modules" (fun () -> ignore (parse_and_convert (Gconf.create ()) input)));
 
   test "executable with no main" (fun () ->
       let input = "name: x\nversion: 1\nobuild-ver: 1\n\nexecutable myexe\n  src-dir: src\n" in
-      assert_raises "no main" (fun () -> ignore (parse_and_convert input)));
+      assert_raises "no main" (fun () -> ignore (parse_and_convert (Gconf.create ()) input)));
 
   ()
 
@@ -252,7 +252,7 @@ let test_complex_project () =
 
   test "full project" (fun () ->
       let input = "name: myproject\nversion: 1.0.0\nobuild-ver: 1\nsynopsis: A complex project\nlicense: BSD-3-Clause\nauthors: Alice, Bob\nhomepage: https://github.com/example/myproject\n\nlibrary core\n  modules: Types, Utils, Engine\n  build-deps: base, stdio, unix\n  src-dir: lib/core\n\n  per Engine\n    build-deps: threads\n\nexecutable mycli\n  main-is: main.ml\n  src-dir: bin\n  build-deps: core, cmdliner\n\ntest unit_tests\n  main-is: test_unit.ml\n  src-dir: tests\n  build-deps: core, alcotest\n\nflag debug\n  description: Build with debug info\n  default: false\n" in
-      let proj = parse_and_convert input in
+      let proj = parse_and_convert (Gconf.create ()) input in
       assert_eq "name" "myproject" proj.Project.name;
       assert_eq_int "libs" 1 (List.length proj.Project.libs);
       assert_eq_int "exes" 1 (List.length proj.Project.exes);

@@ -19,6 +19,23 @@ type file_entry =
     (** Source file compiled under the hier leaf's unit name instead of the
         file basename (module-alias wrapping): (root_path, full_path) *)
 
+(** Module resolution registry, one per build invocation *)
+type registry
+
+val create_registry : unit -> registry
+(** Create an empty registry. Commands create one and thread it through
+    project validation, analysis and build. *)
+
+val generators : registry -> Generators.set
+(** The generators available to this build *)
+
+val conf : registry -> Gconf.t
+(** The build configuration for this invocation *)
+
+val set_custom_generators : registry -> Generators.custom list -> unit
+(** Install the project's custom generator definitions (called once after the
+    project file is parsed) *)
+
 (** {1 Exceptions} *)
 
 exception EmptyModuleHierarchy
@@ -84,28 +101,28 @@ val ml_to_ext : Filepath.filepath -> Filetype.t -> Filepath.filepath
 
 (** {1 File Lookup} *)
 
-val get_filepath : Filepath.filepath -> t -> Filetype.t -> file_entry option
+val get_filepath : registry -> Filepath.filepath -> t -> Filetype.t -> file_entry option
 (** [get_filepath root hier ext] searches for a file matching the hierarchy
     with the given extension. Returns cached result if available. *)
 
-val to_filename : t -> Filepath.filepath -> file_entry option
+val to_filename : registry -> t -> Filepath.filepath -> file_entry option
 (** [to_filename hier root] finds the .ml file for hierarchy *)
 
-val to_interface : t -> Filepath.filepath -> file_entry option
+val to_interface : registry -> t -> Filepath.filepath -> file_entry option
 (** [to_interface hier root] finds the .mli file for hierarchy *)
 
-val to_directory : t -> Filepath.filepath -> file_entry option
+val to_directory : registry -> t -> Filepath.filepath -> file_entry option
 (** [to_directory hier root] finds the directory for hierarchy *)
 
-val to_generators : t -> Filepath.filepath -> file_entry option
+val to_generators : registry -> t -> Filepath.filepath -> file_entry option
 (** [to_generators hier root] finds source files matching custom generators defined in .obuild *)
 
-val get_file_entry : t -> Filepath.filepath list -> file_entry
+val get_file_entry : registry -> t -> Filepath.filepath list -> file_entry
 (** [get_file_entry hier paths] searches for hierarchy across multiple root paths,
     trying all lookup methods (filename, directory, generators, interface).
     @raise Not_found if hierarchy not found in any path *)
 
-val get_file_entry_maybe : t -> file_entry option
+val get_file_entry_maybe : registry -> t -> file_entry option
 (** [get_file_entry_maybe hier] returns cached file entry if available *)
 
 (** {1 File Entry Operations} *)
@@ -116,39 +133,39 @@ val file_entry_to_string : file_entry -> string
 val get_src_file : Filepath.filepath -> file_entry -> Filepath.filepath
 (** [get_src_file dst_dir entry] returns the source file path from an entry *)
 
-val get_dest_file : Filepath.filepath -> Filetype.t -> t -> Filepath.filepath
+val get_dest_file : registry -> Filepath.filepath -> Filetype.t -> t -> Filepath.filepath
 (** [get_dest_file dst_dir ext hier] computes destination file path
     for hierarchy with given extension in destination directory.
     @raise Not_found if hierarchy not cached *)
 
-val get_dest_file_ext : Filepath.filepath -> t -> (Filetype.t -> Filetype.t) -> Filepath.filepath
+val get_dest_file_ext : registry -> Filepath.filepath -> t -> (Filetype.t -> Filetype.t) -> Filepath.filepath
 (** [get_dest_file_ext dst_dir hier ext_fn] computes destination file path
     using [ext_fn] to transform the source file type.
     @raise Not_found if hierarchy not cached *)
 
-val source_exists : t -> Filepath.filepath list -> bool
+val source_exists : registry -> t -> Filepath.filepath list -> bool
 (** [source_exists hier paths] checks whether a source file (ml, mli, directory
     or generator input) provides this module in one of [paths], without
     registering anything in the global registry. Used by project validation. *)
 
-val register_synthetic_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
+val register_synthetic_entry : registry -> t -> Filepath.filepath -> Filepath.filepath -> unit
 (** [register_synthetic_entry hier root_path full_path] registers a synthetic file entry
     for modules that will be generated during build (e.g., cstubs-generated modules,
     generate-block modules). This allows get_dest_file to work for these modules even
     before the source file exists. Replaces any existing entry (which may have been
     cached during dependency analysis before the module was identified as synthetic). *)
 
-val register_directory_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
+val register_directory_entry : registry -> t -> Filepath.filepath -> Filepath.filepath -> unit
 (** [register_directory_entry hier root_path full_path] registers a directory entry
     for virtual pack modules ([pack: true] libraries). The full path's basename
     determines the pack's artifact names and does not need to exist on disk. *)
 
-val register_aliased_entry : t -> Filepath.filepath -> Filepath.filepath -> unit
+val register_aliased_entry : registry -> t -> Filepath.filepath -> Filepath.filepath -> unit
 (** [register_aliased_entry hier root_path full_path] registers a source file that
     compiles under the unit name of the hier leaf (e.g. util.ml as Mylib__Util),
     used for module-alias wrapping of [pack: true] libraries on OCaml >= 4.02. *)
 
-val register_generated_entry : t -> Filepath.filepath -> Filepath.filepath -> Filepath.filename -> unit
+val register_generated_entry : registry -> t -> Filepath.filepath -> Filepath.filepath -> Filepath.filename -> unit
 (** [register_generated_entry hier root_path src_path output_file] registers a generated
     file entry for modules produced by generators (e.g., atdgen). This allows modules
     like Ollama_t (from ollama.atd) to be discovered before generation.
@@ -159,14 +176,13 @@ val register_generated_entry : t -> Filepath.filepath -> Filepath.filepath -> Fi
 
 (** {1 Global Generated Module Registry} *)
 
-val register_generated_module : string -> unit
+val register_generated_module : registry -> string -> unit
 (** [register_generated_module name] registers a module name as globally generated
     (from a generate block in any target). This allows dependent targets to
     recognize generated modules before their generating target is prepared. *)
 
-val is_generated_module : string -> bool
+val is_generated_module : registry -> string -> bool
 (** [is_generated_module name] returns true if the module was registered as
     generated via [register_generated_module]. *)
 
-val clear : unit -> unit
 (** [clear ()] resets all caches (file entry cache and generated module registry). *)

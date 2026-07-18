@@ -24,6 +24,8 @@ type cpkg_config = {
 
 (** Analyzed project configuration with resolved dependencies *)
 type project_config = {
+  project_hier_registry : Hier.registry;
+  project_metacache : Metacache.t;
   project_dep_data : (Libname.t, dep_type) Hashtbl.t;
     (** Mapping of dependencies to their type (system/internal) *)
   project_pkgdeps_dag : dependency_tag Dag.t;
@@ -42,7 +44,7 @@ type project_config = {
     (** C package configurations *)
 }
 
-val prepare : Project.t -> (string * bool) list -> project_config
+val prepare : Project.t -> (string * bool) list -> Hier.registry -> project_config
 (** [prepare proj_file user_flags] analyzes project and resolves dependencies
 
     Performs full dependency analysis:

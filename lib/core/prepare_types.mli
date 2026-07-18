@@ -120,6 +120,7 @@ module Module : sig
 end
 
 type compilation_state = {
+  compilation_hier : Hier.registry;
   compilation_modules : (Hier.t, Module.t) Hashtbl.t;
   compilation_csources : filename list;
   compilation_dag : compile_step Dag.t;

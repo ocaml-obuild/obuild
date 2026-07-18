@@ -1,6 +1,7 @@
 (** Library and executable installation *)
 
-val opam_install_file : Project.t -> (string * bool) list -> unit
+val opam_install_file :
+  Gconf.t -> Project.t -> (string * bool) list -> unit
 (** [opam_install_file proj_file flags] generates an OPAM .install file.
 
     Creates a <project>.install file listing all files to be installed.
@@ -8,7 +9,8 @@ val opam_install_file : Project.t -> (string * bool) list -> unit
     @param proj_file the project configuration
     @param flags configuration flags for determining which targets are installable *)
 
-val install : Project.t -> Filepath.filepath -> Filepath.filepath -> bool -> unit
+val install :
+  Gconf.t -> Project.t -> Filepath.filepath -> Filepath.filepath -> bool -> unit
 (** [install_libs proj_file dest_dir bin_dir opam] installs libraries and executables.
 
     Copies compiled library files, META files, and executables to the installation directories.

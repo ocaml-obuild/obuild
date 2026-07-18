@@ -36,7 +36,8 @@ val shared_lib_name : string -> string
 val static_lib_name : string -> string
 (** [static_lib_name clib_name] returns platform-appropriate static library filename *)
 
-val to_exe_name : Types.ocaml_compilation_option -> Types.ocaml_compiled_type -> string -> Filepath.filename
+val to_exe_name :
+  Gconf.t -> Types.ocaml_compilation_option -> Types.ocaml_compiled_type -> string -> Filepath.filename
 (** Generate executable filename with appropriate extensions
     @param mode Compilation option (Normal, WithDebug, WithProf)
     @param build Build type (ByteCode, Native)

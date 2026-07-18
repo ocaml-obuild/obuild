@@ -120,9 +120,9 @@ let reason_from_paths (_, dest) (srcTy, changedSrc) =
           "file changed " ^ fp_to_string changedSrc
     | _, _ -> fp_to_string changedSrc ^ " changed"
 
-let get_all_modes target =
-  let compile_opts = Target.get_compilation_opts target in
-  let compiled_types = Target.get_ocaml_compiled_types target in
+let get_all_modes conf target =
+  let compile_opts = Target.get_compilation_opts conf target in
+  let compiled_types = Target.get_ocaml_compiled_types conf target in
   let all_modes =
     List.concat
       (List.map (fun ty -> List.map (fun cmode -> (ty, cmode)) compile_opts) compiled_types)
@@ -134,12 +134,12 @@ let get_all_modes target =
       | _ -> true)
     all_modes
 
-let annot_mode () =
-  if Gconf.get_target_option_typed Annot && gconf.bin_annot then
+let annot_mode conf =
+  if Gconf.get_target_option_typed conf Annot && conf.Gconf.bin_annot then
     AnnotationBoth
-  else if Gconf.get_target_option_typed Annot then
+  else if Gconf.get_target_option_typed conf Annot then
     AnnotationText
-  else if gconf.bin_annot then
+  else if conf.Gconf.bin_annot then
     AnnotationBin
   else
     AnnotationNone
@@ -186,7 +186,7 @@ let compile_cstubs_c = Build_cstubs.compile_cstubs_c
 
 (* Run explicit generate block *)
 let run_generate_block task_index task (gen_block : Target.target_generate) _bstate task_context dag =
-  let _cstate, _target = Hashtbl.find task_context task in
+  let cstate, _target = Hashtbl.find task_context task in
   let autogenDir = Dist.get_build_exn Dist.Autogen in
 
   (* Match a filename against a glob pattern segment (e.g., "*.scm", "*") *)
@@ -299,7 +299,7 @@ let run_generate_block task_index task (gen_block : Target.target_generate) _bst
     log Report "[%*d of %d] Generating %-30s\n%!" nb_step_len task_index nb_step
       (Hier.to_string output_module);
     let dest = autogenDir </> fn (Compat.string_lowercase (Hier.to_string output_module)) in
-    Generators.run_custom_multi
+    Generators.run_custom_multi (Hier.generators cstate.compilation_hier)
       ~generator_name:gen_block.generate_using
       ~dest
       ~sources
@@ -344,7 +344,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = Hier.lvl h + 1 then Some m else None
     | CompileInterface m ->
         if Hier.lvl m = Hier.lvl h + 1 then begin
-          let fe = Hier.get_file_entry_maybe m in
+          let fe = Hier.get_file_entry_maybe cstate.compilation_hier m in
           match fe with
           | None -> None
           | Some e -> (
@@ -360,8 +360,8 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
           None
   in
   let modules = List.rev $ list_filter_map filter_modules modules_task in
-  let all_modes = get_all_modes target in
-  let annot_mode = annot_mode () in
+  let all_modes = get_all_modes (Hier.conf cstate.compilation_hier) target in
+  let annot_mode = annot_mode (Hier.conf cstate.compilation_hier) in
   (* directory never have interface (?) so we serialize the native/bytecode creation.
    * the mtime checking is sub-optimal. low hanging fruits warning *)
   let tasks_ops : (string * Scheduler.call) option list list =
@@ -376,7 +376,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
                changes.  Use the per-mode object as dest so bytecode and native
                don't share one staleness record. *)
             let obj_ty = if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
-            let dest = (obj_ty, Hier.get_dest_file path obj_ty h) in
+            let dest = (obj_ty, Hier.get_dest_file cstate.compilation_hier path obj_ty h) in
             let mdeps =
               List.concat
                 (List.map
@@ -384,18 +384,18 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
                      (* .cmx is only an approximation of the implementation:
                         the native code lives in the companion .o, which must
                         be tracked for implementation-only changes *)
-                     [ (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI m);
-                       (obj_ty, Hier.get_dest_file path obj_ty m) ]
+                     [ (Filetype.FileCMI, Hier.get_dest_file cstate.compilation_hier path Filetype.FileCMI m);
+                       (obj_ty, Hier.get_dest_file cstate.compilation_hier path obj_ty m) ]
                      @
                      if build_mode = Native then
-                       [ (Filetype.FileO, Hier.get_dest_file path Filetype.FileO m) ]
+                       [ (Filetype.FileO, Hier.get_dest_file cstate.compilation_hier path Filetype.FileO m) ]
                      else
                        [])
                    modules)
             in
             let dir = cstate.compilation_builddir_ml comp_opt in
             let fcompile =
-             fun () -> run_ocaml_pack dir dir annot_mode build_mode pack_opt h modules
+             fun () -> run_ocaml_pack cstate.compilation_hier dir dir annot_mode build_mode pack_opt h modules
             in
             match check_destination_valid_with mdeps dest with
             | None -> None
@@ -438,7 +438,7 @@ let check_compilation_needed is_intf dep_descs dir_spec use_thread annot_mode pa
         let fcompile =
           ( build_mode,
             fun () ->
-              run_ocaml_compile r_dir_spec use_thread annot_mode build_mode comp_opt pack_opt use_pp
+              run_ocaml_compile cstate.compilation_hier r_dir_spec use_thread annot_mode build_mode comp_opt pack_opt use_pp
                 oflags h )
         in
         if invalid then begin
@@ -475,8 +475,8 @@ let dep_descs is_intf hdesc bstate cstate target h =
   let self_deps = Analyze.get_internal_library_deps bstate.bstate_config target in
   let internal_libs_paths_all_modes = internal_libs_paths self_deps in
   let module_deps = hdesc.Module.File.dep_cwd_modules in
-  let compile_opts = Target.get_compilation_opts target in
-  let all_modes = get_all_modes target in
+  let compile_opts = Target.get_compilation_opts (Hier.conf cstate.compilation_hier) target in
+  let all_modes = get_all_modes (Hier.conf cstate.compilation_hier) target in
   if is_intf then
     let intf_desc =
       match hdesc.Module.File.intf_desc with
@@ -486,12 +486,12 @@ let dep_descs is_intf hdesc bstate cstate target h =
     List.map
       (fun comp_opt ->
         let path = cstate.compilation_builddir_ml comp_opt in
-        let dest = (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h) in
+        let dest = (Filetype.FileCMI, Hier.get_dest_file cstate.compilation_hier path Filetype.FileCMI h) in
         let src = [ (Filetype.FileMLI, intf_desc.Module.Intf.path) ] in
         let m_deps =
           List.map
             (fun module_dep ->
-              (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep))
+              (Filetype.FileCMI, Hier.get_dest_file cstate.compilation_hier path Filetype.FileCMI module_dep))
             module_deps
         in
         let internal_deps = Hashtbl.find internal_libs_paths_all_modes (comp_opt, ByteCode) in
@@ -503,7 +503,7 @@ let dep_descs is_intf hdesc bstate cstate target h =
         let file_compile_ty = buildmode_to_filety compiled_ty in
         let ext = if compiled_ty = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
         let path = cstate.compilation_builddir_ml comp_opt in
-        let dest = (file_compile_ty, Hier.get_dest_file path ext h) in
+        let dest = (file_compile_ty, Hier.get_dest_file cstate.compilation_hier path ext h) in
         let src =
           (match hdesc.Module.File.intf_desc with
             | None -> []
@@ -515,7 +515,7 @@ let dep_descs is_intf hdesc bstate cstate target h =
           | None -> []
           | Some _ ->
               (* Add dependency on the module's own .cmi file *)
-              [ (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI h) ]
+              [ (Filetype.FileCMI, Hier.get_dest_file cstate.compilation_hier path Filetype.FileCMI h) ]
         in
         let m_deps =
           own_cmi_dep
@@ -526,12 +526,12 @@ let dep_descs is_intf hdesc bstate cstate target h =
                In native mode, .cmx files depend on both .cmx (for inlining) and .cmi *)
                    let compiled_file_dep =
                      if compiled_ty = Native then
-                       [ (file_compile_ty, Hier.get_dest_file path ext module_dep) ]
+                       [ (file_compile_ty, Hier.get_dest_file cstate.compilation_hier path ext module_dep) ]
                      else
                        []
                    in
                    compiled_file_dep
-                   @ [ (Filetype.FileCMI, Hier.get_dest_file path Filetype.FileCMI module_dep) ])
+                   @ [ (Filetype.FileCMI, Hier.get_dest_file cstate.compilation_hier path Filetype.FileCMI module_dep) ])
                  module_deps)
         in
         let internal_deps = Hashtbl.find internal_libs_paths_all_modes (comp_opt, compiled_ty) in
@@ -556,7 +556,7 @@ let compile_module task_index task is_intf h bstate task_context dag =
     let use_thread = hdesc.Module.File.use_threads in
     let dir_spec = { src_dir = src_path; dst_dir = current_dir; include_dirs = [ current_dir ] } in
     let dep_descs = dep_descs is_intf hdesc bstate cstate target h in
-    let annot_mode = annot_mode () in
+    let annot_mode = annot_mode (Hier.conf cstate.compilation_hier) in
     let check_result =
       check_compilation_needed is_intf dep_descs dir_spec use_thread annot_mode pack_opt
         hdesc.Module.File.use_pp hdesc.Module.File.oflags h cstate
@@ -623,18 +623,18 @@ let link_c cstate clib_name =
   in
   (* Not sure why it is necessary ... gcc seems to return before the files are ready. *)
   ignore (wait_for_files cdep_files);
-  if gconf.ocamlmklib then
-    [ [ (fun () -> run_c_linking LinkingShared cdep_files lib_name) ] ]
+  if (Hier.conf cstate.compilation_hier).Gconf.ocamlmklib then
+    [ [ (fun () -> run_c_linking (Hier.conf cstate.compilation_hier) LinkingShared cdep_files lib_name) ] ]
   else
     let so_file = cstate.compilation_builddir_c </> fn (Utils.shared_lib_name clib_name) in
     let a_file = cstate.compilation_builddir_c </> fn (Utils.static_lib_name clib_name) in
     [
-      [ (fun () -> run_c_linking LinkingShared cdep_files so_file) ];
+      [ (fun () -> run_c_linking (Hier.conf cstate.compilation_hier) LinkingShared cdep_files so_file) ];
       [ (fun () -> run_ar a_file cdep_files) ];
       [ (fun () -> run_ranlib a_file) ];
     ]
 
-let satisfy_preds dep preds =
+let satisfy_preds metacache dep preds =
   let satisfy_all current_pkg =
     let res =
       List.fold_left
@@ -649,7 +649,7 @@ let satisfy_preds dep preds =
   let rec dep_is_satisfied current_pkg =
     satisfy_all current_pkg && List.for_all satisfy_all current_pkg.Meta.Pkg.subs
   in
-  let _, root_pkg = Metacache.get dep.Libname.main_name in
+  let _, root_pkg = Metacache.get metacache dep.Libname.main_name in
   dep_is_satisfied root_pkg
 
 (** Helper: Resolve build dependencies to actual library file paths *)
@@ -664,7 +664,7 @@ let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadL
            match Hashtbl.find bstate.bstate_config.project_dep_data dep with
            | Internal -> [ in_current_dir (Libname.to_cmca compiledType compileOpt dep) ]
            | System ->
-               let path, rootPkg = Metacache.get_from_cache dep in
+               let path, rootPkg = Metacache.get_from_cache bstate.bstate_config.project_metacache dep in
                let libDir =
                  Meta.get_include_dir_with_subpath
                    (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config))
@@ -689,7 +689,7 @@ let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadL
                  | WithProf -> Meta.Predicate.Gprof :: preds
                  | _ -> preds
                in
-               if satisfy_preds dep preds then
+               if satisfy_preds bstate.bstate_config.project_metacache dep preds then
                  let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
                  List.fold_left
                    (fun acc (_, a) ->
@@ -717,7 +717,7 @@ let get_link_destination cstate target compiledType compileOpt plugin =
         cstate.compilation_builddir_ml Normal </> Libname.to_cmca compiledType compileOpt libname
   | _ ->
       let outputName =
-        Utils.to_exe_name compileOpt compiledType (Target.get_target_dest_name target)
+        Utils.to_exe_name (Hier.conf cstate.compilation_hier) compileOpt compiledType (Target.get_target_dest_name target)
       in
       cstate.compilation_builddir_ml Normal </> outputName
 
@@ -774,9 +774,9 @@ let check_needs_relink cstate compiled c_obj_files dep_archives dest compiledTyp
     List.concat
       (List.map
          (fun m ->
-           (ext, Hier.get_dest_file path ext m)
+           (ext, Hier.get_dest_file cstate.compilation_hier path ext m)
            :: (if compiledType = Native then
-                 [ (Filetype.FileO, Hier.get_dest_file path Filetype.FileO m) ]
+                 [ (Filetype.FileO, Hier.get_dest_file cstate.compilation_hier path Filetype.FileO m) ]
                else
                  []))
          compiled)
@@ -856,7 +856,7 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       (fp_to_string dest);
     [
       (fun () ->
-        run_ocaml_linking (linking_paths_of compileOpt) compiledType link_type compileOpt
+        run_ocaml_linking cstate.compilation_hier (linking_paths_of compileOpt) compiledType link_type compileOpt
           useThreadLib systhread target.target_obits.target_oflags cclibs buildDeps compiled dest);
     ])
   else
@@ -955,20 +955,20 @@ let link task_index task bstate task_context dag =
     if all_objs <> [] then begin
       let clib_name = Target.get_target_clibname target in
       ignore (wait_for_files all_objs);
-      if gconf.ocamlmklib then
-        [ [ (fun () -> run_c_linking LinkingShared all_objs (cstate.compilation_builddir_c </> fn clib_name)) ] ]
+      if (Hier.conf cstate.compilation_hier).Gconf.ocamlmklib then
+        [ [ (fun () -> run_c_linking (Hier.conf cstate.compilation_hier) LinkingShared all_objs (cstate.compilation_builddir_c </> fn clib_name)) ] ]
       else
         let so_file = cstate.compilation_builddir_c </> fn (Utils.shared_lib_name clib_name) in
         let a_file = cstate.compilation_builddir_c </> fn (Utils.static_lib_name clib_name) in
         [
-          [ (fun () -> run_c_linking LinkingShared all_objs so_file) ];
+          [ (fun () -> run_c_linking (Hier.conf cstate.compilation_hier) LinkingShared all_objs so_file) ];
           [ (fun () -> run_ar a_file all_objs) ];
           [ (fun () -> run_ranlib a_file) ];
         ]
     end else
       []
   in
-  let all_modes = get_all_modes target in
+  let all_modes = get_all_modes (Hier.conf cstate.compilation_hier) target in
   let funlist =
     List.fold_left
       (fun flist (compiledType, compileOpt) ->
@@ -977,7 +977,7 @@ let link task_index task bstate task_context dag =
             compiledType compileOpt false
         in
         let res =
-          if is_lib target && compiledType = Native && Gconf.get_target_option_typed Library_plugin then
+          if is_lib target && compiledType = Native && Gconf.get_target_option_typed (Hier.conf cstate.compilation_hier) Library_plugin then
             link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
               compiledType compileOpt true
             @ normal
@@ -992,17 +992,17 @@ let link task_index task bstate task_context dag =
   else
     Scheduler.FinishTask task
 
-let get_destination_files target =
-  let all_modes = get_all_modes target in
+let get_destination_files conf target =
+  let all_modes = get_all_modes conf target in
   match target.Target.target_name with
   | Name.Lib libname -> List.map (fun (typ, opt) -> Libname.to_cmca typ opt libname) all_modes
   | Name.Exe _ | Name.Test _ | Name.Bench _ | Name.Example _ ->
       List.map
-        (fun (ty, opt) -> Utils.to_exe_name opt ty (Target.get_target_dest_name target))
+        (fun (ty, opt) -> Utils.to_exe_name conf opt ty (Target.get_target_dest_name target))
         all_modes
 
-let sanity_check build_dir target =
-  let files = get_destination_files target in
+let sanity_check conf build_dir target =
+  let files = get_destination_files conf target in
   let allOK =
     List.for_all
       (fun f ->
@@ -1017,12 +1017,12 @@ let sanity_check build_dir target =
   ()
 
 let check task_index task task_context dag =
-  let _, target = Hashtbl.find task_context task in
+  let cstate, target = Hashtbl.find task_context task in
   let buildDir = Dist.get_build_path (Dist.Target target.target_name) in
   let nb_step, nb_step_len = get_nb_step dag in
   log Report "[%*d of %d] Checking %s\n%!" nb_step_len task_index nb_step
     (fp_to_string buildDir);
-  sanity_check buildDir target;
+  sanity_check (Hier.conf cstate.compilation_hier) buildDir target;
   Scheduler.FinishTask task
 
 (* compile will process the compilation DAG,
@@ -1080,7 +1080,7 @@ let compile (bstate : build_state) task_context dag =
   let stat =
     try
       Helper.Timing.measure_time "Scheduler.schedule" (fun () ->
-          Scheduler.schedule gconf.parallel_jobs taskdep dispatch schedule_finish)
+          Scheduler.schedule (Hier.conf bstate.bstate_config.project_hier_registry).Gconf.parallel_jobs taskdep dispatch schedule_finish)
     with e ->
       Digests.save ();
       raise e
@@ -1111,7 +1111,7 @@ let sweep_stale_artifacts cstate =
           match step with
           | CompileModule h | CompileInterface h | CompileDirectory h -> (
               try
-                let dest = fp_to_string (Hier.get_dest_file dir Filetype.FileCMI h) in
+                let dest = fp_to_string (Hier.get_dest_file cstate.compilation_hier dir Filetype.FileCMI h) in
                 Hashtbl.replace expected (String.sub dest 0 (String.length dest - 4)) ()
               with Not_found -> ())
           | _ -> ())
@@ -1190,7 +1190,7 @@ let build_dag bstate proj_file targets_dag =
         let target = Project.Library.to_target lib in
         List.iter (fun (gen : Target.target_generate) ->
           let module_name = Hier.to_string gen.Target.generate_module in
-          Hier.register_generated_module module_name
+          Hier.register_generated_module bstate.bstate_config.project_hier_registry module_name
         ) target.Target.target_generates
       ) proj_file.Project.libs;
 

@@ -169,13 +169,13 @@ val get_target_clibname : target -> string
 val is_lib : target -> bool
 (** Check if target is a library *)
 
-val get_ocaml_compiled_types : target -> Types.ocaml_compiled_type list
+val get_ocaml_compiled_types : Gconf.t -> target -> Types.ocaml_compiled_type list
 (** Get OCaml compilation types (Native/ByteCode) based on target type and global config *)
 
-val get_debug_profile : target -> bool * bool
+val get_debug_profile : Gconf.t -> target -> bool * bool
 (** Get (debugging, profiling) flags based on target type and global config *)
 
-val get_compilation_opts : target -> Types.ocaml_compilation_option list
+val get_compilation_opts : Gconf.t -> target -> Types.ocaml_compilation_option list
 (** Get compilation options (Normal/WithDebug/WithProf) based on target config *)
 
 val get_all_builddeps : target -> Dependencies.dependency list
@@ -184,6 +184,6 @@ val get_all_builddeps : target -> Dependencies.dependency list
 val find_extra_matching : target -> string -> target_extra list
 (** Find extra compilation settings for a specific object file *)
 
-val register_generator_outputs : target -> unit
+val register_generator_outputs : Hier.registry -> target -> unit
 (** Register output modules from generators so they can be found during validation and build.
     Handles both suffix-based generators (e.g., atdgen) and explicit generate blocks. *)

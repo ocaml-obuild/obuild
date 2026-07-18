@@ -5,17 +5,17 @@ let print_warnings warnings =
     if warnings <> "" then fprintf stderr "%s\n%!" warnings else ()
 
 let log lvl fmt =
-    if lvl <= gconf.verbosity
+    if lvl <= console.verbosity
         then printf fmt
         else ifprintf stdout fmt
 
 let support_color =
     not Utils.isWindows && Unix.isatty Unix.stdout
 
-let color_red ()   = if support_color && Gconf.gconf.color then "\x1b[1;31m" else ""
-let color_green () = if support_color && Gconf.gconf.color then "\x1b[1;32m" else ""
-let color_blue ()  = if support_color && Gconf.gconf.color then "\x1b[1;34m" else ""
-let color_white () = if support_color && Gconf.gconf.color then "\x1b[0m" else ""
+let color_red ()   = if support_color && Gconf.console.color then "\x1b[1;31m" else ""
+let color_green () = if support_color && Gconf.console.color then "\x1b[1;32m" else ""
+let color_blue ()  = if support_color && Gconf.console.color then "\x1b[1;34m" else ""
+let color_white () = if support_color && Gconf.console.color then "\x1b[0m" else ""
 
 (** Performance timing utilities *)
 module Timing = struct

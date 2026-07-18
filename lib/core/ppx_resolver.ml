@@ -54,7 +54,7 @@ let get_syntax_pp bstate preprocessor buildDeps =
           Some [fp_to_string (dir </> Libname.to_cmca ByteCode Normal lib.Project.Library.name) ]
         ) else None
       ) else (
-        let meta = Metacache.get_from_cache spkg in
+        let meta = Metacache.get_from_cache conf.project_metacache spkg in
         let preds =
           if spkg = camlp4Libname
           then p4pred :: syntaxPredsCommon
@@ -84,7 +84,7 @@ let get_target_pp bstate target = function
     in
     log Verbose " all packages : [%s]\n%!" (Utils.showList "," Libname.to_string syntaxPkgs);
     let p4pred = get_p4pred pp in
-    let p4Meta = Metacache.get_from_cache camlp4Libname in
+    let p4Meta = Metacache.get_from_cache bstate.bstate_config.project_metacache camlp4Libname in
     let preproc = (snd p4Meta).Meta.Pkg.preprocessor in
     let archive = [Meta.Pkg.get_archive p4Meta camlp4Libname (p4pred::syntaxPredsCommon)] in
     (*log Verbose " camlp4 strs: [%s]\n%!" (Utils.showList "] [" id camlp4Strs);*)

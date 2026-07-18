@@ -11,17 +11,25 @@ let ( |> ) x f = f x
 
 (* ===== Helper Functions ===== *)
 
-let read_setup () =
+let read_setup conf =
   FindlibConf.load ();
   let setup = Dist.read_setup () in
-  Configure.set_opts setup;
+  Configure.set_opts conf setup;
   setup
 
-let project_read () =
-  try Project_read.read ()
+(* each command works in its own build context (module resolution registry,
+   generators, build configuration) *)
+let project_read_with hreg =
+  try Project_read.read hreg
   with exn ->
     log Verbose "exception during project read: %s\n" (Printexc.to_string exn);
     raise exn
+
+let project_read_ctx () =
+  let hreg = Hier.create_registry () in
+  (project_read_with hreg, hreg)
+
+let project_read () = fst (project_read_ctx ())
 
 let collect_all_targets proj_file =
   List.map (fun lib -> lib.Project.Library.target) proj_file.Project.libs
@@ -144,9 +152,9 @@ let cmd_configure =
 
         (* Run configuration *)
         FindlibConf.load ();
-        let proj_file = Project_read.read () in
+        let proj_file, hreg = project_read_ctx () in
         log Report "Configuring %s-%s...\n" proj_file.Project.name proj_file.Project.version;
-        Configure.run proj_file !user_flags !user_opts;
+        Configure.run hreg proj_file !user_flags !user_opts;
         (* keep IDE support fresh; never clobbers a hand-written .merlin *)
         if write_merlin proj_file then log Verbose "refreshed .merlin\n")
       ()
@@ -177,22 +185,24 @@ let cmd_build =
     Cli.command "build" ~doc:"Make this package ready for installation"
       ~description:"Compiles all or specified targets in the project using parallel compilation."
       ~run:(fun ctx ->
+        let hreg = Hier.create_registry () in
+        let conf = Hier.conf hreg in
         (* Set parallel jobs *)
-        gconf.parallel_jobs <- Cli.get_int ctx "jobs" ~default:gconf.parallel_jobs;
+        conf.Gconf.parallel_jobs <- Cli.get_int ctx "jobs" ~default:conf.Gconf.parallel_jobs;
 
         (* Set other options *)
-        if Cli.get_flag ctx "dot" then gconf.dump_dot <- true;
-        if Cli.get_flag ctx "noocamlmklib" then gconf.ocamlmklib <- false;
+        if Cli.get_flag ctx "dot" then conf.Gconf.dump_dot <- true;
+        if Cli.get_flag ctx "noocamlmklib" then conf.Gconf.ocamlmklib <- false;
 
         (* Get target names *)
         let targets = Cli.get_positionals ctx in
 
         (* Build *)
         Dist.exist ();
-        let setup = read_setup () in
-        let proj_file = project_read () in
-        let flags = Configure.check proj_file true setup in
-        let project = Analyze.prepare proj_file flags in
+        let setup = read_setup conf in
+        let proj_file = project_read_with hreg in
+        let flags = Configure.check hreg proj_file true setup in
+        let project = Analyze.prepare proj_file flags hreg in
         let bstate = Prepare.init project in
 
         let dag =
@@ -206,7 +216,7 @@ let cmd_build =
       ()
   in
   cmd |> Cli.help_flag
-  |> Cli.option_int "jobs" ~short:'j' ~placeholder:"N" ~default:gconf.parallel_jobs
+  |> Cli.option_int "jobs" ~short:'j' ~placeholder:"N" ~default:2
        ~doc:"Maximum number of jobs in parallel"
   |> Cli.flag "dot" ~doc:"Dump dependencies dot files during build"
   |> Cli.flag "noocamlmklib" ~doc:"Do not use ocamlmklib when linking C code"
@@ -253,9 +263,10 @@ let cmd_install =
         let opam_install = Cli.get_flag ctx "opam" in
 
         Dist.exist ();
-        let setup = read_setup () in
-        let proj_file = project_read () in
-        let flags = Configure.check proj_file false setup in
+        let hreg = Hier.create_registry () in
+        let setup = read_setup (Hier.conf hreg) in
+        let proj_file = project_read_with hreg in
+        let flags = Configure.check hreg proj_file false setup in
 
         let dest_dir =
           match dest_dir_str with
@@ -272,8 +283,8 @@ let cmd_install =
           | None -> Filepath.path_dirname dest_dir </> fn "bin"
         in
 
-        Install.install proj_file dest_dir bin_dir opam_install;
-        if opam_install then Install.opam_install_file proj_file flags)
+        Install.install (Hier.conf hreg) proj_file dest_dir bin_dir opam_install;
+        if opam_install then Install.opam_install_file (Hier.conf hreg) proj_file flags)
       ()
   in
   cmd |> Cli.help_flag
@@ -301,8 +312,9 @@ let cmd_run =
                 | r -> r ))
         in
         Dist.exist ();
-        let setup = read_setup () in
-        let proj_file = project_read () in
+        let hreg = Hier.create_registry () in
+        let setup = read_setup (Hier.conf hreg) in
+        let proj_file = project_read_with hreg in
         let exe =
           match exe_name with
           | Some name -> Project.find_exe proj_file name
@@ -318,8 +330,8 @@ let cmd_run =
                   exit 1)
         in
         (* build the executable target (and its dependencies) if stale *)
-        let flags = Configure.check proj_file true setup in
-        let project = Analyze.prepare proj_file flags in
+        let flags = Configure.check hreg proj_file true setup in
+        let project = Analyze.prepare proj_file flags hreg in
         let bstate = Prepare.init project in
         let target_name = Target.Name.Exe exe.Project.Executable.name in
         let dag = Dag.subset project.Analyze.project_targets_dag [ target_name ] in
@@ -330,8 +342,8 @@ let cmd_run =
         let dest_name = Target.get_target_dest_name target in
         let exe_path =
           let candidates =
-            [ Utils.to_exe_name Normal Native dest_name;
-              Utils.to_exe_name Normal ByteCode dest_name ]
+            [ Utils.to_exe_name (Hier.conf hreg) Normal Native dest_name;
+              Utils.to_exe_name (Hier.conf hreg) Normal ByteCode dest_name ]
           in
           try dir </> List.find (fun c -> Filesystem.exists (dir </> c)) candidates
           with Not_found ->
@@ -358,11 +370,12 @@ let cmd_test =
       ~run:(fun ctx ->
         let show_test = Cli.get_flag ctx "output" in
 
-        let setup = read_setup () in
-        let proj_file = project_read () in
-        let _ = Configure.check proj_file false setup in
+        let hreg = Hier.create_registry () in
+        let setup = read_setup (Hier.conf hreg) in
+        let proj_file = project_read_with hreg in
+        let _ = Configure.check hreg proj_file false setup in
 
-        if not (Gconf.get_target_option_typed Build_tests) then (
+        if not (Gconf.get_target_option_typed (Hier.conf hreg) Build_tests) then (
           eprintf "error: building tests are disabled, re-configure with --build-tests=true\n";
           exit 1);
 
@@ -373,7 +386,7 @@ let cmd_test =
               (fun test ->
                 let test_target = Project.Test.to_target test in
                 let output_name =
-                  Utils.to_exe_name Normal Native (Target.get_target_dest_name test_target)
+                  Utils.to_exe_name (Hier.conf hreg) Normal Native (Target.get_target_dest_name test_target)
                 in
                 let dir = Dist.get_build_exn (Dist.Target test_target.Target.target_name) in
                 let exe_path = dir </> output_name in
@@ -635,11 +648,11 @@ let cmd_generate =
 
 let process_global_args ctx =
   (* Process global flags *)
-  if Cli.get_flag ctx "verbose" then gconf.verbosity <- Verbose;
-  if Cli.get_flag ctx "quiet" then gconf.verbosity <- Silent;
-  if Cli.get_flag ctx "debug" then gconf.verbosity <- Debug;
-  if Cli.get_flag ctx "debug+" then gconf.verbosity <- Trace;
-  if Cli.get_flag ctx "color" then gconf.color <- true;
+  if Cli.get_flag ctx "verbose" then console.verbosity <- Verbose;
+  if Cli.get_flag ctx "quiet" then console.verbosity <- Silent;
+  if Cli.get_flag ctx "debug" then console.verbosity <- Debug;
+  if Cli.get_flag ctx "debug+" then console.verbosity <- Trace;
+  if Cli.get_flag ctx "color" then console.color <- true;
 
   (* Process global options *)
   (match Cli.get_string_opt ctx "findlib-conf" with

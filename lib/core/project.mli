@@ -147,6 +147,7 @@ module Test : sig
   (** Test configuration *)
 
   val make :
+    Gconf.t ->
     name:string ->
     main:Filepath.filename ->
     target:Target.target ->
@@ -174,6 +175,7 @@ module Bench : sig
   (** Benchmark configuration *)
 
   val make :
+    Gconf.t ->
     name:string ->
     main:Filepath.filename ->
     target:Target.target ->
@@ -199,6 +201,7 @@ module Example : sig
   (** Example executable configuration *)
 
   val make :
+    Gconf.t ->
     name:string ->
     main:Filepath.filename ->
     target:Target.target ->
@@ -286,7 +289,7 @@ val digest : unit -> Digest.t
 val write : Filepath.filepath -> t -> unit
 (** [write file proj] writes project configuration to file *)
 
-val check : t -> unit
+val check : Hier.registry -> t -> unit
 (** [check proj] validates the project configuration.
     Checks that required files and modules exist on disk.
     @raise ModuleNotFound if a declared module doesn't exist

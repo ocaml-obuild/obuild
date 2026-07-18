@@ -30,20 +30,35 @@ let file_entry_to_string = function
   | AliasedFileEntry (p, f) ->
       Printf.sprintf "AliasedFileEntry %s %s" (fp_to_string p) (fp_to_string f)
 
-let hiers : (t, file_entry) Hashtbl.t = Hashtbl.create 128
+(* Module resolution registry, one per build invocation.  Explicit (no global
+   state): module->file mappings and generated-module names are only shared
+   between the targets of the same build, and unit tests get isolation. *)
+type registry = {
+  reg_entries : (t, file_entry) Hashtbl.t;
+  reg_generated : (string, unit) Hashtbl.t; (* generate-block module names *)
+  mutable reg_generators : Generators.set;
+      (* generators available to this build; set after the project file is
+         parsed (custom generator definitions live in the .obuild file) *)
+  reg_conf : Gconf.t; (* build configuration for this invocation *)
+}
 
-(* Global registry of generated module names (from generate blocks across all targets) *)
-let generated_modules : (string, unit) Hashtbl.t = Hashtbl.create 16
+let create_registry () =
+  {
+    reg_entries = Hashtbl.create 128;
+    reg_generated = Hashtbl.create 16;
+    reg_generators = Generators.make_set [];
+    reg_conf = Gconf.create ();
+  }
 
-let register_generated_module name =
-  Hashtbl.replace generated_modules name ()
+let generators reg = reg.reg_generators
+let conf reg = reg.reg_conf
+let set_custom_generators reg customs = reg.reg_generators <- Generators.make_set customs
 
-let is_generated_module name =
-  Hashtbl.mem generated_modules name
+let register_generated_module reg name =
+  Hashtbl.replace reg.reg_generated name ()
 
-let clear () =
-  Hashtbl.clear hiers;
-  Hashtbl.clear generated_modules
+let is_generated_module reg name =
+  Hashtbl.mem reg.reg_generated name
 
 let root = function
   | x :: _ -> x
@@ -117,8 +132,8 @@ let check_modname path modname ext =
     else
       None
 
-let get_filepath root_path hier ext : file_entry option =
-  match SafeHashtbl.find_opt hiers hier with
+let get_filepath reg root_path hier ext : file_entry option =
+  match SafeHashtbl.find_opt reg.reg_entries hier with
   | Some entry ->
       (* the module already resolved through another root; if this root also
          provides a source for it, the module name is ambiguous: the cached
@@ -161,14 +176,14 @@ let get_filepath root_path hier ext : file_entry option =
             else
               DirectoryEntry (root_path, path </> fn name)
           in
-          Hashtbl.add hiers hier entry;
+          Hashtbl.add reg.reg_entries hier entry;
           Some entry)
 
-let to_filename hier prefix_path = get_filepath prefix_path hier Filetype.FileML
-let to_directory hier prefix_path = get_filepath prefix_path hier (Filetype.FileOther "")
+let to_filename reg hier prefix_path = get_filepath reg prefix_path hier Filetype.FileML
+let to_directory reg hier prefix_path = get_filepath reg prefix_path hier (Filetype.FileOther "")
 
-let to_generators hier prefix_path =
-  match SafeHashtbl.find_opt hiers hier with
+let to_generators reg hier prefix_path =
+  match SafeHashtbl.find_opt reg.reg_entries hier with
   | Some entry -> Some entry
   | None -> (
       try
@@ -189,10 +204,10 @@ let to_generators hier prefix_path =
                    let generated_file =
                      gen.Generators.generated_files filename (Modname.to_string (leaf hier))
                    in
-                   Hashtbl.add hiers hier
+                   Hashtbl.add reg.reg_entries hier
                      (GeneratedFileEntry (prefix_path, fullname, generated_file));
                    Some (GeneratedFileEntry (prefix_path, fullname, generated_file)))
-             (Generators.get_all ()))
+             (Generators.get_all reg.reg_generators))
       with Not_found -> None)
 
 let get_src_file dst_dir = function
@@ -205,9 +220,9 @@ let get_src_file dst_dir = function
    so the -o file name makes the compiler use the mangled unit name *)
 let aliased_dest_name hier = fn (string_uncapitalize (Modname.to_string (leaf hier)))
 
-let get_dest_file dst_dir ext hier =
+let get_dest_file reg dst_dir ext hier =
   let entry =
-    match SafeHashtbl.find_opt hiers hier with
+    match SafeHashtbl.find_opt reg.reg_entries hier with
     | Some e -> e
     | None -> raise Not_found
   in
@@ -227,9 +242,9 @@ let get_dest_file dst_dir ext hier =
       let path = add_prefix dst_dir hier in
       path </> (aliased_dest_name hier <.> Filetype.to_string ext)
 
-let get_dest_file_ext dst_dir hier ext_f =
+let get_dest_file_ext reg dst_dir hier ext_f =
   let entry =
-    match SafeHashtbl.find_opt hiers hier with
+    match SafeHashtbl.find_opt reg.reg_entries hier with
     | Some e -> e
     | None -> raise Not_found
   in
@@ -253,11 +268,11 @@ let get_dest_file_ext dst_dir hier ext_f =
       let filetype = Filetype.of_filepath f in
       path </> (aliased_dest_name hier <.> Filetype.to_string (ext_f filetype))
 
-let to_interface hier prefix_path = get_filepath prefix_path hier Filetype.FileMLI
-let get_file_entry_maybe hier = SafeHashtbl.find_opt hiers hier
+let to_interface reg hier prefix_path = get_filepath reg prefix_path hier Filetype.FileMLI
+let get_file_entry_maybe reg hier = SafeHashtbl.find_opt reg.reg_entries hier
 
-let get_file_entry hier paths =
-  match SafeHashtbl.find_opt hiers hier with
+let get_file_entry reg hier paths =
+  match SafeHashtbl.find_opt reg.reg_entries hier with
   | Some entry ->
       (* the module already resolved elsewhere (usually another target); if one
          of this target's search paths also provides a source for it, the name
@@ -285,18 +300,18 @@ let get_file_entry hier paths =
           try
             Some
               (list_find_map
-                 (fun lookup -> lookup hier path)
+                 (fun lookup -> lookup reg hier path)
                  [ to_filename; to_directory; to_generators; to_interface ])
           with Not_found -> None)
         paths
 
 (* Side-effect-free existence probe: check whether a source (ml, mli, directory
    or generator input) provides this module in one of the given paths, WITHOUT
-   registering anything in the global hiers table.  Used by project validation,
+   registering anything in the registry.  Used by project validation,
    which must not pollute the registry: for pack: true libraries the same bare
    module name may legitimately exist in several targets. *)
-let source_exists hier paths =
-  match SafeHashtbl.find_opt hiers hier with
+let source_exists reg hier paths =
+  match SafeHashtbl.find_opt reg.reg_entries hier with
   | Some _ -> true
   | None ->
       let name = Modname.to_string (leaf hier) in
@@ -310,7 +325,7 @@ let source_exists hier paths =
                (fun gen ->
                  let gname = Modname.to_string (gen.Generators.modname (leaf hier)) in
                  check_modname prefixed gname (Filetype.FileOther gen.Generators.suffix) <> None)
-               (Generators.get_all ()))
+               (Generators.get_all reg.reg_generators))
         paths
 
 (* Register a synthetic file entry for modules that will be generated during build
@@ -318,8 +333,8 @@ let source_exists hier paths =
    to work for these modules even before the source file exists.
    This function REPLACES any existing entry because during dependency analysis
    a directory or other entry might have been cached before we knew it was synthetic. *)
-let register_synthetic_entry hier root_path full_path =
-  Hashtbl.replace hiers hier (FileEntry (root_path, full_path))
+let register_synthetic_entry reg hier root_path full_path =
+  Hashtbl.replace reg.reg_entries hier (FileEntry (root_path, full_path))
 
 (* Register a generated file entry for modules produced by generators (e.g., atdgen).
    This allows modules like Ollama_t (from ollama.atd) to be discovered.
@@ -327,19 +342,19 @@ let register_synthetic_entry hier root_path full_path =
    - root_path: the source directory containing the generator input
    - src_path: full path to the source file (e.g., lib/ollama.atd)
    - output_file: the generated output filename (e.g., ollama_t.ml) *)
-let register_generated_entry hier root_path src_path output_file =
-  Hashtbl.replace hiers hier (GeneratedFileEntry (root_path, src_path, output_file))
+let register_generated_entry reg hier root_path src_path output_file =
+  Hashtbl.replace reg.reg_entries hier (GeneratedFileEntry (root_path, src_path, output_file))
 
 (* Register a directory entry for virtual pack modules (pack: true libraries).
    The full path's basename determines the pack's artifact names (<name>.cmi/.cmo/.cmx)
    and does not need to exist on disk. *)
-let register_directory_entry hier root_path full_path =
-  Hashtbl.replace hiers hier (DirectoryEntry (root_path, full_path))
+let register_directory_entry reg hier root_path full_path =
+  Hashtbl.replace reg.reg_entries hier (DirectoryEntry (root_path, full_path))
 
 (* Register an aliased file entry: the source compiles under the unit name of
    the hier leaf (e.g. util.ml as Mylib__Util) for module-alias wrapping. *)
-let register_aliased_entry hier root_path full_path =
-  Hashtbl.replace hiers hier (AliasedFileEntry (root_path, full_path))
+let register_aliased_entry reg hier root_path full_path =
+  Hashtbl.replace reg.reg_entries hier (AliasedFileEntry (root_path, full_path))
 
 let of_filename filename =
   let name = Filename.chop_extension (fn_to_string filename) in

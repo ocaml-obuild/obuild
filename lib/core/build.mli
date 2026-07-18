@@ -32,7 +32,7 @@ val build_dag : Prepare.build_state -> Project.t -> Target.Name.t Dag.t -> unit
     @raise CCompilationFailed if C compilation fails
     @raise CompilationFailed if OCaml compilation fails *)
 
-val sanity_check : Filepath.filepath -> Target.target -> unit
+val sanity_check : Gconf.t -> Filepath.filepath -> Target.target -> unit
 (** [sanity_check build_dir target] verifies all target output files exist
 
     Checks that all expected compilation outputs are present

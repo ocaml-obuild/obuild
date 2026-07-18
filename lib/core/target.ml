@@ -214,23 +214,23 @@ let get_target_dest_name target = Name.get_dest_name target.target_name
 let get_target_clibname target = Name.get_clibname target.target_name
 let is_lib target = Typ.is_lib target.target_type
 
-let get_ocaml_compiled_types target =
+let get_ocaml_compiled_types conf target =
   let nat, byte =
     if is_lib target then
-      (Gconf.get_target_option_typed Library_native, Gconf.get_target_option_typed Library_bytecode)
+      (Gconf.get_target_option_typed conf Library_native, Gconf.get_target_option_typed conf Library_bytecode)
     else
-      (Gconf.get_target_option_typed Executable_native, Gconf.get_target_option_typed Executable_bytecode)
+      (Gconf.get_target_option_typed conf Executable_native, Gconf.get_target_option_typed conf Executable_bytecode)
   in
   (if nat then [ Native ] else []) @ if byte then [ ByteCode ] else []
 
-let get_debug_profile target =
+let get_debug_profile conf target =
   if is_lib target then
-    (Gconf.get_target_option_typed Library_debugging, Gconf.get_target_option_typed Library_profiling)
+    (Gconf.get_target_option_typed conf Library_debugging, Gconf.get_target_option_typed conf Library_profiling)
   else
-    (Gconf.get_target_option_typed Executable_debugging, Gconf.get_target_option_typed Executable_profiling)
+    (Gconf.get_target_option_typed conf Executable_debugging, Gconf.get_target_option_typed conf Executable_profiling)
 
-let get_compilation_opts target =
-  let debug, prof = get_debug_profile target in
+let get_compilation_opts conf target =
+  let debug, prof = get_debug_profile conf target in
   (Normal :: (if debug then [ WithDebug ] else [])) @ if prof then [ WithProf ] else []
 
 let get_all_builddeps target =
@@ -245,8 +245,8 @@ let find_extra_matching target s =
 
 (** Register output modules from generators so they can be found during validation and build.
     Handles both suffix-based generators (e.g., atdgen) and explicit generate blocks. *)
-let register_generator_outputs target =
-  let generators = Generators.get_all () in
+let register_generator_outputs reg target =
+  let generators = Generators.get_all (Hier.generators reg) in
   let src_dirs = target.target_obits.target_srcdir in
   (* Register suffix-based generator outputs *)
   List.iter (fun src_dir ->
@@ -263,7 +263,7 @@ let register_generator_outputs target =
           let output_base = fn_to_string (chop_extension output_file) in
           let module_name = Compat.string_capitalize output_base in
           let hier = Hier.of_string module_name in
-          Hier.register_generated_entry hier src_dir src_path output_file
+          Hier.register_generated_entry reg hier src_dir src_path output_file
         ) files
       end
     ) generators
@@ -271,5 +271,5 @@ let register_generator_outputs target =
   (* Register generate block modules *)
   List.iter (fun (gen_block : target_generate) ->
     let module_name = Hier.to_string gen_block.generate_module in
-    Hier.register_generated_module module_name
+    Hier.register_generated_module reg module_name
   ) target.target_generates

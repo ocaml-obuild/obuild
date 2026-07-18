@@ -17,14 +17,10 @@ let convert_generator_to_custom (gen : Project.Generator.t) : Generators.custom 
     custom_module_name = gen.Project.Generator.module_name;
   }
 
-(** Register custom generators from project *)
-let register_generators proj =
-  (* Clear any previously registered custom generators *)
-  Generators.clear_custom_generators ();
-  (* Register new ones *)
-  List.iter (fun gen ->
-    Generators.register_custom (convert_generator_to_custom gen)
-  ) proj.Project.generators
+(** Install the project's custom generators into the build context *)
+let register_generators hier_registry proj =
+  Hier.set_custom_generators hier_registry
+    (List.map convert_generator_to_custom proj.Project.generators)
 
 (* ===== Vendored sub-projects =====
 
@@ -71,8 +67,8 @@ let rec reroot_library prefix (lib : Project.Library.t) =
     subs = List.map (reroot_library prefix) lib.Project.Library.subs;
   }
 
-let parse_project_file path =
-  try Obuild_validate.parse_and_convert_file (fp_to_string path) with
+let parse_project_file conf path =
+  try Obuild_validate.parse_and_convert_file conf (fp_to_string path) with
   | Obuild_validate.Validation_error (loc, msg) ->
       raise
         (Project.InvalidConfFile
@@ -87,7 +83,7 @@ let parse_project_file path =
 (* returns (libraries, custom generators) of the vendored project at [dir],
    including its own vendored projects, recursively.  [visited] guards
    against cycles and double-vendoring of the same project. *)
-let rec collect_vendored visited dir =
+let rec collect_vendored conf visited dir =
   match find_vendored_project_file dir with
   | None -> ([], [])
   | Some path ->
@@ -96,18 +92,18 @@ let rec collect_vendored visited dir =
         ([], [])
       else begin
         Hashtbl.add visited key ();
-        let proj = parse_project_file path in
+        let proj = parse_project_file conf path in
         let libs = List.map (reroot_library dir) proj.Project.libs in
         let nested =
-          List.map (fun d -> scan_vendor_dir visited (reroot dir d)) proj.Project.vendor_dirs
+          List.map (fun d -> scan_vendor_dir conf visited (reroot dir d)) proj.Project.vendor_dirs
         in
         ( libs @ List.concat (List.map fst nested),
           proj.Project.generators @ List.concat (List.map snd nested) )
       end
 
-and scan_vendor_dir visited dir =
+and scan_vendor_dir conf visited dir =
   if find_vendored_project_file dir <> None then
-    collect_vendored visited dir
+    collect_vendored conf visited dir
   else
     let subdirs =
       try
@@ -117,15 +113,15 @@ and scan_vendor_dir visited dir =
              (List.fast_sort String.compare (Array.to_list (Sys.readdir (fp_to_string dir)))))
       with Sys_error _ -> []
     in
-    let results = List.map (collect_vendored visited) subdirs in
+    let results = List.map (collect_vendored conf visited) subdirs in
     (List.concat (List.map fst results), List.concat (List.map snd results))
 
-let merge_vendored proj =
+let merge_vendored conf proj =
   match proj.Project.vendor_dirs with
   | [] -> proj
   | dirs ->
       let visited = Hashtbl.create 4 in
-      let results = List.map (scan_vendor_dir visited) dirs in
+      let results = List.map (scan_vendor_dir conf visited) dirs in
       let vlibs = List.concat (List.map fst results) in
       let vgens = List.concat (List.map snd results) in
       let seen = Hashtbl.create 8 in
@@ -146,17 +142,18 @@ let merge_vendored proj =
       }
 
 (** Read project file using the new parser *)
-let read () =
+let read hier_registry =
+  let conf = Hier.conf hier_registry in
   let path = Project.findPath () in
-  let proj = parse_project_file path in
+  let proj = parse_project_file conf path in
   (* merge vendored sub-project libraries as internal targets *)
-  let proj = merge_vendored proj in
+  let proj = merge_vendored conf proj in
   (* Apply ocaml_extra_args side effect *)
   (match proj.Project.ocaml_extra_args with
-  | Some args -> Gconf.gconf.Gconf.ocaml_extra_args <- args
+  | Some args -> (Hier.conf hier_registry).Gconf.ocaml_extra_args <- args
   | None -> ());
   (* Register custom generators *)
-  register_generators proj;
+  register_generators hier_registry proj;
   (* Validate file existence *)
-  Project.check proj;
+  Project.check hier_registry proj;
   proj

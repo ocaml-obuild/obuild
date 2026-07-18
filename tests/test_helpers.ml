@@ -1,14 +1,10 @@
 open Test_framework
 open Printf
 
-(** Clear all global caches between tests.
-    Call [install_cache_reset ()] once at the top of any test suite that exercises
-    code paths touching Metacache or Hier (project parsing, META resolution, etc.).
-    This prevents state from one test silently affecting later tests. *)
+(** Historical hook: caches are no longer global (Hier registries and META
+    caches are explicit per-invocation values), so there is nothing to reset. *)
 let install_cache_reset () =
-  Test_framework.before_each := fun () ->
-    Metacache.clear ();
-    Hier.clear ()
+  Test_framework.before_each := fun () -> ()
 
 (** Test helpers for parser testing *)
 
@@ -114,7 +110,7 @@ let with_temp_project_file content test_func =
 let assert_project_parses ~content ~name =
   try
     with_temp_project_file content (fun () ->
-      let _ = Project_read.read () in
+      let _ = Project_read.read (Hier.create_registry ()) in
       Success)
   with exn ->
     TestFailure (sprintf "Project parsing failed: %s\nInput:\n%s"
@@ -123,7 +119,7 @@ let assert_project_parses ~content ~name =
 let assert_project_parse_error ~content ~expected_msg ~name =
   try
     with_temp_project_file content (fun () ->
-      let _ = Project_read.read () in
+      let _ = Project_read.read (Hier.create_registry ()) in
       TestFailure (sprintf "Expected project parse error, but parsing succeeded.\nInput:\n%s" content))
   with
   | Project.MissingField field ->

@@ -7,18 +7,6 @@ type verbosity_t =
   | Debug
   | Trace
 
-type t = {
-  mutable verbosity : verbosity_t;
-  mutable parallel_jobs : int;
-  mutable dump_dot : bool;
-  mutable color : bool;
-  mutable bin_annot : bool;
-  mutable bin_annot_occurrences : bool;
-  mutable short_path : bool;
-  mutable ocamlmklib : bool;
-  mutable ocaml_extra_args : string list;
-}
-
 type target_option =
   | Executable_profiling
   | Executable_debugging
@@ -34,6 +22,29 @@ type target_option =
   | Build_tests
   | Build_examples
   | Annot
+(* Process-wide console settings.  Logging is cross-cutting — passing a
+   context into every log call site would be noise — so this small record is
+   deliberately global.  Everything build-affecting lives in the explicit
+   [t] below, created per invocation and carried in the build context. *)
+type console_t = {
+  mutable verbosity : verbosity_t;
+  mutable color : bool;
+}
+
+let console = { verbosity = Report; color = false }
+
+type t = {
+  mutable parallel_jobs : int;
+  mutable dump_dot : bool;
+  mutable bin_annot : bool;
+  mutable bin_annot_occurrences : bool;
+  mutable short_path : bool;
+  mutable ocamlmklib : bool;
+  mutable ocaml_extra_args : string list;
+  target_options : (target_option, bool) Hashtbl.t;
+}
+
+
 
 let all_target_options = [
   Executable_profiling; Executable_debugging; Executable_native; Executable_bytecode;
@@ -105,7 +116,7 @@ let set_env field value =
   if not (Hashtbl.mem env_ field) then raise (UnknownOption field);
   Hashtbl.replace env_ field (Some value)
 
-let target_options_ =
+let create () =
   let h = Hashtbl.create (List.length all_target_options) in
   List.iter (fun opt ->
     let default = match opt with
@@ -114,43 +125,37 @@ let target_options_ =
       | _ -> false
     in
     Hashtbl.add h opt default) all_target_options;
-  h
-
-let rec set_target_option_typed opt value =
-  Hashtbl.replace target_options_ opt value;
-  match (opt, value) with
-  | Executable_profiling, true -> set_target_option_typed Library_profiling true
-  | Executable_debugging, true -> set_target_option_typed Library_debugging true
-  | Library_plugin, true -> set_target_option_typed Library_native true
-  | Library_native, false -> set_target_option_typed Library_plugin false
-  | _ -> ()
-
-let set_target_options field value =
-  set_target_option_typed (target_option_of_string field) value
-
-let get_target_options_keys () =
-  List.map target_option_to_string all_target_options
-
-let get_target_options () =
-  Hashtbl.fold (fun k v acc -> (target_option_to_string k, v) :: acc) target_options_ []
-
-let get_target_option_typed opt =
-  try Hashtbl.find target_options_ opt with Not_found -> false
-
-let get_target_option field =
-  get_target_option_typed (target_option_of_string field)
-
-let defaults =
   {
-    verbosity = Report;
     parallel_jobs = 2;
     dump_dot = false;
-    color = false;
     bin_annot = true;
     bin_annot_occurrences = false;
     short_path = false;
     ocamlmklib = true;
     ocaml_extra_args = [];
+    target_options = h;
   }
 
-let gconf = defaults
+let rec set_target_option_typed conf opt value =
+  Hashtbl.replace conf.target_options opt value;
+  match (opt, value) with
+  | Executable_profiling, true -> set_target_option_typed conf Library_profiling true
+  | Executable_debugging, true -> set_target_option_typed conf Library_debugging true
+  | Library_plugin, true -> set_target_option_typed conf Library_native true
+  | Library_native, false -> set_target_option_typed conf Library_plugin false
+  | _ -> ()
+
+let set_target_options conf field value =
+  set_target_option_typed conf (target_option_of_string field) value
+
+let get_target_options_keys () =
+  List.map target_option_to_string all_target_options
+
+let get_target_options conf =
+  Hashtbl.fold (fun k v acc -> (target_option_to_string k, v) :: acc) conf.target_options []
+
+let get_target_option_typed conf opt =
+  try Hashtbl.find conf.target_options opt with Not_found -> false
+
+let get_target_option conf field =
+  get_target_option_typed conf (target_option_of_string field)
