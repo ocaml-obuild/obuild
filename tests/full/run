@@ -56,5 +56,6 @@ for t in ${TESTS}
 do
 	cd ${t}
 	${OBUILD} clean
+	rm -f .merlin
 	cd ..
 done

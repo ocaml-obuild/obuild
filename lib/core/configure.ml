@@ -83,9 +83,45 @@ let execute_configure_script proj_file =
       | Process.Success (_, warnings, _) -> print_warnings warnings
       | Process.Failure (_, er, _) -> raise (ConfigureScriptFailed er))
 
+(* Remove the build directory content, but preserve the currently running
+   executable if it lives inside it: with a self-hosted obuild, a plain
+   `obuild configure && obuild build` would otherwise delete the very binary
+   the shell is about to invoke.  Identity is compared by (device, inode) so
+   no realpath (OCaml 4.13+) is needed. *)
+let remove_build_content_keep_self () =
+  let self_id =
+    try
+      let st = Unix.stat Sys.executable_name in
+      Some (st.Unix.st_dev, st.Unix.st_ino)
+    with _ -> None
+  in
+  let is_self path =
+    match self_id with
+    | None -> false
+    | Some id -> (
+        try
+          let st = Unix.stat (fp_to_string path) in
+          (st.Unix.st_dev, st.Unix.st_ino) = id
+        with _ -> false)
+  in
+  let rec remove_content dir =
+    Filesystem.iterate
+      (fun ent ->
+        let p = dir </> ent in
+        if Filesystem.is_dir p then begin
+          remove_content p;
+          try Unix.rmdir (fp_to_string p) with _ -> ()
+        end
+        else if not (is_self p) then
+          try Sys.remove (fp_to_string p) with _ -> ())
+      dir
+  in
+  let build_path = Dist.build_path () in
+  if Filesystem.exists build_path then remove_content build_path
+
 let create_dist project flags =
   log Verbose "configuration changed, deleting dist\n%!";
-  Filesystem.remove_dir_content (Dist.build_path ());
+  remove_build_content_keep_self ();
   Dist.remove_dead_links ();
   log Verbose "auto-generating configuration files\n%!";
   let autogenDir = Dist.create_build Dist.Autogen in

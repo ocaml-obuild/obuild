@@ -227,6 +227,11 @@ val version_flag : command -> command
 val help_flag : command -> command
 (** Adds standard -h/--help flag *)
 
+val stop_at_first_positional : command -> command
+(** Stop option parsing at the first positional argument; all following
+    arguments are passed through to the command verbatim (for commands like
+    [run <exe> [args...]]) *)
+
 val verbose_flag : command -> command
 (** Adds standard -v/--verbose flag *)
 

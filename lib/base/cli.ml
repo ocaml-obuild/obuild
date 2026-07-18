@@ -41,6 +41,9 @@ type command = {
   cmd_args : arg_spec list;
   cmd_run : command_run option;
   cmd_subcommands : command list;
+  cmd_stop_at_positional : bool;
+      (* stop option parsing at the first positional: everything after it is
+         passed through verbatim (for commands like `run <exe> [args...]`) *)
 }
 
 type app = {
@@ -128,6 +131,7 @@ let command name ~doc ?description ?(args = []) ~run () =
       cmd_args = [];
       cmd_run = Some run;
       cmd_subcommands = [];
+      cmd_stop_at_positional = false;
     }
   in
   List.fold_left (fun cmd f -> f cmd) base_cmd args
@@ -140,6 +144,7 @@ let command_with_subcommands name ~doc ?description ~commands =
     cmd_args = [];
     cmd_run = None;
     cmd_subcommands = commands;
+    cmd_stop_at_positional = false;
   }
 
 let app name ~version ~doc ?description ?(global_args = []) ?on_global_args ~commands () =
@@ -152,6 +157,7 @@ let app name ~version ~doc ?description ?(global_args = []) ?on_global_args ~com
       cmd_args = [];
       cmd_run = None;
       cmd_subcommands = [];
+      cmd_stop_at_positional = false;
     }
   in
   let with_args = List.fold_left (fun cmd f -> f cmd) temp_cmd global_args in
@@ -168,6 +174,10 @@ let app name ~version ~doc ?description ?(global_args = []) ?on_global_args ~com
 (* ===== Argument Builders (Return modified command) ===== *)
 
 let add_arg spec cmd = { cmd with cmd_args = spec :: cmd.cmd_args }
+
+(* stop option parsing at the first positional argument; the remaining
+   arguments are passed through to the command verbatim *)
+let stop_at_first_positional cmd = { cmd with cmd_stop_at_positional = true }
 
 let flag name ?short ?env ~doc cmd =
   add_arg { arg_name = name; arg_short = short; arg_env = env; arg_kind = `Flag; arg_doc = doc } cmd
@@ -539,7 +549,12 @@ let parse_args ?(stop_at_positional = false) specs argv start_idx =
 
   while !idx < len && not !stopped do
     let arg = argv.(!idx) in
-    if String.length arg > 0 && arg.[0] = '-' then (* Parse option *)
+    if arg = "--" then begin
+      (* conventional end-of-options marker: the rest are positionals *)
+      incr idx;
+      stopped := true
+    end
+    else if String.length arg > 0 && arg.[0] = '-' then (* Parse option *)
       let is_long = String.length arg > 1 && arg.[1] = '-' in
       let opt_name, opt_val =
         if is_long then (* Long option: --name or --name=value *)
@@ -638,7 +653,7 @@ let parse_args ?(stop_at_positional = false) specs argv start_idx =
     incr idx
   done;
 
-  (values, List.rev !positionals @ !remaining)
+  (values, !positionals @ !remaining)
 
 (* ===== Main Execution ===== *)
 
@@ -682,7 +697,10 @@ let run_internal argv app =
       raise (Parse_error msg)
   | Some cmd -> (
       (* Parse command args *)
-      let cmd_vals, cmd_positionals = parse_args cmd.cmd_args (Array.of_list cmd_args) 0 in
+      let cmd_vals, cmd_positionals =
+        parse_args ~stop_at_positional:cmd.cmd_stop_at_positional cmd.cmd_args
+          (Array.of_list cmd_args) 0
+      in
       let ctx = { command_name = cmd.cmd_name; values = cmd_vals; positionals = cmd_positionals } in
 
       (* Check for command --help *)
