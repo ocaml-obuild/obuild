@@ -23,9 +23,21 @@ let parse_file path =
     with Not_found ->
       failwith ("findlib config " ^ fp_to_string path ^ ": missing key '" ^ key ^ "'")
   in
-  let paths = String_utils.split ':' (unquote (assoc_req "path")) in
-  let destdir = unquote (assoc_req "destdir") in
-  { _all = kvs; path = List.map fp paths; destdir = Some (fp destdir); _loaded = true }
+  (* Relocatable findlib (>= 1.9.9) writes RELATIVE path/destdir entries (".",
+     "./ocaml"), which findlib resolves against the config FILE's own directory.
+     obuild searches these dirs directly, so resolve them the same way — otherwise
+     a relative entry is (wrongly) taken relative to obuild's CWD and no package is
+     found. Absolute entries pass through unchanged (older findlib → no-op). *)
+  let base = fp_to_string (path_dirname path) in
+  let resolve s =
+    let s = if String.length s >= 2 && s.[0] = '.' && s.[1] = '/' then String.sub s 2 (String.length s - 2) else s in
+    if s = "" || s = "." then base
+    else if Filename.is_relative s then Filename.concat base s
+    else s
+  in
+  let paths = List.map (fun s -> fp (resolve s)) (String_utils.split ':' (unquote (assoc_req "path"))) in
+  let destdir = resolve (unquote (assoc_req "destdir")) in
+  { _all = kvs; path = paths; destdir = Some (fp destdir); _loaded = true }
 
 let get_program_config () =
   match Process.run [ "ocamlfind"; "printconf"; "conf" ] with
