@@ -40,15 +40,9 @@ let opam_install_file conf proj_file flags =
   let install_path = fp (proj_file.name ^ ".install") in
   Utils.generateFile install_path (fun add ->
       let all_targets = Project.get_all_installable_targets proj_file flags in
-      let print_target_files target list_files_fun =
+      let print_target_files target list_files_fun dest_prefix =
         let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
         let _, files = list_files_fun target build_dir in
-        (* Library files go into a per-library subdirectory so each library
-           is a distinct findlib sub-package (e.g. ozzy/ozzy_core/META). *)
-        let dest_prefix = match target.Target.target_name with
-          | Name.Lib l -> Libname.to_string l ^ "/"
-          | _ -> ""
-        in
         List.iter
           (fun file ->
             let file_str = fn_to_string file in
@@ -56,19 +50,43 @@ let opam_install_file conf proj_file flags =
               (fp_to_string build_dir) file_str dest_prefix file_str))
           files
       in
-      add (sprintf "%s: [\n" "lib");
+      (* A library's findlib package is its ROOT node (the first, un-dotted part
+         of a possibly-dotted name); a sub-library shares its parent's root and so
+         installs flat *beside* the parent — the generated META references sub-package
+         archives with no `directory`, i.e. relative to the parent dir.
+
+         The library whose root == the package name is the PRIMARY findlib package.
+         opam's `lib:` section already scopes to %{lib}%/<pkg>/, so the primary (and
+         its sub-libraries) install flat there. Every OTHER top-level library is a
+         findlib package in its own right and goes to `lib_root:` under %{lib}%/<root>/,
+         mirroring the direct-install layout (`obuild install`) — so e.g. obuild_core
+         becomes a real, discoverable findlib package rather than an unreachable
+         %{lib}%/obuild/obuild_core/. Keying on the full dotted name (the earlier bug)
+         instead buried the primary at %{lib}%/<pkg>/<pkg>/ and broke every dependant. *)
+      let lib_root l = List.hd (Libname.to_string_nodes l) in
+      add "lib: [\n";
       List.iter
         (fun target ->
           match target.target_name with
-          | Name.Lib _ -> print_target_files target (list_lib_files conf)
+          | Name.Lib l when lib_root l = proj_file.name ->
+              print_target_files target (list_lib_files conf) ""
           | _ -> ())
         all_targets;
       add "]\n";
-      add (sprintf "%s: [\n" "bin");
+      add "lib_root: [\n";
       List.iter
         (fun target ->
           match target.target_name with
-          | Name.Exe _ -> print_target_files target (list_exe_files conf)
+          | Name.Lib l when lib_root l <> proj_file.name ->
+              print_target_files target (list_lib_files conf) (lib_root l ^ "/")
+          | _ -> ())
+        all_targets;
+      add "]\n";
+      add "bin: [\n";
+      List.iter
+        (fun target ->
+          match target.target_name with
+          | Name.Exe _ -> print_target_files target (list_exe_files conf) ""
           | _ -> ())
         all_targets;
       add "]\n")
