@@ -24,11 +24,20 @@ Feature
 -------
 
 * Incremental & parallel build system. only rebuilding what's necessary.
+* Content-digest based staleness: rebuilds are driven by what actually
+  changed, not file timestamps, with early cutoff (an implementation-only
+  change does not recompile dependents whose interfaces are unchanged).
 * Descriptive configuration file.
 * Easy for users: no rules to mess about, just describe what you want.
 * No building dependency apart from OCaml's stdlib: easy to build
 * No tool or binary dependencies apart from ocaml compilers
 * OCamlfind-like support integrated for faster compilation
+* Wrapped libraries (`pack: true`): a library's modules namespaced under a
+  single top-level module, so different libraries can reuse module names
+* Vendored sub-projects (`vendor-dirs:`): build against obuild projects
+  checked into your tree (e.g. git submodules) without installing them
+* `obuild run`: build and run an executable in one step
+* Generates `.merlin` automatically for IDE support
 
 How to build a project using obuild
 -----------------------------------
@@ -46,7 +55,7 @@ obuild build -h              # Show build-specific options
 obuild --version
 
 # Typical workflow
-obuild configure --enable-tests
+obuild configure --build-tests true
 obuild build
 obuild test
 ```
@@ -56,6 +65,7 @@ obuild test
 ```
 obuild configure    Prepare to build the package
 obuild build        Make this package ready for installation
+obuild run          Build an executable (if needed) and run it
 obuild clean        Clean up after a build
 obuild install      Install this package
 obuild test         Run the tests
@@ -63,6 +73,7 @@ obuild doc          Generate documentation
 obuild sdist        Generate a source distribution file (.tar.gz)
 obuild init         Initialize a new project
 obuild get          Get project metadata field
+obuild generate     Generate configuration files (merlin, opam, completions)
 ```
 
 ### Command Details
@@ -73,12 +84,12 @@ obuild get          Get project metadata field
 obuild configure [OPTIONS]
 
 Options:
-  --enable-tests              Enable building tests
-  --enable-examples           Enable building examples
-  --enable-library-bytecode   Enable library bytecode compilation
-  --enable-library-native     Enable library native compilation
-  -g                          Enable debugging symbols
-  --annot                     Generate .annot files
+  --build-tests true|false        Build tests
+  --build-examples true|false     Build examples
+  --library-bytecode true|false   Compile libraries as bytecode
+  --library-native true|false     Compile libraries as native
+  -g                              Enable debugging symbols
+  --annot                         Generate .annot files
 ```
 
 **build** - Build every buildable target defined by the project
@@ -95,6 +106,19 @@ Examples:
   obuild build -j 4          # Build with 4 parallel jobs
   obuild build mylib myexe   # Build specific targets only
 ```
+
+**run** - Build an executable target if it is stale, then run it
+
+```bash
+obuild run [EXE] [ARGS...]
+
+# with a single executable in the project the name can be omitted;
+# everything after the executable name is passed to the program verbatim
+obuild run
+obuild run myexec --port 8080
+```
+
+The program inherits the terminal and its exit code is propagated.
 
 **clean** - Remove all build artifacts
 
@@ -245,3 +269,44 @@ Declaring a library
       src-dir: lib
       build-deps: mydep1, mydep2
 ```
+
+Wrapped libraries (pack)
+------------------------
+
+Adding `pack: true` to a library namespaces all of its modules under a single
+top-level module named after the library:
+
+```
+    library mylib
+      modules: Util, Core
+      src-dir: lib
+      pack: true
+```
+
+Consumers see `Mylib.Util` and `Mylib.Core`; the bare names are hidden, so two
+libraries may both define a module `Util` without clashing.  Inside the
+library, modules refer to each other by their plain names.  On OCaml >= 4.02
+this is implemented with module aliases (dune-style `Mylib__Util` units, cheap
+incremental builds); on older compilers it falls back to `-pack`.  The project
+syntax is the same either way.
+
+Without `pack: true`, a module name may only be defined once per project:
+obuild reports a clear error when two targets provide the same module name
+from different source files.
+
+Vendored sub-projects
+---------------------
+
+```
+    name: myproject
+    ...
+    vendor-dirs: vendor
+```
+
+Each entry of `vendor-dirs` either is a vendored obuild project directory or
+contains project directories (`vendor/*/x.obuild` — the layout produced by
+git submodules).  The libraries of vendored projects are built as part of
+your project (their `build-deps` resolve against other vendored or project
+libraries first, then ocamlfind) and are not installed: they link into your
+artifacts.  Vendored executables and tests are ignored.  Vendored projects
+must themselves be obuild projects.
