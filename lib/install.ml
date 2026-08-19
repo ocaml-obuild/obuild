@@ -188,6 +188,12 @@ let install_exe conf exe bindir =
 let install conf proj_file destdir bindir opam =
   if not opam then begin
     List.iter (fun lib -> install_lib conf proj_file lib destdir) proj_file.Project.libs;
-    List.iter (fun exe -> install_exe conf exe bindir) proj_file.Project.exes
+    (* only install executables that were actually built *)
+    List.iter
+      (fun exe ->
+        let target = Project.Executable.to_target exe in
+        if Filesystem.is_dir (Dist.get_build_path (Dist.Target target.Target.target_name)) then
+          install_exe conf exe bindir)
+      proj_file.Project.exes
   end else
     List.iter (fun lib -> write_lib_meta conf proj_file lib) proj_file.Project.libs
