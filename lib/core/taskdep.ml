@@ -10,7 +10,9 @@ type 'a t = {
   steps_done          : ('a, unit) Hashtbl.t;
   direction         : direction;
   mutable current_step   : int;
-  mutable next_tasks : 'a list;
+  (* ready queue: FIFO so newly-ready tasks are appended in O(1) instead of the old
+     O(n) list tail-append, which was quadratic on wide DAGs *)
+  next_tasks : 'a Queue.t;
   next_tasks_set    : ('a, unit) Hashtbl.t;
 }
 
@@ -18,13 +20,15 @@ type 'a t = {
 let init_with dag direction nodes =
   let set = Hashtbl.create 16 in
   List.iter (fun n -> Hashtbl.replace set n ()) nodes;
+  let q = Queue.create () in
+  List.iter (fun n -> Queue.add n q) nodes;
   {
     dag       = dag;
     nb_steps   = Dag.length dag;
     current_step   = 1;
     direction = direction;
     steps_done  = Hashtbl.create 16;
-    next_tasks = nodes;
+    next_tasks = q;
     next_tasks_set = set;
   }
 
@@ -38,13 +42,13 @@ let next_index taskdep =
 
 (* get next task from the task dependency, and removes it from the next list *)
 let get_next taskdep =
-  let nexts = taskdep.next_tasks in
-  match nexts with
-  | []       -> None
-  | task::xs ->
-    taskdep.next_tasks <- xs;
+  if Queue.is_empty taskdep.next_tasks then
+    None
+  else begin
+    let task = Queue.take taskdep.next_tasks in
     Hashtbl.remove taskdep.next_tasks_set task;
     Some (next_index taskdep, task)
+  end
 
 let mark_done taskdep step =
   (* replace, not add: two code paths call mark_done, and a duplicate entry would
@@ -63,7 +67,7 @@ let mark_done taskdep step =
       let allDone = List.for_all (fun child -> Hashtbl.mem taskdep.steps_done child) children in
       if allDone && not (Hashtbl.mem taskdep.next_tasks_set parent) then (
         Hashtbl.replace taskdep.next_tasks_set parent ();
-        taskdep.next_tasks <- taskdep.next_tasks @ [parent])
+        Queue.add parent taskdep.next_tasks)
     ) parents
 
 let is_complete taskdep =
@@ -84,4 +88,4 @@ let linearize dag direction nodes =
 
 let dump a_to_string taskdep =
   printf "tasks steps done: [%s]\n" (String.concat "," (List.map a_to_string (hashtbl_keys taskdep.steps_done)));
-  printf "tasks next: [%s]\n" (String.concat "," (List.map a_to_string taskdep.next_tasks))
+  printf "tasks next: [%s]\n" (String.concat "," (List.map a_to_string (List.rev (Queue.fold (fun acc x -> x :: acc) [] taskdep.next_tasks))))
