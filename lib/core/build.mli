@@ -9,16 +9,6 @@ exception CompilationFailed of string
 (** Exception raised for internal consistency errors *)
 exception InternalInconsistency of string * string
 
-val build_exe : Prepare.build_state -> Project.Executable.t -> unit
-(** [build_exe bstate exe] builds a single executable
-
-    Prepares compilation state and compiles the executable
-    with all its dependencies.
-
-    @param bstate global build state
-    @param exe executable to build
-    @raise CCompilationFailed if C compilation fails
-    @raise CompilationFailed if OCaml compilation fails *)
 
 val build_dag : Prepare.build_state -> Project.t -> Target.Name.t Dag.t -> unit
 (** [build_dag bstate proj_file targets_dag] builds targets according to DAG

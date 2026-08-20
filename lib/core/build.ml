@@ -617,23 +617,6 @@ let wait_for_files cdep_files =
   in
   loop cdep_files
 
-let link_c cstate clib_name =
-  let lib_name = cstate.compilation_builddir_c </> fn clib_name in
-  let cdep_files =
-    List.map (fun x -> cstate.compilation_builddir_c </> o_from_cfile x) cstate.compilation_csources
-  in
-  (* Not sure why it is necessary ... gcc seems to return before the files are ready. *)
-  ignore (wait_for_files cdep_files);
-  if (Hier.conf cstate.compilation_hier).Gconf.ocamlmklib then
-    [ [ (fun () -> run_c_linking (Hier.conf cstate.compilation_hier) LinkingShared cdep_files lib_name) ] ]
-  else
-    let so_file = cstate.compilation_builddir_c </> fn (Utils.shared_lib_name clib_name) in
-    let a_file = cstate.compilation_builddir_c </> fn (Utils.static_lib_name clib_name) in
-    [
-      [ (fun () -> run_c_linking (Hier.conf cstate.compilation_hier) LinkingShared cdep_files so_file) ];
-      [ (fun () -> run_ar a_file cdep_files) ];
-      [ (fun () -> run_ranlib a_file) ];
-    ]
 
 let satisfy_preds metacache dep preds =
   let satisfy_all current_pkg =
@@ -1148,17 +1131,6 @@ let sweep_stale_artifacts cstate =
   let root = cstate.compilation_builddir_ml Normal in
   if Filesystem.is_dir root then walk root
 
-let build_exe bstate exe =
-  let target = Project.Executable.to_target exe in
-  let modules = [ Hier.of_filename exe.Project.Executable.main ] in
-  let task_context = Hashtbl.create initial_task_context_size in
-  let build_dir = Dist.create_build (Dist.Target target.target_name) in
-  let cstate = prepare_target bstate build_dir target modules in
-  sweep_stale_artifacts cstate;
-  List.iter
-    (fun n -> Hashtbl.add task_context n (cstate, target))
-    (Dag.get_nodes cstate.compilation_dag);
-  compile bstate task_context cstate.compilation_dag
 
 let select_leaves children duplicate dag =
   let dup_set = Hashtbl.create (List.length duplicate) in
