@@ -23,6 +23,12 @@ type t = {
 (* create a new process with stdout and stderr redirected
  * and returns a new process_state
  *)
+(* terminate removes the temp files on the normal path; register them so an exception
+   between make and terminate doesn't strand obuild*.out/.err pairs in $TMPDIR *)
+let live_temp_files : (string, unit) Hashtbl.t = Hashtbl.create 64
+let () = at_exit (fun () ->
+  Hashtbl.iter (fun f () -> try Sys.remove f with _ -> ()) live_temp_files)
+
 let make args =
   let escape s = try
       let _ = String.index s ' ' in "\"" ^ s ^ "\""
@@ -31,6 +37,8 @@ let make args =
     log Trace "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
   let out_file = Filename.temp_file "obuild" ".out" in
   let err_file = Filename.temp_file "obuild" ".err" in
+  Hashtbl.replace live_temp_files out_file ();
+  Hashtbl.replace live_temp_files err_file ();
   let fd_out = Unix.openfile out_file [ Unix.O_WRONLY; Unix.O_TRUNC ] 0o600 in
   let fd_err = Unix.openfile err_file [ Unix.O_WRONLY; Unix.O_TRUNC ] 0o600 in
   let argv = Array.of_list args in
@@ -93,6 +101,7 @@ let terminate (_, p) =
   let slurp f =
     let content = try Filesystem.read_file (Filepath.fp f) with _ -> "" in
     (try Sys.remove f with Sys_error _ -> ());
+    Hashtbl.remove live_temp_files f;
     content
   in
   let stdout = slurp p.out_file in
