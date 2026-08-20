@@ -21,7 +21,7 @@ let get cache name =
     Hashtbl.find cache name
   with Not_found ->
     let r = get_from_disk name in
-    Hashtbl.add cache name r;
+    Hashtbl.replace cache name r;
     r
 
 let get_from_cache cache lib =
@@ -33,7 +33,7 @@ let get_from_cache cache lib =
     failwith (Printf.sprintf "package %s not found in the hashtbl: internal error" (Libname.to_string lib))
 
 let add cache name meta =
-  Hashtbl.add cache name meta
+  Hashtbl.replace cache name meta
 
 let find cache name =
   try
