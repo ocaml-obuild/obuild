@@ -32,7 +32,7 @@ let test_empty_name () =
 
 let test_invalid_obuild_ver () =
   assert_project_parse_error ~content:"name: test\nversion: 1.0.0\nobuild-ver: not_a_number\n"
-    ~expected_msg:"int_of_string" ~name:"invalid obuild-ver value"
+    ~expected_msg:"must be an integer" ~name:"invalid obuild-ver value"
 
 let test_future_obuild_ver () =
   assert_project_parse_error ~content:"name: test\nversion: 1.0.0\nobuild-ver: 999\n"
