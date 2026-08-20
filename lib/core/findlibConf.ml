@@ -47,13 +47,21 @@ let get_program_config () =
       | [ x ] -> [ fp x ]
       | _ -> failwith ("ocamlfind printconf failed output: " ^ out))
 
-let get_paths () =
+(* candidate locations of the findlib config file (distinct from the package search
+   path returned by the exported get_paths below) *)
+let get_conf_candidates () =
   try [ fp (Sys.getenv "OCAMLFIND_CONF") ]
   with Not_found -> (
     try get_program_config () with Failure _ | Not_found -> [ fp "/etc/findlib.conf"; fp "/etc/ocamlfind.conf" ])
 
 let get_system () =
-  let paths = get_paths () in
+  (* an explicitly-set but missing OCAMLFIND_CONF is a mistake worth reporting: silently
+     falling back to an empty config makes every dependency look "not found" *)
+  (match (try Some (Sys.getenv "OCAMLFIND_CONF") with Not_found -> None) with
+   | Some p when not (Filesystem.exists (fp p)) ->
+       failwith ("OCAMLFIND_CONF is set to " ^ p ^ " but that file does not exist")
+   | _ -> ());
+  let paths = get_conf_candidates () in
   try
     let found_path = List.find Filesystem.exists paths in
     parse_file found_path
