@@ -64,5 +64,14 @@ let load () =
   | None -> conf := get_system ()
   | Some p -> conf := parse_file (fp p)
 
-let get_paths () = !conf.path
+(* findlib prepends $OCAMLPATH to the search path; honor it so nix/esy/duniverse and
+   OCAMLPATH-based opam layouts resolve the same packages obuild does. *)
+let get_paths () =
+  let sep = if Utils.isWindows then ';' else ':' in
+  let env_paths =
+    match (try Sys.getenv "OCAMLPATH" with Not_found -> "") with
+    | "" -> []
+    | s -> List.map fp (List.filter (fun x -> x <> "") (String_utils.split sep s))
+  in
+  env_paths @ !conf.path
 let get_destdir () = !conf.destdir

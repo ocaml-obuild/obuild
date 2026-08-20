@@ -191,6 +191,21 @@ module Pkg = struct
     try snd (List.find (fun (e, _) -> list_eq_noorder e preds) pkg.archives)
     with Not_found -> raise (ArchiveNotFound (path, dep, preds))
 
+  (* inverse of the tokenizer's unescaping: a value may hold a quote, backslash or
+     newline (e.g. a description taken from the .obuild file) and must be escaped so
+     the emitted META reparses — by ocamlfind and by obuild itself. *)
+  let escape s =
+    let b = Buffer.create (String.length s + 2) in
+    String.iter
+      (fun c ->
+        match c with
+        | '"' -> Buffer.add_string b "\\\""
+        | '\\' -> Buffer.add_string b "\\\\"
+        | '\n' -> Buffer.add_string b "\\n"
+        | c -> Buffer.add_char b c)
+      s;
+    Buffer.contents b
+
   let write path package =
     let out = Buffer.create 1024 in
     let append = Buffer.add_string out in
@@ -204,7 +219,7 @@ module Pkg = struct
       let indent_str = String.make indent ' ' in
       let output_field field name =
         if field <> "" then
-          append (sprintf "%s%s = \"%s\"\n" indent_str name field)
+          append (sprintf "%s%s = \"%s\"\n" indent_str name (escape field))
       in
       output_field pkg.description "description";
       output_field pkg.version "version";
@@ -214,17 +229,17 @@ module Pkg = struct
       List.iter
         (fun (preds, deps) ->
           let dep_str = String.concat "," (List.map (fun dep -> Libname.to_string dep) deps) in
-          append (sprintf "%srequires%s = \"%s\"\n" indent_str (preds_to_string preds) dep_str))
+          append (sprintf "%srequires%s = \"%s\"\n" indent_str (preds_to_string preds) (escape dep_str)))
         pkg.requires;
 
       List.iter
         (fun (preds, v) ->
-          append (sprintf "%sarchive%s = \"%s\"\n" indent_str (preds_to_string preds) v))
+          append (sprintf "%sarchive%s = \"%s\"\n" indent_str (preds_to_string preds) (escape v)))
         pkg.archives;
 
       List.iter
         (fun (preds, v) ->
-          append (sprintf "%sarchive%s += \"%s\"\n" indent_str (preds_to_string preds) v))
+          append (sprintf "%sarchive%s += \"%s\"\n" indent_str (preds_to_string preds) (escape v)))
         pkg.append_archives;
 
       List.iter
@@ -233,7 +248,7 @@ module Pkg = struct
             | None -> ""
             | Some preds -> preds_to_string preds
           in
-          append (sprintf "%slinkopts%s = \"%s\"\n" indent_str preds_str v))
+          append (sprintf "%slinkopts%s = \"%s\"\n" indent_str preds_str (escape v)))
         pkg.linkopts;
 
       List.iter
@@ -422,7 +437,7 @@ module Token = struct
                 )
             in
             parse pkg_name
-              { acc with Pkg.requires = (preds, List.rev deps) :: acc.Pkg.requires }
+              { acc with Pkg.requires = (preds, deps) :: acc.Pkg.requires }
               expecting_rparen xs3
         | _ ->
             raise

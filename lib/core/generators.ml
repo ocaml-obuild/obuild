@@ -55,12 +55,15 @@ let find_substring str sub =
     - ${sources} : Space-separated list of all input files (for multi-input)
 *)
 let substitute_variables ~src ~dest ~sources str =
-  let src_str = fp_to_string src in
-  let dest_str = fp_to_string dest in
-  let base = fn_to_string (chop_extension (path_basename src)) in
-  let srcdir = fp_to_string (path_dirname src) in
-  let destdir = fp_to_string (path_dirname dest) in
-  let sources_str = String.concat " " (List.map fp_to_string sources) in
+  (* shell-quote each substituted path so a source dir containing a space or shell
+     metacharacter cannot break (or inject into) the generator command; the template
+     text itself stays raw, so &&, |, etc. in a custom command still work. *)
+  let src_str = Filename.quote (fp_to_string src) in
+  let dest_str = Filename.quote (fp_to_string dest) in
+  let base = Filename.quote (fn_to_string (chop_extension (path_basename src))) in
+  let srcdir = Filename.quote (fp_to_string (path_dirname src)) in
+  let destdir = Filename.quote (fp_to_string (path_dirname dest)) in
+  let sources_str = String.concat " " (List.map (fun s -> Filename.quote (fp_to_string s)) sources) in
 
   let replacements = [
     ("${src}", src_str);
