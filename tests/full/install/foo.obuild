@@ -1,0 +1,9 @@
+name: foo
+version: 1.0
+obuild-ver: 1
+
+library foo
+  modules: Foo
+
+executable footool
+  main-is: footool.ml
