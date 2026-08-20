@@ -624,10 +624,14 @@ let parse_project tokens =
           | "name" -> { p with project_name = { Obuild_ast.value; loc = t.Obuild_lexer.loc } }
           | "version" -> { p with project_version = { Obuild_ast.value; loc = t.Obuild_lexer.loc } }
           | "obuild-ver" ->
+              let ver =
+                try int_of_string (String_utils.strip_spaces value)
+                with _ ->
+                  raise (Parser_error (t.Obuild_lexer.loc, "obuild-ver must be an integer, got: " ^ value))
+              in
               {
                 p with
-                project_obuild_ver =
-                  { Obuild_ast.value = int_of_string value; loc = t.Obuild_lexer.loc };
+                project_obuild_ver = { Obuild_ast.value = ver; loc = t.Obuild_lexer.loc };
               }
           | "synopsis" -> { p with project_synopsis = Some value }
           | "description" -> { p with project_description = Some value }
