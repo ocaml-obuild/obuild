@@ -160,5 +160,5 @@ let get_cpu_count () =
   in
 
   match detected with
-  | Some n when n > 0 && n <= 128 -> n (* Sanity check: reasonable CPU count *)
+  | Some n when n > 0 -> min n 1024 (* clamp absurd values, but don't reject big hosts *)
   | _ -> 2 (* Default fallback *)

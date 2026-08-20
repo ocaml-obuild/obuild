@@ -14,12 +14,13 @@ let remove_dir_content wpath =
         try
           while true do
             let ent = Unix.readdir dirhandle in
-            if String.length ent > 0 && ent.[0] <> '.' then
+            if ent <> "." && ent <> ".." then
               let fent = path ^ Filename.dir_sep ^ ent in
               match (Unix.lstat fent).Unix.st_kind with
               | Unix.S_DIR -> rmdir_recursive Unix.rmdir fent
-              | Unix.S_REG -> Unix.unlink fent
-              | _ -> raise (UnexpectedFileType fent)
+              (* everything else (regular file, symlink, fifo, ...) is unlinked;
+                 lstat means a symlink is removed, not followed *)
+              | _ -> Unix.unlink fent
           done
         with End_of_file -> ())
       (fun () -> Unix.closedir dirhandle);
@@ -134,7 +135,7 @@ let copy_file src dst =
   let s = bytes_make 4096 ' ' in
   let srcStat = Unix.stat (fp_to_string src) in
   let operm = srcStat.Unix.st_perm in
-  with_file dst [ Unix.O_WRONLY; Unix.O_CREAT ] operm (fun fdDst ->
+  with_file dst [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ] operm (fun fdDst ->
       with_file src [ Unix.O_RDONLY ] 0o644 (fun fdSrc ->
           let isDone = ref false in
           while not !isDone do

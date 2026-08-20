@@ -27,7 +27,7 @@ let fn_to_string x = x.filename
 let got_dirsep x =
   let gotDirsep = ref false in
   let dirsepLen = String.length Filename.dir_sep in
-  for i = 0 to String.length x - dirsepLen - 1 do
+  for i = 0 to String.length x - dirsepLen do
     if String.sub x i dirsepLen = Filename.dir_sep then
       gotDirsep := true
   done;

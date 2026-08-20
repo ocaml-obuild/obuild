@@ -189,7 +189,7 @@ let cmd_build =
         let hreg = Hier.create_registry () in
         let conf = Hier.conf hreg in
         (* Set parallel jobs *)
-        conf.Gconf.parallel_jobs <- Cli.get_int ctx "jobs" ~default:conf.Gconf.parallel_jobs;
+        conf.Gconf.parallel_jobs <- Cli.get_int ctx "jobs" ~default:(Utils.get_cpu_count ());
 
         (* Set other options *)
         if Cli.get_flag ctx "dot" then conf.Gconf.dump_dot <- true;
@@ -217,8 +217,8 @@ let cmd_build =
       ()
   in
   cmd |> Cli.help_flag
-  |> Cli.option_int "jobs" ~short:'j' ~placeholder:"N" ~default:2
-       ~doc:"Maximum number of jobs in parallel"
+  |> Cli.option_int "jobs" ~short:'j' ~placeholder:"N"
+       ~doc:"Maximum number of jobs in parallel (default: detected CPU count)"
   |> Cli.flag "dot" ~doc:"Dump dependencies dot files during build"
   |> Cli.flag "noocamlmklib" ~doc:"Do not use ocamlmklib when linking C code"
   |> Cli.positionals "targets" ~placeholder:"TARGET..." ~doc:"Optional list of targets to build"
