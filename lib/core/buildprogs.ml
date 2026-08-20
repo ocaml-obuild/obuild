@@ -175,7 +175,7 @@ let run_ocaml_linking reg includeDirs build_mode linking_mode compileType use_th
     match linking_mode with
     | LinkingPlugin | LinkingLibrary -> ()
     | LinkingExecutable ->
-        if not (Gconf.get_target_option_typed conf Executable_as_obj) then
+        if not (Gconf.get_target_option_typed conf Gconf.Executable_as_obj) then
           let real = fp_to_string dest in
           let basename = Filename.basename real in
           if Utils.isWindows then
@@ -202,7 +202,7 @@ let run_ocaml_linking reg includeDirs build_mode linking_mode compileType use_th
       | LinkingPlugin -> [ "-shared" ]
       | LinkingLibrary -> [ "-a" ]
       | LinkingExecutable ->
-          if Gconf.get_target_option_typed conf Executable_as_obj then [ "-output-obj" ] else [])
+          if Gconf.get_target_option_typed conf Gconf.Executable_as_obj then [ "-output-obj" ] else [])
     @ [ "-o"; fp_to_string dest ]
     @ (match compileType with
       | Normal -> []

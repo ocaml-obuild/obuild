@@ -1,3 +1,4 @@
+open Compat
 open Printf
 open Fugue
 open Filepath
@@ -375,7 +376,7 @@ let cmd_test =
         let proj_file = project_read_with hreg in
         let _ = Configure.check hreg proj_file false setup in
 
-        if not (Gconf.get_target_option_typed (Hier.conf hreg) Build_tests) then (
+        if not (Gconf.get_target_option_typed (Hier.conf hreg) Gconf.Build_tests) then (
           eprintf "error: building tests are disabled, re-configure with --build-tests=true\n";
           exit 1);
 

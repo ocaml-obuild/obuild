@@ -1121,7 +1121,7 @@ let warn_source_overlap target modulesDeps =
     match mdesc with
     | Module.DescFile dfile ->
         let src_path = fp_to_string dfile.Module.File.path in
-        (match Hashtbl.find_opt source_registry src_path with
+        (match Compat.SafeHashtbl.find_opt source_registry src_path with
          | Some (other_name, other_hier) when other_name <> target_name ->
              (* Only warn when the -for-pack context differs: one target nests the file
               * inside a directory module (Hier.parent <> None) while another doesn't,

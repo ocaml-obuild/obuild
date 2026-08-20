@@ -1,4 +1,9 @@
 
+(* Application operators: added to the stdlib in 4.01, absent before. Defining them
+   here (with the same semantics) lets pre-4.01 compilers build modules that open Compat. *)
+let ( |> ) x f = f x
+let ( @@ ) f x = f x
+
 (* Result type definition - common across versions *)
 type ('a, 'b) result = Ok of 'a | Error of 'b
 

@@ -1,3 +1,4 @@
+open Compat
 open Fugue
 open Filepath
 open Types
@@ -977,7 +978,7 @@ let link task_index task bstate task_context dag =
             compiledType compileOpt false
         in
         let res =
-          if is_lib target && compiledType = Native && Gconf.get_target_option_typed (Hier.conf cstate.compilation_hier) Library_plugin then
+          if is_lib target && compiledType = Native && Gconf.get_target_option_typed (Hier.conf cstate.compilation_hier) Gconf.Library_plugin then
             link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib cclibs
               compiledType compileOpt true
             @ normal
