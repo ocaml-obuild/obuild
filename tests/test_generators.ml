@@ -72,6 +72,13 @@ let () =
     ~src ~dest ~sources:[src] "${base}-${base}" in
   assumeEq "subst repeated" "parser-parser" result;
 
+  (* a path with a space (or shell metacharacter) must be shell-quoted, since the
+     command is run through `sh -c`; clean paths above stay unquoted *)
+  let spacey = Filepath.fp "my dir/parser.mly" in
+  let result = Generators.substitute_variables
+    ~src:spacey ~dest ~sources:[spacey] "menhir ${src}" in
+  assumeEq "subst quotes unsafe path" ("menhir " ^ Filename.quote "my dir/parser.mly") result;
+
   (* --- substitute_output_pattern tests --- *)
   let result = Generators.substitute_output_pattern
     ~src:(Filepath.fp "parser.mly") "${base}.ml" in

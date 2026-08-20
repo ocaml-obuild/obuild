@@ -54,13 +54,26 @@ let find_substring str sub =
     - ${destdir} : Destination directory
     - ${sources} : Space-separated list of all input files (for multi-input)
 *)
+(* A substituted path is spliced into a `sh -c` command, so a space or shell
+   metacharacter in it would break (or inject into) the generator command. Quote a
+   value only when it actually contains an unsafe character — ordinary paths pass
+   through unchanged, so custom commands and their tests stay readable. *)
+let shell_safe_char c =
+  (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+  || (match c with '/' | '.' | '-' | '_' | '+' | ',' | ':' | '=' | '@' | '%' -> true | _ -> false)
+
+let quote_if_needed s =
+  let needs = ref (s = "") in
+  String.iter (fun c -> if not (shell_safe_char c) then needs := true) s;
+  if !needs then Filename.quote s else s
+
 let substitute_variables ~src ~dest ~sources str =
-  let src_str = fp_to_string src in
-  let dest_str = fp_to_string dest in
-  let base = fn_to_string (chop_extension (path_basename src)) in
-  let srcdir = fp_to_string (path_dirname src) in
-  let destdir = fp_to_string (path_dirname dest) in
-  let sources_str = String.concat " " (List.map fp_to_string sources) in
+  let src_str = quote_if_needed (fp_to_string src) in
+  let dest_str = quote_if_needed (fp_to_string dest) in
+  let base = quote_if_needed (fn_to_string (chop_extension (path_basename src))) in
+  let srcdir = quote_if_needed (fp_to_string (path_dirname src)) in
+  let destdir = quote_if_needed (fp_to_string (path_dirname dest)) in
+  let sources_str = String.concat " " (List.map (fun s -> quote_if_needed (fp_to_string s)) sources) in
 
   let replacements = [
     ("${src}", src_str);
