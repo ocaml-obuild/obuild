@@ -154,7 +154,9 @@ let merge_continuations tokens =
 
 (** Tokenize entire input string *)
 let tokenize input =
-  let lines = String_utils.split '\n' input in
+  (* String_utils.lines strips a trailing CR per line, so CRLF-edited .obuild files
+     don't leak '\r' into names/values (e.g. a module "Foo\r" that can't be found) *)
+  let lines = String_utils.lines input in
   let rec loop line_num acc = function
     | [] ->
         let loc = { line = line_num; col = 1 } in

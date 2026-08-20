@@ -47,7 +47,9 @@ let get_next taskdep =
     Some (next_index taskdep, task)
 
 let mark_done taskdep step =
-  Hashtbl.add taskdep.steps_done step ();
+  (* replace, not add: two code paths call mark_done, and a duplicate entry would
+     inflate Hashtbl.length and make is_complete fire early (silent truncation) *)
+  Hashtbl.replace taskdep.steps_done step ();
   (* check if any parents is now free to complete *)
   let parents = if taskdep.direction = FromChildren
     then Dag.get_parents taskdep.dag step

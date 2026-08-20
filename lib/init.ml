@@ -30,7 +30,9 @@ let run () =
      raise ProjectAlreadyExists
    with Project.NoConfFile -> ());
 
-  if not (Unix.isatty Unix.stdout) then
+  (* the wizard reads answers from stdin, so interactivity is about stdin, not stdout
+     (obuild init | tee log must still work; obuild init < answers must still fail) *)
+  if not (Unix.isatty Unix.stdin) then
     raise CannotRunNotInteractive;
 
   printf "  %swelcome to the obuild wizard%s\n" (color_green ()) (color_white ());

@@ -757,4 +757,7 @@ let () =
   | Init.AbortedByUser ->
       eprintf "init aborted. nothing written\n";
       exit 0
+  | Init.CannotRunNotInteractive ->
+      eprintf "error: init needs an interactive terminal (stdin is not a tty)\n";
+      exit 1
   | exn -> Exception.show exn
