@@ -238,24 +238,22 @@ let rec to_string = function
 
 let showList sep f l = String.concat sep (List.map f l)
 
+(* Precedence: AND binds tighter than OR (the conventional reading), so
+   ">= 1.0 || >= 4.0 && < 5.0" is ">= 1.0 || (>= 4.0 && < 5.0)". The previous
+   parser folded both at one level left-to-right, giving the surprising
+   "(>= 1.0 || >= 4.0) && < 5.0". *)
 let parse_expr l =
-  let rec parse_sub_expr l =
+  let rec parse_atom l =
     match l with
     | [] -> raise MalformedExpression
     | Token.NOT :: r ->
-        let e, r = parse_sub_expr r in
+        let e, r = parse_atom r in
         (Not e, r)
-    | Token.LPAREN :: r ->
-        let e, r = parse_sub_expr r in
-        let rec loop e r =
-          match r with
-          | Token.RPAREN :: r -> (Paren e, r)
-          | Token.OR :: _ | Token.AND :: _ ->
-              let e, r = parse_bin_expr e r in
-              loop e r
-          | _ -> raise UnbalancedParenthesis
-        in
-        loop e r
+    | Token.LPAREN :: r -> (
+        let e, r = parse_or_level r in
+        match r with
+        | Token.RPAREN :: r -> (Paren e, r)
+        | _ -> raise UnbalancedParenthesis)
     | Token.GT :: Token.VER v :: r -> (Gt v, r)
     | Token.GE :: Token.VER v :: r -> (Ge v, r)
     | Token.EQ :: Token.VER v :: r -> (Eq v, r)
@@ -263,25 +261,31 @@ let parse_expr l =
     | Token.LE :: Token.VER v :: r -> (Le v, r)
     | Token.NE :: Token.VER v :: r -> (Ne v, r)
     | z -> raise (UnknownExpression (showList "," Token.to_string z))
-  and parse_bin_expr expr l =
-    match l with
-    | Token.OR :: r ->
-        let e, r = parse_sub_expr r in
-        (Or (expr, e), r)
-    | Token.AND :: r ->
-        let e, r = parse_sub_expr r in
-        (And (expr, e), r)
-    | _ -> raise MalformedExpression
+  and parse_and_level l =
+    let e, r = parse_atom l in
+    let rec loop e r =
+      match r with
+      | Token.AND :: r ->
+          let e2, r = parse_atom r in
+          loop (And (e, e2)) r
+      | _ -> (e, r)
+    in
+    loop e r
+  and parse_or_level l =
+    let e, r = parse_and_level l in
+    let rec loop e r =
+      match r with
+      | Token.OR :: r ->
+          let e2, r = parse_and_level r in
+          loop (Or (e, e2)) r
+      | _ -> (e, r)
+    in
+    loop e r
   in
-  let e, r = parse_sub_expr l in
-  let rec loop e r =
-    match r with
-    | [] -> e
-    | _ ->
-      let e, r = parse_bin_expr e r in
-      loop e r
-  in
-  loop e r
+  let e, r = parse_or_level l in
+  match r with
+  | [] -> e
+  | _ -> raise MalformedExpression
 
 let parse_constraints name cs =
   try

@@ -57,6 +57,14 @@ let () =
   assumeEq "< | >= = true" true (eval version3 expr_comp2);
   assumeEq "< | >= = false" false (eval version4 expr_comp2);
 
+  (* precedence: && binds tighter than ||, so this is  >=2.0 || (>=1.0 && <1.7.2).
+     version3 = 2.0.0.0 satisfies the >=2.0 branch -> true. Under the old flat,
+     left-associative parse it would be (>=2.0 || >=1.0) && <1.7.2 -> false. *)
+  let name, expr_prec = Expr.parse_builddep "uri >=2.0 || >=1.0 && <1.7.2" in
+  Printf.printf "pkg %s constraint %s\n" name (expr_to_string expr_prec);
+  assumeEq "precedence: && tighter than ||" true (eval version3 expr_prec);
+  assumeEq "precedence: && branch" true (eval version1 expr_prec);
+
   if !err > 1 then
     exit 1
   else
