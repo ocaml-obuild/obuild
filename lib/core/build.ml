@@ -174,6 +174,19 @@ let internal_libs_paths self_deps =
       [Normal; WithProf; WithDebug]));
   tbl
 
+(* internal_libs_paths (and the internal-dep walk feeding it) depend only on the
+   target, yet dep_descs recomputes them for every module of that target. Memoize
+   per target, keyed on the small, unique target name. One obuild invocation builds
+   one project, so the paths are stable for the process's lifetime. *)
+let internal_libs_paths_memo = Hashtbl.create 16
+let internal_libs_paths_for bstate target =
+  let key = target.Target.target_name in
+  try Hashtbl.find internal_libs_paths_memo key
+  with Not_found ->
+    let v = internal_libs_paths (Analyze.get_internal_library_deps bstate.bstate_config target) in
+    Hashtbl.replace internal_libs_paths_memo key v;
+    v
+
 (* Helper: get include paths for ctypes from dependencies *)
 
 (* Generate ctypes.cstubs type discovery - produces types_generated.ml *)
@@ -473,8 +486,7 @@ let organize_compilation_functions is_intf check_fun_list hdesc =
     List.filter (fun x -> x <> []) [ List.map snd l1; List.map snd l2 ]
 
 let dep_descs is_intf hdesc bstate cstate target h =
-  let self_deps = Analyze.get_internal_library_deps bstate.bstate_config target in
-  let internal_libs_paths_all_modes = internal_libs_paths self_deps in
+  let internal_libs_paths_all_modes = internal_libs_paths_for bstate target in
   let module_deps = hdesc.Module.File.dep_cwd_modules in
   let compile_opts = Target.get_compilation_opts (Hier.conf cstate.compilation_hier) target in
   let all_modes = get_all_modes (Hier.conf cstate.compilation_hier) target in
