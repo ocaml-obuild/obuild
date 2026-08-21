@@ -918,6 +918,8 @@ let get_modules_desc bstate target toplevelModules =
         | PackAlias -> (pd.pd_root_hier :: pd.pd_members) @ pd.pd_synthetic)
   in
 
+  (* target-invariant: resolve once here rather than per module inside get_one *)
+  let ppx = resolve_module_ppx_flags bstate target in
   let get_one hier =
     let moduleName = Hier.to_string hier in
     log Verbose "Analysing %s\n%!" moduleName;
@@ -1022,9 +1024,6 @@ let get_modules_desc bstate target toplevelModules =
                 Pp.append targetPP
                   (Ppx_resolver.get_syntax_pp bstate preprocessor (List.map fst extraDeps))
           in
-
-          (* Resolve PPX flags for this module *)
-          let ppx = resolve_module_ppx_flags bstate target in
 
           log Debug "  %s has mtime %f\n%!" moduleName modTime;
           if hasInterface then
