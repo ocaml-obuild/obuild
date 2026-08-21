@@ -571,14 +571,15 @@ let cmd_generate_opam =
         let opam_content = Buffer.create 512 in
 
         Buffer.add_string opam_content (Printf.sprintf "opam-version: \"2.0\"\n");
-        Buffer.add_string opam_content (Printf.sprintf "name: \"%s\"\n" proj_file.Project.name);
+        let esc = String_utils.escape_ocaml_string in
+        Buffer.add_string opam_content (Printf.sprintf "name: \"%s\"\n" (esc proj_file.Project.name));
         Buffer.add_string opam_content
-          (Printf.sprintf "version: \"%s\"\n" proj_file.Project.version);
+          (Printf.sprintf "version: \"%s\"\n" (esc proj_file.Project.version));
 
         (* Synopsis and description *)
         if proj_file.Project.synopsis <> "" then
           Buffer.add_string opam_content
-            (Printf.sprintf "synopsis: \"%s\"\n" proj_file.Project.synopsis);
+            (Printf.sprintf "synopsis: \"%s\"\n" (esc proj_file.Project.synopsis));
 
         if proj_file.Project.description <> "" then (
           Buffer.add_string opam_content "description: \"\"\"\n";
@@ -589,19 +590,19 @@ let cmd_generate_opam =
         if proj_file.Project.authors <> [] then (
           Buffer.add_string opam_content "authors: [\n";
           List.iter
-            (fun author -> Buffer.add_string opam_content (Printf.sprintf "  \"%s\"\n" author))
+            (fun author -> Buffer.add_string opam_content (Printf.sprintf "  \"%s\"\n" (esc author)))
             proj_file.Project.authors;
           Buffer.add_string opam_content "]\n");
 
         (* License *)
         if proj_file.Project.license <> "" then
           Buffer.add_string opam_content
-            (Printf.sprintf "license: \"%s\"\n" proj_file.Project.license);
+            (Printf.sprintf "license: \"%s\"\n" (esc proj_file.Project.license));
 
         (* Homepage *)
         if proj_file.Project.homepage <> "" then
           Buffer.add_string opam_content
-            (Printf.sprintf "homepage: \"%s\"\n" proj_file.Project.homepage);
+            (Printf.sprintf "homepage: \"%s\"\n" (esc proj_file.Project.homepage));
 
         (* Collect all dependencies from all target types *)
         let unique_deps = collect_all_deps proj_file in
