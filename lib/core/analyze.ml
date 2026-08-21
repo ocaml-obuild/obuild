@@ -202,6 +202,31 @@ let prepare projFile user_flags hier_registry =
 
   let add_missing dep = missingDeps := StringSet.add dep !missingDeps in
 
+  (* findlib's exists_if: a (sub)package counts as existing only if at least one of
+     the listed files is present in its directory. Honor it so an optional or
+     native-/bytecode-only subpackage that isn't installed is skipped (as ocamlfind
+     would) rather than triggering a spurious not-found/link error downstream.
+     Conservative by construction: an empty exists_if or any resolution failure
+     yields "present", so a package whose files ARE there is never wrongly excluded. *)
+  let stdlib = fp (Hashtbl.find ocamlCfg "standard_library") in
+  let dep_present dep =
+    if isInternal dep then true
+    else
+      try
+        let path, meta = Metacache.get metacache dep.Libname.main_name in
+        let pkg = Meta.Pkg.find dep.Libname.subnames meta in
+        if pkg.Meta.Pkg.exists_if = "" then true
+        else
+          let dir = Meta.get_include_dir_with_subpath stdlib (path, meta) dep.Libname.subnames in
+          let files =
+            List.filter (fun s -> s <> "")
+              (String_utils.split_pred (fun c -> c = ' ' || c = ',' || c = '\t')
+                 pkg.Meta.Pkg.exists_if)
+          in
+          List.exists (fun f -> Filesystem.exists (dir </> fn f)) files
+      with _ -> true
+  in
+
   (* load every dependencies META files and at the same time generate the
    * graph of inter-dependencies.
    *
@@ -238,10 +263,14 @@ let prepare projFile user_flags hier_registry =
               | _ ->
                   List.iter
                     (fun reqDep ->
-                      log Debug "  library %s depends on %s\n" (Libname.to_string dep)
-                        (Libname.to_string reqDep);
-                      Dag.add_edge (Dependency dep) (Dependency reqDep) depsDag;
-                      loop reqDep)
+                      if dep_present reqDep then begin
+                        log Debug "  library %s depends on %s\n" (Libname.to_string dep)
+                          (Libname.to_string reqDep);
+                        Dag.add_edge (Dependency dep) (Dependency reqDep) depsDag;
+                        loop reqDep
+                      end else
+                        log Verbose "  skipping %s: exists_if files not installed\n"
+                          (Libname.to_string reqDep))
                     reqDeps)
             pkg.Meta.Pkg.requires;
           System

@@ -1,0 +1,3 @@
+exists_if = "nothere.cma"
+archive(byte) = "optabsent.cma"
+archive(native) = "optabsent.cmxa"

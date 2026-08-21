@@ -1,0 +1,6 @@
+obuild-ver: 1
+name: existsif
+version: 0.1
+
+library existsif
+  modules: E
