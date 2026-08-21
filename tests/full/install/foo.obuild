@@ -5,5 +5,5 @@ obuild-ver: 1
 library foo
   modules: Foo
 
-executable footool
-  main-is: footool.ml
+executable main
+  main-is: main.ml

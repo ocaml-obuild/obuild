@@ -17,7 +17,7 @@ fail() { echo "check failed: $1"; rm -rf "$DEST"; exit 1; }
 "$OBUILD" install --destdir "$DEST" --bindir "$BIN" >/dev/null 2>&1 \
   || fail "install after a library-only build (the 0.3.0 regression)"
 [ -f "$DEST/foo/META" ] || fail "library META missing at \$DEST/foo/META"
-[ -e "$BIN/footool" ] && fail "an unbuilt executable was installed"
+[ -e "$BIN/main" ] && fail "an unbuilt executable was installed"
 
 # scenario 2 — full build: the executable is installed too
 "$OBUILD" clean >/dev/null 2>&1
@@ -27,7 +27,7 @@ rm -rf "${DEST:?}"/*
 "$OBUILD" install --destdir "$DEST" --bindir "$BIN" >/dev/null 2>&1 \
   || fail "install after a full build"
 [ -f "$DEST/foo/META" ] || fail "library META missing after full build"
-[ -x "$BIN/footool" ] || fail "built executable missing at \$BIN/footool"
+[ -x "$BIN/main" ] || fail "built executable missing at \$BIN/main"
 
 rm -rf "$DEST"
 echo "install regression check: OK"
