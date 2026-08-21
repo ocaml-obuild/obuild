@@ -186,10 +186,16 @@ module Pkg = struct
     in
     res @ all_append_archives pkg.append_archives
 
-  let get_archive (path, root) dep preds =
-    let pkg = find dep.Libname.subnames root in
-    try snd (List.find (fun (e, _) -> list_eq_noorder e preds) pkg.archives)
-    with Not_found -> raise (ArchiveNotFound (path, dep, preds))
+  (* single-archive lookup used by the syntax/ppx path: delegate to the findlib-correct
+     subset+most-specific selection instead of demanding an exact predicate-set match
+     (which rejected e.g. archive(syntax,preprocessor) queried with a superset of preds
+     — a package ocamlfind would accept). *)
+  let get_archive meta dep preds =
+    match get_archive_with_filter meta dep preds with
+    | (_, a) :: _ -> a
+    | [] ->
+        let path, _ = meta in
+        raise (ArchiveNotFound (path, dep, preds))
 
   (* inverse of the tokenizer's unescaping: a value may hold a quote, backslash or
      newline (e.g. a description taken from the .obuild file) and must be escaped so
