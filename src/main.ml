@@ -201,7 +201,7 @@ let cmd_build =
         let hreg = Hier.create_registry () in
         let conf = Hier.conf hreg in
         (* Set parallel jobs *)
-        conf.Gconf.parallel_jobs <- Cli.get_int ctx "jobs" ~default:(Utils.get_cpu_count ());
+        conf.Gconf.parallel_jobs <- max 1 (Cli.get_int ctx "jobs" ~default:(Utils.get_cpu_count ()));
 
         (* Set other options *)
         if Cli.get_flag ctx "dot" then conf.Gconf.dump_dot <- true;
@@ -610,16 +610,17 @@ let cmd_generate_opam =
 
         (* Collect all dependencies from all target types *)
         let unique_deps = collect_all_deps proj_file in
-        if unique_deps <> [] then (
-          Buffer.add_string opam_content "depends: [\n";
-          Buffer.add_string opam_content "  \"ocaml\"\n";
-          Buffer.add_string opam_content "  \"obuild\" {build}\n";
-          List.iter
-            (fun (libname, _) ->
-              Buffer.add_string opam_content
-                (Printf.sprintf "  \"%s\"\n" (Libname.to_string libname)))
-            unique_deps;
-          Buffer.add_string opam_content "]\n");
+        (* always emit ocaml + obuild (the build tool), even for a dep-free project,
+           otherwise the generated .opam has no way to build *)
+        Buffer.add_string opam_content "depends: [\n";
+        Buffer.add_string opam_content "  \"ocaml\"\n";
+        Buffer.add_string opam_content "  \"obuild\" {build}\n";
+        List.iter
+          (fun (libname, _) ->
+            Buffer.add_string opam_content
+              (Printf.sprintf "  \"%s\"\n" (esc (Libname.to_string libname))))
+          unique_deps;
+        Buffer.add_string opam_content "]\n";
 
         (* Build instructions *)
         Buffer.add_string opam_content "build: [\n";
