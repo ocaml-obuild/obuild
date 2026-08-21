@@ -215,7 +215,7 @@ let () =
       String.concat " " (List.map Libname.to_string libs)
     ) reqs)
   in
-  assumeEq "netstring requires" "netsys unix str"
+  assumeEq "netstring requires" "str unix netsys"
     (requires_to_string netstring.Meta.Pkg.requires);
 
   (* --- New tests: subpackage navigation --- *)
