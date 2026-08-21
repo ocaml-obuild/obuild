@@ -217,10 +217,18 @@ let prepare projFile user_flags hier_registry =
         let pkg = Meta.Pkg.find dep.Libname.subnames meta in
         if pkg.Meta.Pkg.exists_if = "" then true
         else
-          let dir = Meta.get_include_dir_with_subpath stdlib (path, meta) dep.Libname.subnames in
+          (* the exists_if files live in the package's own directory. For the top-level
+             package (no subnames), get_include_dir applies its `directory` field, which
+             get_include_dir_with_subpath skips for the empty-subname case. *)
+          let dir =
+            match dep.Libname.subnames with
+            | [] -> Meta.get_include_dir stdlib (path, meta)
+            | _ -> Meta.get_include_dir_with_subpath stdlib (path, meta) dep.Libname.subnames
+          in
           let files =
             List.filter (fun s -> s <> "")
-              (String_utils.split_pred (fun c -> c = ' ' || c = ',' || c = '\t')
+              (String_utils.split_pred
+                 (fun c -> c = ' ' || c = ',' || c = '\t' || c = '\n' || c = '\r')
                  pkg.Meta.Pkg.exists_if)
           in
           List.exists (fun f -> Filesystem.exists (dir </> fn f)) files
