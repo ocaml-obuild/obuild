@@ -61,6 +61,26 @@ let show exn =
   | Expr.CannotParseConstraints (builddep, s) ->
       error "cannot parse constraints for build dependency '%s': %s\n" builddep s;
       exit exit_project_error
+  (* target lookups: a bad name on the command line (build/run/…) — a clean message
+     rather than an uncaught DagNodeNotFound / Project.*NotFound *)
+  | Dag.DagNodeNotFound ->
+      error "no such target (check the target names in your project)\n";
+      exit exit_project_error
+  | Project.ExecutableNotFound name ->
+      error "no executable named '%s' in this project\n" name;
+      exit exit_project_error
+  | Project.LibraryNotFound name ->
+      error "no library named '%s' in this project\n" (Libname.to_string name);
+      exit exit_project_error
+  | Project.TestNotFound name ->
+      error "no test named '%s' in this project\n" name;
+      exit exit_project_error
+  | Project.BenchNotFound name ->
+      error "no benchmark named '%s' in this project\n" name;
+      exit exit_project_error
+  | Project.ExampleNotFound name ->
+      error "no example named '%s' in this project\n" name;
+      exit exit_project_error
   (* dist directory related *)
   | Dist.DistNotADirectory ->
       error "dist is not a directory\n";
