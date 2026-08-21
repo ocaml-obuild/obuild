@@ -36,6 +36,15 @@ let list_exe_files conf lib build_dir =
       | Filetype.FileEXE -> true
       | _ -> false)
 
+(* the bytecode C-stub shared library (dll<clib>.so). It belongs in the toolchain's
+   stublibs directory (on ld.conf), NOT the package dir, so bytecode/toplevel/Dynlink
+   consumers can load it — the static libstubs_<clib>.a already covers native linking. *)
+let list_stublib_files conf lib build_dir =
+  list_target_files_pred conf lib (fun f ->
+      match Filetype.of_filepath (build_dir </> f) with
+      | Filetype.FileSO -> true
+      | _ -> false)
+
 let opam_install_file conf proj_file flags =
   let install_path = fp (proj_file.name ^ ".install") in
   Utils.generateFile install_path (fun add ->
@@ -87,6 +96,15 @@ let opam_install_file conf proj_file flags =
         (fun target ->
           match target.target_name with
           | Name.Exe _ -> print_target_files target (list_exe_files conf) ""
+          | _ -> ())
+        all_targets;
+      add "]\n";
+      (* opam's stublibs: section installs to %{lib}%/stublibs/ (on ld.conf) *)
+      add "stublibs: [\n";
+      List.iter
+        (fun target ->
+          match target.target_name with
+          | Name.Lib _ -> print_target_files target (list_stublib_files conf) ""
           | _ -> ())
         all_targets;
       add "]\n")
@@ -164,11 +182,21 @@ let install_lib conf proj_file lib dest_dir =
         list_lib_files conf target build_dir)
       (Project.Library.to_targets lib)
   in
+  let stub_files =
+    List.map
+      (fun target ->
+        let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
+        list_stublib_files conf target build_dir)
+      (Project.Library.to_targets lib)
+  in
   let dir_name = fn (Libname.to_string lib.Project.Library.name) in
   log Report "installing library %s\n" (Libname.to_string lib.Project.Library.name);
   log Debug "installing files: %s\n"
     (Utils.showList "," fn_to_string (List.concat (List.map snd all_files)));
-  copy_files all_files dest_dir dir_name
+  copy_files all_files dest_dir dir_name;
+  (* stub shared libs go to <root>/stublibs/, not the package dir *)
+  if List.exists (fun (_, fs) -> fs <> []) stub_files then
+    copy_files stub_files dest_dir (fn "stublibs")
 
 let install_exe conf exe bindir =
   let target = Project.Executable.to_target exe in

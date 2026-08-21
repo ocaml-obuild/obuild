@@ -1,0 +1,7 @@
+obuild-ver: 1
+name: cstub
+version: 0.1
+
+library cstub
+  modules: Cstub
+  c-sources: cadd.c
