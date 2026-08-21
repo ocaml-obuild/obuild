@@ -577,28 +577,39 @@ let compile_module task_index task is_intf h bstate task_context dag =
     (check_result, hdesc)
   in
   let all = List.map (fun (c, t) -> process_one_target c t) all in
-  match all with
-  | [] -> Scheduler.FinishTask task
-  | ((compilation_reason, _), _) :: _ ->
-  match compilation_reason with
+  (* A module can be shared by several targets (CompileModule is keyed by Hier only),
+     so [all] holds one (compilation_reason, check) per (cstate, target). Rebuild if
+     ANY pair is stale, and gather the compilation functions of ALL pairs — a fresh
+     pair contributes an empty group, which is filtered out. Deciding from only the
+     head pair would (a) silently skip a stale sibling (later "Unbound module"/link
+     failure), or (b) with an interface, hand the scheduler an empty task group whose
+     completion count starts at 0 and never fires (build hangs). *)
+  let stale_reason =
+    List.fold_left
+      (fun acc ((reason, _), _) -> match acc with Some _ -> acc | None -> reason)
+      None all
+  in
+  match stale_reason with
   | None -> Scheduler.FinishTask task
-  | Some reason ->
-      (* if the module has an interface, we create one list, so everything can be run in parallel,
-       * otherwise we partition the build_mode functions in build_modes group. *)
+  | Some reason -> (
+      (* interface case yields a single group; otherwise partition by build mode.
+         empty groups (from fresh pairs) are dropped so the scheduler never gets one. *)
       let all_fun_lists =
-        List.fold_left
-          (fun l ((_, check), hdesc) ->
-            let funlist = organize_compilation_functions is_intf check hdesc in
-            l @ funlist)
-          [] all
+        List.filter
+          (fun g -> g <> [])
+          (List.fold_left
+             (fun l ((_, check), hdesc) -> l @ organize_compilation_functions is_intf check hdesc)
+             [] all)
       in
-
-      let verb = if is_intf then "Intfing" else "Compiling" in
-      let nb_step, nb_step_len = get_nb_step dag in
-      log Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb
-        (Hier.to_string h)
-        (if reason <> "" then "    ( " ^ reason ^ " )" else "");
-      Scheduler.AddTask (task, all_fun_lists)
+      match all_fun_lists with
+      | [] -> Scheduler.FinishTask task
+      | _ ->
+          let verb = if is_intf then "Intfing" else "Compiling" in
+          let nb_step, nb_step_len = get_nb_step dag in
+          log Report "[%*d of %d] %s %-30s%s\n%!" nb_step_len task_index nb_step verb
+            (Hier.to_string h)
+            (if reason <> "" then "    ( " ^ reason ^ " )" else "");
+          Scheduler.AddTask (task, all_fun_lists))
 
 let wait_for_files cdep_files =
   let max_wait = 30.0 in

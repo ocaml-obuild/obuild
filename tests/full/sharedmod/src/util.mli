@@ -1,0 +1,1 @@
+val greet : unit -> string

@@ -1,0 +1,12 @@
+obuild-ver: 1
+name: sharedmod
+version: 0.1
+
+library sharedmod
+  src-dir: src
+  modules: Util
+
+executable prog
+  src-dir: src
+  main-is: prog.ml
+  modules: Util
