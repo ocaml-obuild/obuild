@@ -421,6 +421,19 @@ module Token = struct
         | _ -> raise (MetaParseError (name, "expecting ')' after " ^ field ^ "'s predicate")))
     | xs -> ([], xs)
 
+  (* archive / requires / ppx / warning / linkopts / ... all begin with an optional
+     predicate list then `=` or `+=` and a quoted string; factor that shared prefix.
+     Returns the predicates, which operator was used, the string, and the rest. *)
+  let parse_predicate_value name field xs =
+    let preds, xs2 = parse_predicate_list name field xs in
+    match xs2 with
+    | EQ :: S v :: rest -> (preds, `Eq, v, rest)
+    | PLUSEQ :: S v :: rest -> (preds, `PlusEq, v, rest)
+    | _ ->
+        raise
+          (MetaParseError
+             (name, "parsing " ^ field ^ " failed: expected '=' or '+=' followed by a quoted string"))
+
   let rec parse pkg_name acc expecting_rparen = function
     | [] ->
         if expecting_rparen then
@@ -432,97 +445,57 @@ module Token = struct
         let pkg, xs2 = parse pkg_name (Pkg.make name) true xs in
         let nacc = { acc with Pkg.subs = acc.Pkg.subs @ [ pkg ] } in
         parse pkg_name nacc expecting_rparen xs2
-    | ID "requires" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "requires" xs in
-        match xs2 with
-        | PLUSEQ :: S reqs :: xs3 | EQ :: S reqs :: xs3 ->
-            let deps =
-              List.map (fun r -> Libname.of_string r)
-              $ (List.filter (fun x -> x <> "")
-                $ String_utils.split_pred (fun c -> match c with ',' | ' ' | '\n' | '\r' | '\t' -> true | _ -> false) reqs
-                )
-            in
-            parse pkg_name
-              { acc with Pkg.requires = (preds, deps) :: acc.Pkg.requires }
-              expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError
-                 ( pkg_name,
-                   "parsing requires failed: expected '=' or '+=' followed by quoted dependency \
-                    list" )))
+    | ID "requires" :: xs ->
+        let preds, _op, reqs, xs3 = parse_predicate_value pkg_name "requires" xs in
+        let deps =
+          List.map (fun r -> Libname.of_string r)
+          $ (List.filter (fun x -> x <> "")
+            $ String_utils.split_pred
+                (fun c -> match c with ',' | ' ' | '\n' | '\r' | '\t' -> true | _ -> false)
+                reqs)
+        in
+        parse pkg_name { acc with Pkg.requires = (preds, deps) :: acc.Pkg.requires }
+          expecting_rparen xs3
     | ID "directory" :: EQ :: S dir :: xs ->
         parse pkg_name { acc with Pkg.directory = dir } expecting_rparen xs
     | ID "description" :: EQ :: S dir :: xs ->
         parse pkg_name { acc with Pkg.description = dir } expecting_rparen xs
     | ID "browse_interfaces" :: EQ :: S _ :: xs -> parse pkg_name acc expecting_rparen xs
     | ID "warning" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "archive" xs in
-        match xs2 with
-        | EQ :: S v :: xs3 ->
-            let nacc = { acc with Pkg.warning = acc.Pkg.warning @ [ (preds, v) ] } in
-            parse pkg_name nacc expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError
-                 (pkg_name, "parsing warning failed: expected '=' followed by quoted string")))
-    | ID "archive" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "archive" xs in
-        match xs2 with
-        | PLUSEQ :: S v :: xs3 ->
-            let nacc =
-              { acc with Pkg.append_archives = acc.Pkg.append_archives @ [ (preds, v) ] }
-            in
-            parse pkg_name nacc expecting_rparen xs3
-        | EQ :: S v :: xs3 ->
-            let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [ (preds, v) ] } in
-            parse pkg_name nacc expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError
-                 (pkg_name, "parsing archive failed: expected '=' or '+=' followed by quoted string"))
-        )
-    | ID "plugin" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "plugin" xs in
+        let preds, op, v, xs3 = parse_predicate_value pkg_name "warning" xs in
+        match op with
+        | `Eq ->
+            parse pkg_name { acc with Pkg.warning = acc.Pkg.warning @ [ (preds, v) ] }
+              expecting_rparen xs3
+        | `PlusEq -> raise (MetaParseError (pkg_name, "parsing warning failed: '+=' not supported")))
+    | ID "archive" :: xs ->
+        let preds, op, v, xs3 = parse_predicate_value pkg_name "archive" xs in
+        let nacc =
+          match op with
+          | `PlusEq -> { acc with Pkg.append_archives = acc.Pkg.append_archives @ [ (preds, v) ] }
+          | `Eq -> { acc with Pkg.archives = acc.Pkg.archives @ [ (preds, v) ] }
+        in
+        parse pkg_name nacc expecting_rparen xs3
+    | ID "plugin" :: xs ->
+        let preds, op, v, xs3 = parse_predicate_value pkg_name "plugin" xs in
         let preds = Predicate.Plugin :: preds in
-        match xs2 with
-        | PLUSEQ :: S v :: xs3 ->
-            let nacc =
-              { acc with Pkg.append_archives = acc.Pkg.append_archives @ [ (preds, v) ] }
-            in
-            parse pkg_name nacc expecting_rparen xs3
-        | EQ :: S v :: xs3 ->
-            let nacc = { acc with Pkg.archives = acc.Pkg.archives @ [ (preds, v) ] } in
-            parse pkg_name nacc expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError
-                 ( pkg_name,
-                   "parsing plugin failed: expected '=' or '+=' followed by quoted plugin path" )))
+        let nacc =
+          match op with
+          | `PlusEq -> { acc with Pkg.append_archives = acc.Pkg.append_archives @ [ (preds, v) ] }
+          | `Eq -> { acc with Pkg.archives = acc.Pkg.archives @ [ (preds, v) ] }
+        in
+        parse pkg_name nacc expecting_rparen xs3
     | ID "preprocessor" :: EQ :: S v :: xs ->
         parse pkg_name { acc with Pkg.preprocessor = v } expecting_rparen xs
     | ID "ppx" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "ppx" xs in
-        match xs2 with
-        | EQ :: S v :: xs3 ->
-            parse pkg_name { acc with Pkg.ppx = Some (preds, v) } expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError
-                 (pkg_name, "parsing ppx failed: expected '=' followed by quoted preprocessor path"))
-        )
-    | ID "ppxopt" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "ppxopt" xs in
-        match xs2 with
-        | PLUSEQ :: S v :: xs3 | EQ :: S v :: xs3 ->
-            parse pkg_name
-              { acc with Pkg.ppxopt = acc.Pkg.ppxopt @ [ (preds, v) ] }
-              expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError
-                 (pkg_name, "parsing ppxopt failed: expected '=' or '+=' followed by quoted options"))
-        )
+        let preds, op, v, xs3 = parse_predicate_value pkg_name "ppx" xs in
+        match op with
+        | `Eq -> parse pkg_name { acc with Pkg.ppx = Some (preds, v) } expecting_rparen xs3
+        | `PlusEq -> raise (MetaParseError (pkg_name, "parsing ppx failed: '+=' not supported")))
+    | ID "ppxopt" :: xs ->
+        let preds, _op, v, xs3 = parse_predicate_value pkg_name "ppxopt" xs in
+        parse pkg_name { acc with Pkg.ppxopt = acc.Pkg.ppxopt @ [ (preds, v) ] }
+          expecting_rparen xs3
     | ID "version" :: EQ :: S v :: xs ->
         parse pkg_name { acc with Pkg.version = v } expecting_rparen xs
     | ID "exists_if" :: EQ :: S v :: xs ->
@@ -543,18 +516,16 @@ module Token = struct
               (MetaParseError
                  (pkg_name, "parsing error field failed, expected '=' after closing parenthesis")))
     | ID "linkopts" :: xs -> (
-        let preds, xs2 = parse_predicate_list pkg_name "linkopts" xs in
-        match xs2 with
-        | EQ :: S s :: xs3 ->
+        let preds, op, s, xs3 = parse_predicate_value pkg_name "linkopts" xs in
+        match op with
+        | `Eq ->
             parse pkg_name
               {
                 acc with
                 Pkg.linkopts = ((if preds = [] then None else Some preds), s) :: acc.Pkg.linkopts;
               }
               expecting_rparen xs3
-        | _ ->
-            raise
-              (MetaParseError (pkg_name, "parsing linkopts failed, expected '=' after predicates")))
+        | `PlusEq -> raise (MetaParseError (pkg_name, "parsing linkopts failed: '+=' not supported")))
     | ID stuff :: EQ :: S stuffVal :: xs ->
         parse pkg_name
           { acc with Pkg.assignment = (stuff, stuffVal) :: acc.Pkg.assignment }
