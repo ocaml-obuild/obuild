@@ -32,6 +32,18 @@ let project_read_ctx () =
 
 let project_read () = fst (project_read_ctx ())
 
+(* prepare and build the given targets (all of them if [None]). Shared by the
+   `build` and `run` commands so they cannot drift apart. *)
+let build_targets hreg proj_file flags target_names =
+  let project = Analyze.prepare proj_file flags hreg in
+  let bstate = Prepare.init project in
+  let dag =
+    match target_names with
+    | None -> project.Analyze.project_targets_dag
+    | Some names -> Dag.subset project.Analyze.project_targets_dag names
+  in
+  Build.build_dag bstate proj_file dag
+
 let collect_all_targets proj_file =
   List.map (fun lib -> lib.Project.Library.target) proj_file.Project.libs
   @ List.map (fun exe -> exe.Project.Executable.target) proj_file.Project.exes
@@ -203,17 +215,12 @@ let cmd_build =
         let setup = read_setup conf in
         let proj_file = project_read_with hreg in
         let flags = Configure.check hreg proj_file true setup in
-        let project = Analyze.prepare proj_file flags hreg in
-        let bstate = Prepare.init project in
-
-        let dag =
+        let target_names =
           match targets with
-          | [] -> project.Analyze.project_targets_dag
-          | _ ->
-              let target_names = List.map Target.Name.of_string targets in
-              Dag.subset project.Analyze.project_targets_dag target_names
+          | [] -> None
+          | _ -> Some (List.map Target.Name.of_string targets)
         in
-        Build.build_dag bstate proj_file dag)
+        build_targets hreg proj_file flags target_names)
       ()
   in
   cmd |> Cli.help_flag
@@ -332,11 +339,8 @@ let cmd_run =
         in
         (* build the executable target (and its dependencies) if stale *)
         let flags = Configure.check hreg proj_file true setup in
-        let project = Analyze.prepare proj_file flags hreg in
-        let bstate = Prepare.init project in
         let target_name = Target.Name.Exe exe.Project.Executable.name in
-        let dag = Dag.subset project.Analyze.project_targets_dag [ target_name ] in
-        Build.build_dag bstate proj_file dag;
+        build_targets hreg proj_file flags (Some [ target_name ]);
         (* run it, inheriting the terminal, and propagate the exit code *)
         let target = Project.Executable.to_target exe in
         let dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
