@@ -1,0 +1,6 @@
+obuild-ver: 1
+name: dep
+version: 0.1
+
+library dep
+  modules: A, B, C, D, E
