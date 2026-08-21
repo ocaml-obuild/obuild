@@ -201,7 +201,12 @@ let cmd_build =
         let hreg = Hier.create_registry () in
         let conf = Hier.conf hreg in
         (* Set parallel jobs *)
-        conf.Gconf.parallel_jobs <- max 1 (Cli.get_int ctx "jobs" ~default:(Utils.get_cpu_count ()));
+        (* detect the CPU count only when -j is absent, so `-j N` doesn't fork nproc *)
+        conf.Gconf.parallel_jobs <-
+          max 1
+            (match Cli.get_int_opt ctx "jobs" with
+             | Some n -> n
+             | None -> Utils.get_cpu_count ());
 
         (* Set other options *)
         if Cli.get_flag ctx "dot" then conf.Gconf.dump_dot <- true;

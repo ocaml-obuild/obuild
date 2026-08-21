@@ -2,7 +2,6 @@ open Fugue
 open Filepath
 open Compat
 
-exception UnexpectedFileType of string
 exception WriteFailed
 
 let remove_dir_content wpath =

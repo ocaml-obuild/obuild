@@ -65,7 +65,9 @@ let mark_done taskdep step =
         else Dag.get_parents taskdep.dag parent
       in
       let allDone = List.for_all (fun child -> Hashtbl.mem taskdep.steps_done child) children in
-      if allDone && not (Hashtbl.mem taskdep.next_tasks_set parent) then (
+      if allDone
+         && not (Hashtbl.mem taskdep.next_tasks_set parent)
+         && not (Hashtbl.mem taskdep.steps_done parent) then (
         Hashtbl.replace taskdep.next_tasks_set parent ();
         Queue.add parent taskdep.next_tasks)
     ) parents

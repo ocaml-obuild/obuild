@@ -43,6 +43,7 @@ let list_stublib_files conf lib build_dir =
   list_target_files_pred conf lib (fun f ->
       match Filetype.of_filepath (build_dir </> f) with
       | Filetype.FileSO -> true
+      | Filetype.FileOther "dll" -> true (* Windows stub: dll<clib>.dll *)
       | _ -> false)
 
 let opam_install_file conf proj_file flags =

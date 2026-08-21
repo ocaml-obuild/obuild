@@ -3,15 +3,14 @@
 
 (** Exceptions *)
 
-exception UnexpectedFileType of string
 (** Raised by [remove_dir_content] whenever trying to delete a block or char device. *)
 
 exception WriteFailed
 (** Raised by [write_no_partial]. *)
 
 val remove_dir_content : Filepath.filepath -> unit
-(** Removes the contents of a directory. Raises [UnexpectedFileType] if the directory contain a file
-    representing a block or a character device. *)
+(** Removes the contents of a directory. Non-directory entries (files, symlinks,
+    fifos, ...) are unlinked; symlinks are removed, not followed. *)
 
 val remove_dir : Filepath.filepath -> unit
 (** Remove a directory and its content. *)

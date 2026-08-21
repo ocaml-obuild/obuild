@@ -36,8 +36,8 @@ let make args =
   if Gconf.console.Gconf.verbosity >= Gconf.Trace then
     log Trace "  [CMD]: %s\n%!" (String.concat " " (List.map escape args));
   let out_file = Filename.temp_file "obuild" ".out" in
-  let err_file = Filename.temp_file "obuild" ".err" in
   Hashtbl.replace live_temp_files out_file ();
+  let err_file = Filename.temp_file "obuild" ".err" in
   Hashtbl.replace live_temp_files err_file ();
   let fd_out = Unix.openfile out_file [ Unix.O_WRONLY; Unix.O_TRUNC ] 0o600 in
   let fd_err = Unix.openfile err_file [ Unix.O_WRONLY; Unix.O_TRUNC ] 0o600 in
