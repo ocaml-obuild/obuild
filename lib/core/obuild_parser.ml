@@ -383,183 +383,89 @@ and collect_nested tokens base_indent =
   in
   loop [] tokens
 
-(** Parse executable block *)
-let parse_executable_block name tokens =
-  let exe = { exe_name = name; exe_main = ""; exe_target = default_target_common } in
-  let rec loop exe = function
-    | [] -> exe
+(** The executable/test/example/benchmark blocks share one shape: a few special
+    keys, otherwise target-common settings, plus `per` and `generate` sub-blocks.
+    Only the record and its special keys differ, so they parameterize this one loop.
+    [handle_key] returns [Some acc'] when it consumes a special key, or [None] to let
+    the key fall through to the common target settings. *)
+let parse_exe_like ~handle_key ~get_target ~set_target init tokens =
+  let rec loop acc = function
+    | [] -> acc
     | t :: rest -> (
         match t.tok with
         | KEY_VALUE (key, value) ->
-            let exe' =
-              match Compat.string_lowercase key with
-              | "main" | "mainis" | "main-is" -> { exe with exe_main = value }
-              | _ -> { exe with exe_target = parse_target_setting exe.exe_target key value }
+            let acc' =
+              match handle_key (Compat.string_lowercase key) value acc with
+              | Some acc' -> acc'
+              | None -> set_target acc (parse_target_setting (get_target acc) key value)
             in
-            loop exe' rest
-        | BLOCK (name, args) ->
-            let base_indent = t.indent in
-            let nested, remaining = collect_nested rest base_indent in
-            let exe' =
-              match Compat.string_lowercase name with
-              | "per" ->
-                  let per = parse_per_block args nested in
-                  {
-                    exe with
-                    exe_target = { exe.exe_target with per = exe.exe_target.per @ [ per ] };
-                  }
+            loop acc' rest
+        | BLOCK (bname, args) ->
+            let nested, remaining = collect_nested rest t.indent in
+            let tgt = get_target acc in
+            let tgt' =
+              match Compat.string_lowercase bname with
+              | "per" -> { tgt with per = tgt.per @ [ parse_per_block args nested ] }
               | "generate" ->
-                  let module_name =
-                    match args with
-                    | [ n ] -> n
-                    | _ -> ""
-                  in
-                  let gen_block = parse_generate_block module_name nested in
-                  { exe with exe_target = { exe.exe_target with generates = exe.exe_target.generates @ [ gen_block ] } }
-              | _ -> exe
+                  let module_name = match args with [ n ] -> n | _ -> "" in
+                  { tgt with generates = tgt.generates @ [ parse_generate_block module_name nested ] }
+              | _ -> tgt
             in
-            loop exe' remaining
-        | _ -> loop exe rest)
+            loop (set_target acc tgt') remaining
+        | _ -> loop acc rest)
   in
-  loop exe tokens
+  loop init tokens
+
+(** Parse executable block *)
+let parse_executable_block name tokens =
+  parse_exe_like
+    ~handle_key:(fun k v exe ->
+      match k with
+      | "main" | "mainis" | "main-is" -> Some { exe with exe_main = v }
+      | _ -> None)
+    ~get_target:(fun e -> e.exe_target)
+    ~set_target:(fun e t -> { e with exe_target = t })
+    { exe_name = name; exe_main = ""; exe_target = default_target_common }
+    tokens
 
 (** Parse test block *)
 let parse_test_block name tokens =
-  let test =
-    {
-      test_name = name;
-      test_main = "";
-      test_rundir = None;
-      test_run_params = [];
-      test_target = default_target_common;
-    }
-  in
-  let rec loop test = function
-    | [] -> test
-    | t :: rest -> (
-        match t.tok with
-        | KEY_VALUE (key, value) ->
-            let test' =
-              match Compat.string_lowercase key with
-              | "main" | "mainis" | "main-is" -> { test with test_main = value }
-              | "rundir" | "run-dir" -> { test with test_rundir = Some value }
-              | "runparams" | "run-params" -> { test with test_run_params = parse_list value }
-              | _ -> { test with test_target = parse_target_setting test.test_target key value }
-            in
-            loop test' rest
-        | BLOCK (name, args) ->
-            let base_indent = t.indent in
-            let nested, remaining = collect_nested rest base_indent in
-            let test' =
-              match Compat.string_lowercase name with
-              | "per" ->
-                  let per = parse_per_block args nested in
-                  {
-                    test with
-                    test_target = { test.test_target with per = test.test_target.per @ [ per ] };
-                  }
-              | "generate" ->
-                  let module_name =
-                    match args with
-                    | [ n ] -> n
-                    | _ -> ""
-                  in
-                  let gen_block = parse_generate_block module_name nested in
-                  { test with test_target = { test.test_target with generates = test.test_target.generates @ [ gen_block ] } }
-              | _ -> test
-            in
-            loop test' remaining
-        | _ -> loop test rest)
-  in
-  loop test tokens
+  parse_exe_like
+    ~handle_key:(fun k v test ->
+      match k with
+      | "main" | "mainis" | "main-is" -> Some { test with test_main = v }
+      | "rundir" | "run-dir" -> Some { test with test_rundir = Some v }
+      | "runparams" | "run-params" -> Some { test with test_run_params = parse_list v }
+      | _ -> None)
+    ~get_target:(fun t -> t.test_target)
+    ~set_target:(fun t tgt -> { t with test_target = tgt })
+    { test_name = name; test_main = ""; test_rundir = None; test_run_params = [];
+      test_target = default_target_common }
+    tokens
 
-(** Parse example block (same structure as executable) *)
+(** Parse example block *)
 let parse_example_block name tokens =
-  let example =
+  parse_exe_like
+    ~handle_key:(fun k v ex ->
+      match k with
+      | "main" | "mainis" | "main-is" -> Some { ex with example_main = v }
+      | _ -> None)
+    ~get_target:(fun e -> e.example_target)
+    ~set_target:(fun e t -> { e with example_target = t })
     { example_name = name; example_main = ""; example_target = default_target_common }
-  in
-  let rec loop example = function
-    | [] -> example
-    | t :: rest -> (
-        match t.tok with
-        | KEY_VALUE (key, value) ->
-            let example' =
-              match Compat.string_lowercase key with
-              | "main" | "mainis" | "main-is" -> { example with example_main = value }
-              | _ ->
-                  {
-                    example with
-                    example_target = parse_target_setting example.example_target key value;
-                  }
-            in
-            loop example' rest
-        | BLOCK (name, args) ->
-            let base_indent = t.indent in
-            let nested, remaining = collect_nested rest base_indent in
-            let example' =
-              match Compat.string_lowercase name with
-              | "per" ->
-                  let per = parse_per_block args nested in
-                  {
-                    example with
-                    example_target =
-                      { example.example_target with per = example.example_target.per @ [ per ] };
-                  }
-              | "generate" ->
-                  let module_name =
-                    match args with
-                    | [ n ] -> n
-                    | _ -> ""
-                  in
-                  let gen_block = parse_generate_block module_name nested in
-                  { example with example_target = { example.example_target with generates = example.example_target.generates @ [ gen_block ] } }
-              | _ -> example
-            in
-            loop example' remaining
-        | _ -> loop example rest)
-  in
-  loop example tokens
+    tokens
 
 (** Parse benchmark block *)
 let parse_benchmark_block name tokens =
-  let bench = { bench_name = name; bench_main = ""; bench_target = default_target_common } in
-  let rec loop bench = function
-    | [] -> bench
-    | t :: rest -> (
-        match t.tok with
-        | KEY_VALUE (key, value) ->
-            let bench' =
-              match Compat.string_lowercase key with
-              | "main" | "mainis" | "main-is" -> { bench with bench_main = value }
-              | _ -> { bench with bench_target = parse_target_setting bench.bench_target key value }
-            in
-            loop bench' rest
-        | BLOCK (name, args) ->
-            let base_indent = t.indent in
-            let nested, remaining = collect_nested rest base_indent in
-            let bench' =
-              match Compat.string_lowercase name with
-              | "per" ->
-                  let per = parse_per_block args nested in
-                  {
-                    bench with
-                    bench_target =
-                      { bench.bench_target with per = bench.bench_target.per @ [ per ] };
-                  }
-              | "generate" ->
-                  let module_name =
-                    match args with
-                    | [ n ] -> n
-                    | _ -> ""
-                  in
-                  let gen_block = parse_generate_block module_name nested in
-                  { bench with bench_target = { bench.bench_target with generates = bench.bench_target.generates @ [ gen_block ] } }
-              | _ -> bench
-            in
-            loop bench' remaining
-        | _ -> loop bench rest)
-  in
-  loop bench tokens
+  parse_exe_like
+    ~handle_key:(fun k v b ->
+      match k with
+      | "main" | "mainis" | "main-is" -> Some { b with bench_main = v }
+      | _ -> None)
+    ~get_target:(fun b -> b.bench_target)
+    ~set_target:(fun b t -> { b with bench_target = t })
+    { bench_name = name; bench_main = ""; bench_target = default_target_common }
+    tokens
 
 (** Parse flag block *)
 let parse_flag_block name tokens =
