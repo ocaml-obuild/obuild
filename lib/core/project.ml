@@ -308,9 +308,9 @@ let check_modules_exists reg target modules =
     Checks for required fields, file existence, module existence, and OCaml version compatibility.
 *)
 let check reg proj =
-  if proj.name = "" then raise (MissingField "name");
-  if proj.version = "" then raise (MissingField "version");
-  if proj.obuild_ver = 0 then raise (MissingField "obuild-ver");
+  (* name/version/obuild-ver presence is validated earlier, with located messages,
+     by Obuild_validate.validate_required_fields (run before this). Only the
+     future-version bound is checked here. *)
   if proj.obuild_ver > 1 then raise (UnsupportedFutureVersion proj.obuild_ver);
 
   maybe_unit
