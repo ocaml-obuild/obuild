@@ -338,6 +338,8 @@ let validate_required_fields (proj : project) =
     error proj.project_version.loc "Missing required field: version";
   if proj.project_obuild_ver.value = 0 then
     error proj.project_obuild_ver.loc "Missing required field: obuild-ver";
+  if proj.project_obuild_ver.value < 0 then
+    error proj.project_obuild_ver.loc "obuild-ver must be a positive integer";
   if proj.project_obuild_ver.value > 1 then
     error proj.project_obuild_ver.loc
       (Printf.sprintf "Unsupported obuild version: %d (max supported: 1)"
@@ -359,11 +361,23 @@ let validate_test (t : test) =
   if t.test_main = "" then
     failwith (Printf.sprintf "Test '%s' has no main-is" t.test_name)
 
+(** Validate example has main *)
+let validate_example (ex : example) =
+  if ex.example_main = "" then
+    failwith (Printf.sprintf "Example '%s' has no main-is" ex.example_name)
+
+(** Validate benchmark has main *)
+let validate_benchmark (b : benchmark) =
+  if b.bench_main = "" then
+    failwith (Printf.sprintf "Benchmark '%s' has no main-is" b.bench_name)
+
 (** Validate all targets *)
 let validate_targets (proj : project) =
   List.iter validate_library proj.project_libs;
   List.iter validate_executable proj.project_exes;
-  List.iter validate_test proj.project_tests
+  List.iter validate_test proj.project_tests;
+  List.iter validate_example proj.project_examples;
+  List.iter validate_benchmark proj.project_benchs
 
 (* ============================================================ *)
 (* Main conversion function *)

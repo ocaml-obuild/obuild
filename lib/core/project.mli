@@ -20,7 +20,6 @@ exception MissingField of string
 exception UnknownDependencyName of string
 (** Raised when a dependency name cannot be resolved *)
 
-exception UnsupportedFutureVersion of int
 (** Raised when .obuild file uses a newer format version *)
 
 exception ModuleNotFound of Target.target * Hier.t

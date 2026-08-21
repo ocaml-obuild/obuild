@@ -13,7 +13,6 @@ exception MultipleConfFiles
 exception InvalidConfFile of string
 exception MissingField of string
 exception UnknownDependencyName of string
-exception UnsupportedFutureVersion of int
 exception ModuleNotFound of target * Hier.t
 exception ModuleListEmpty of Libname.t
 exception FileNotFound of target * filename
@@ -308,10 +307,9 @@ let check_modules_exists reg target modules =
     Checks for required fields, file existence, module existence, and OCaml version compatibility.
 *)
 let check reg proj =
-  (* name/version/obuild-ver presence is validated earlier, with located messages,
-     by Obuild_validate.validate_required_fields (run before this). Only the
-     future-version bound is checked here. *)
-  if proj.obuild_ver > 1 then raise (UnsupportedFutureVersion proj.obuild_ver);
+  (* name/version/obuild-ver (presence, positivity, and the supported-version bound)
+     are all validated earlier, with located messages, by
+     Obuild_validate.validate_required_fields (run before this). *)
 
   maybe_unit
     (fun x -> if not (Filesystem.exists x) then raise (LicenseFileNotFound x))
