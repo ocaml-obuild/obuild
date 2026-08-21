@@ -197,9 +197,12 @@ module Pkg = struct
         let path, _ = meta in
         raise (ArchiveNotFound (path, dep, preds))
 
-  (* inverse of the tokenizer's unescaping: a value may hold a quote, backslash or
-     newline (e.g. a description taken from the .obuild file) and must be escaped so
-     the emitted META reparses — by ocamlfind and by obuild itself. *)
+  (* inverse of the tokenizer's unescaping: a value may hold a quote or backslash
+     (e.g. a description taken from the .obuild file) and must be escaped so the
+     emitted META reparses — by ocamlfind and by obuild itself. findlib's lexer only
+     understands backslash-quote and backslash-backslash (a backslash-n makes the
+     whole META unparseable by ocamlfind), while a RAW newline inside a quoted
+     string is legal for both parsers — so newlines pass through untouched. *)
   let escape s =
     let b = Buffer.create (String.length s + 2) in
     String.iter
@@ -207,7 +210,6 @@ module Pkg = struct
         match c with
         | '"' -> Buffer.add_string b "\\\""
         | '\\' -> Buffer.add_string b "\\\\"
-        | '\n' -> Buffer.add_string b "\\n"
         | c -> Buffer.add_char b c)
       s;
     Buffer.contents b
