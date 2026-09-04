@@ -39,6 +39,16 @@ let records : (string, (string * Digest.t) list) Hashtbl.t = Hashtbl.create 256
 (* snapshots taken before a compile, not yet validated by task success *)
 let pending : (string, (string * Digest.t) list) Hashtbl.t = Hashtbl.create 64
 
+(* dest -> compiler warning text from its last real build (non-empty only).
+   Replayed when the dest is later skipped as fresh, so warnings stay
+   visible on incremental builds instead of printing once and vanishing
+   until the file is touched again. *)
+let warn_records : (string, string) Hashtbl.t = Hashtbl.create 16
+
+(* warning texts already replayed this run — a task's text is stored on each
+   of its dests, so replay must dedupe by content *)
+let replayed : (string, unit) Hashtbl.t = Hashtbl.create 16
+
 (* dests snapshotted since the last take_group *)
 let current_group : string list ref = ref []
 let loaded = ref false
@@ -122,22 +132,36 @@ let take_group () =
   current_group := [];
   g
 
-let commit_group g =
+let commit_group ?(warnings = "") g =
   List.iter
     (fun d ->
       match find_opt pending d with
       | Some snap ->
           Hashtbl.replace records d snap;
           Hashtbl.remove pending d;
+          if warnings = "" then (
+            if Hashtbl.mem warn_records d then Hashtbl.remove warn_records d)
+          else Hashtbl.replace warn_records d warnings;
           dirty := true
       | None -> ())
     g
+
+(* Warnings recorded for a fresh-skipped [dest], at most once per distinct
+   text per run; None when there are none (or they were already shown). *)
+let take_replay dest : string option =
+  match find_opt warn_records (fp_to_string dest) with
+  | Some w when not (Hashtbl.mem replayed w) ->
+      Hashtbl.add replayed w ();
+      Some w
+  | _ -> None
 
 (* storage format, one entry per line:
  *   F <mtime> <hash_time> <hex_digest> <path>     stat cache entry
  *   D <path>                                      start of a dest record
  *   I <hex_digest> <path>                         input of the current dest
- * paths may contain spaces (they extend to end of line) but not newlines *)
+ *   W <quoted-warnings> <path>                    warnings of a dest's build
+ * paths may contain spaces (they extend to end of line) but not newlines;
+ * warning text is an OCaml %S-quoted literal so it stays on one line *)
 
 let split_first s =
   try
@@ -177,13 +201,20 @@ let load () =
               | 'I' ->
                   let hex, p = split_first rest in
                   inputs := (p, digest_of_hex hex) :: !inputs
+              | 'W' -> (
+                  try
+                    Scanf.sscanf rest "%S %n" (fun w n ->
+                        let p = String.sub rest n (String.length rest - n) in
+                        if p <> "" then Hashtbl.replace warn_records p w)
+                  with _ -> ())
               | _ -> ())
           (String_utils.lines_noempty content);
         flush_dest !inputs
       with _ ->
         (* unreadable or corrupted: start fresh, callers fall back to mtimes *)
         Hashtbl.clear stat_cache;
-        Hashtbl.clear records
+        Hashtbl.clear records;
+        Hashtbl.clear warn_records
   end
 
 let save () =
@@ -201,6 +232,9 @@ let save () =
           (fun (p, d) -> Buffer.add_string buf ("I " ^ digest_to_hex d ^ " " ^ p ^ "\n"))
           inputs)
       records;
+    Hashtbl.iter
+      (fun dest w -> Buffer.add_string buf (Printf.sprintf "W %S %s\n" w dest))
+      warn_records;
     Filesystem.write_file (db_path ()) (Buffer.contents buf);
     dirty := false
   end

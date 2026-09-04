@@ -308,6 +308,30 @@ configure && build && expect_output "c-1" && {
 	build && expect_step "Linking executable" && expect_output "c-2" && expect_converged && ok
 }
 
+scenario warnings-replay-on-fresh-builds
+# a warning used to print once and vanish on every later incremental build
+# until the file changed again; it must replay on fresh skips and clear
+# once the code is fixed
+cat > p.obuild <<-'EOF'
+name: incr
+version: 1.0
+obuild-ver: 1
+executable main
+  main-is: main.ml
+EOF
+printf 'let _w = ignore (max 1)\nlet () = print_endline "w"\n' > main.ml
+configure && build && {
+	grep -q "Warning 5" "${LOG}" || fail "warning missing on real build"
+	build && { grep -q "Warning 5" "${LOG}" || fail "warning not replayed on fresh build"; } && {
+		printf 'let () = print_endline "w"\n' > main.ml
+		build && {
+			if grep -q "Warning 5" "${LOG}"; then fail "stale warning after fix"; fi
+		} && build && {
+			if grep -q "Warning 5" "${LOG}"; then fail "stale warning replayed after fix"; fi
+		} && ok
+	}
+}
+
 scenario duplicate-module-is-an-error
 mkdir -p a b
 cat > p.obuild <<-'EOF'

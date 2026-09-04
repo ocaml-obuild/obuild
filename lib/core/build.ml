@@ -33,7 +33,13 @@ let check_destination_valid_with srcs (_, dest) =
   let src_paths = List.map snd srcs in
   if Filesystem.exists dest then
     match Digests.check dest src_paths with
-    | Digests.Unchanged -> None
+    | Digests.Unchanged ->
+        (* fresh skip: re-show the warnings its last real build produced,
+           so incremental builds don't hide live warnings *)
+        (match Digests.take_replay dest with
+         | Some w -> print_warnings w
+         | None -> ());
+        None
     | Digests.Changed p ->
         Digests.record_pending dest src_paths;
         Some (try List.find (fun (_, sp) -> sp = p) srcs with Not_found -> (Filetype.FileO, p))
@@ -1061,6 +1067,9 @@ let compile (bstate : build_state) task_context dag =
   let taskdep = Helper.Timing.measure_time "Taskdep.init" (fun () -> Taskdep.init dag) in
   (* input digests snapshotted while dispatching each task, committed on success *)
   let task_groups = Hashtbl.create initial_task_context_size in
+  (* warnings accumulated across a task's steps, recorded with the digest
+     commit so fresh skips can replay them on later builds *)
+  let task_warnings = Hashtbl.create initial_task_context_size in
   (* a compilation task has finished, terminate the process,
    * and process the result *)
   let schedule_finish (task, st) is_done =
@@ -1070,8 +1079,13 @@ let compile (bstate : build_state) task_context dag =
         (* print warnings from every step, not just the task's final one —
            intermediate-step warnings used to be silently dropped *)
         print_warnings warnings;
+        if warnings <> "" then
+          Hashtbl.replace task_warnings task
+            ((try Hashtbl.find task_warnings task with Not_found -> "") ^ warnings);
         if is_done then (
-          try Digests.commit_group (Hashtbl.find task_groups task) with Not_found -> ())
+          let acc = try Hashtbl.find task_warnings task with Not_found -> "" in
+          try Digests.commit_group ~warnings:acc (Hashtbl.find task_groups task)
+          with Not_found -> ())
     | Process.Failure (out, er, _) -> (
         let msg = if String.length out > 0 then out ^ "\n" ^ er else er in
         (* name the failing step: compiler output does not always carry the

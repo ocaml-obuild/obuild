@@ -40,5 +40,12 @@ val begin_group : unit -> unit
 val take_group : unit -> group
 (** Return (and clear) the dests snapshotted since [begin_group]. *)
 
-val commit_group : group -> unit
-(** Commit the pending snapshots of a group after its task succeeded. *)
+val commit_group : ?warnings:string -> group -> unit
+(** Commit the pending snapshots of a group after its task succeeded.
+    [warnings] is the task's accumulated compiler warning text; recorded
+    with each dest (cleared when empty) so later fresh skips can replay it. *)
+
+val take_replay : Filepath.filepath -> string option
+(** Warnings recorded for [dest] by its last real build, returned at most
+    once per distinct text per run — for replay when a staleness check
+    skips [dest] as fresh. *)
