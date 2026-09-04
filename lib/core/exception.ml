@@ -153,6 +153,9 @@ let show exn =
   | Dependencies.BuildDepAnalyzeFailed e ->
       eprintf "\n%s\n%!" e;
       exit exit_dep_analyze
+  | Dependencies.BuildCDepAnalyzeFailed e ->
+      error "C dependency analysis failed:\n%s\n" e;
+      exit exit_dep_analyze
   | Dependencies.DependenciesMissing missing -> (
       match missing with
       | [] -> assert false
@@ -173,11 +176,34 @@ let show exn =
       error "File %s not found in directories %s\n" (fn_to_string f)
         (Utils.showList "; " fp_to_string ds);
       exit exit_file_not_found
+  | Configure.ToolNotFound name ->
+      error "required tool not found: %s\n" (fn_to_string name);
+      exit exit_project_error
+  | Configure.ConfigureScriptFailed err ->
+      error "configure script failed:\n%s\n" err;
+      exit exit_project_error
+  | Generators.GeneratorFailed err ->
+      error "generator failed: %s\n" err;
+      exit exit_project_error
+  | Prog.ProgramNotFound name ->
+      error "program not found: %s\n" name;
+      exit exit_project_error
+  | Prog.OCamlProgramError err ->
+      error "ocaml toolchain error: %s\n" err;
+      exit exit_project_error
+  | Prog.PkgConfigError err ->
+      error "pkg-config: %s\n" err;
+      exit exit_project_error
+  | Project.ExecutableWithNoMain name ->
+      error "executable '%s' has no main-is\n" name;
+      exit exit_project_error
   | Exit -> ()
   | Failure msg ->
       (* failwith is reserved for internal programming errors; give a clean message *)
       error "internal error: %s\n" msg;
       exit 1
   | e ->
-      eprintf "uncaught exception\n";
-      raise e
+      (* last resort: name the exception (payload included via to_string)
+         instead of the old bare "uncaught exception" + Fatal error dump *)
+      error "uncaught exception: %s\n" (Printexc.to_string e);
+      exit 1

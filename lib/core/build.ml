@@ -1074,6 +1074,11 @@ let compile (bstate : build_state) task_context dag =
           try Digests.commit_group (Hashtbl.find task_groups task) with Not_found -> ())
     | Process.Failure (out, er, _) -> (
         let msg = if String.length out > 0 then out ^ "\n" ^ er else er in
+        (* name the failing step: compiler output does not always carry the
+           file/target (e.g. link errors print File "_none_") *)
+        let msg =
+          Printf.sprintf "while building [%s]:\n%s"
+            (string_of_compile_step task) msg in
         match task with
         | CompileC _ -> raise (CCompilationFailed msg)
         | _ -> raise (CompilationFailed msg)));
