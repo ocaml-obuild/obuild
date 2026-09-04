@@ -22,6 +22,20 @@ val load : unit -> unit
 val save : unit -> unit
 (** Persist records if anything changed since the last save. *)
 
+val file_digest : Filepath.filepath -> Digest.t
+(** Content digest of a file, mtime-cached across runs (persisted in the
+    stat cache); virtual inputs are served from [set_virtual]. *)
+
+val is_virtual : Filepath.filepath -> bool
+(** True for synthetic input paths registered via [set_virtual] — they
+    never exist on disk, so mtime fallbacks must skip them. *)
+
+val set_virtual : string -> Digest.t -> unit
+(** [set_virtual key d] registers an in-memory digest for the synthetic
+    input path [key] (a path that never exists on disk).  Lets a large
+    shared input set be digested once per run and referenced as a single
+    entry by many records. *)
+
 val check : Filepath.filepath -> Filepath.filepath list -> check_result
 (** [check dest srcs] compares current digests of [srcs] against the record
     for [dest]. *)

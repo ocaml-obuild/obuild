@@ -85,8 +85,25 @@ let digest_of_hex s : Digest.t =
   Buffer.contents b
 
 
+(* Virtual inputs: in-memory digests registered for synthetic paths that
+   never exist on disk.  Used to collapse a large shared input set (a
+   target's external dependency archives — common to every module of the
+   target) into ONE entry per record: the set is digested once per run
+   instead of being re-walked by every module's staleness check, which
+   multiplied ~150 entries by ~900 modules and burned seconds of GC. *)
+let virtual_digests : (string, Digest.t) Hashtbl.t = Hashtbl.create 16
+
+let set_virtual (key : string) (d : Digest.t) : unit =
+  Hashtbl.replace virtual_digests key d
+
+let is_virtual (path : filepath) : bool =
+  Hashtbl.mem virtual_digests (fp_to_string path)
+
 let file_digest path =
   let s = fp_to_string path in
+  match find_opt virtual_digests s with
+  | Some d -> d
+  | None ->
   let mtime = Filesystem.get_modification_time path in
   match find_opt stat_cache s with
   | Some (m, ht, d) when m = mtime && mtime < ht -. mtime_margin -> d

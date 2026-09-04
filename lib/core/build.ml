@@ -47,12 +47,15 @@ let check_destination_valid_with srcs (_, dest) =
         Digests.record_pending dest src_paths;
         Some (Filetype.FileO, current_dir)
     | Digests.NoRecord -> (
-        (* no digest record yet: fall back to mtime comparison *)
+        (* no digest record yet: fall back to mtime comparison (virtual
+           inputs have no mtime — skip them here) *)
         let dest_time = Filesystem.get_modification_time dest in
         try
           let changed =
             List.find
               (fun (_, path) ->
+                (not (Digests.is_virtual path))
+                &&
                 let mtime = Filesystem.get_modification_time path in
                 dest_time < mtime)
               srcs
@@ -97,6 +100,10 @@ let reason_from_paths (_, dest) (srcTy, changedSrc) =
   in
   if changedSrc = current_dir then
     ""
+  else if
+    match srcTy with Filetype.FileOther "system-deps" -> true | _ -> false
+  then
+    "External dependency archives changed"
   else
     let bdest = path_basename dest in
     let bsrc = path_basename changedSrc in
@@ -277,7 +284,14 @@ let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadL
    "inconsistent assumptions".  Memoized per target like
    internal_libs_paths_for.  Only absolute, existing paths qualify (internal
    deps resolve build-dir-relative and are tracked separately); native
-   implementations live in the .cmxa's companion .a, digested too. *)
+   implementations live in the .cmxa's companion .a, digested too.
+
+   The set is COMMON to every module of the target and immutable for the
+   duration of a run, so it is collapsed into ONE virtual input per
+   (target, mode): the archives are digested once here and each module's
+   record carries the single set digest.  Listing the ~150 archives in
+   every module's inputs multiplied the staleness sweep's allocations by
+   the module count (a converged build went 1.3s -> 9s). *)
 let system_libs_paths_memo = Hashtbl.create 16
 let system_libs_paths_for bstate target =
   let key = target.Target.target_name in
@@ -313,7 +327,25 @@ let system_libs_paths_for bstate target =
                 else acc)
             [] archives
         in
-        Hashtbl.replace tbl (opt, ty) files)
+        match files with
+        | [] -> Hashtbl.replace tbl (opt, ty) []
+        | _ ->
+            let vkey =
+              Printf.sprintf "@system-deps/%s/%s%s"
+                (Target.get_target_name target)
+                (match ty with Native -> "native" | ByteCode -> "byte")
+                (match opt with Normal -> "" | WithDebug -> ".d" | WithProf -> ".p")
+            in
+            let b = Buffer.create 4096 in
+            List.iter
+              (fun (_, p) ->
+                Buffer.add_string b (fp_to_string p);
+                Buffer.add_char b '\000';
+                Buffer.add_string b (Digests.file_digest p :> string))
+              files;
+            Digests.set_virtual vkey (Digest.string (Buffer.contents b));
+            Hashtbl.replace tbl (opt, ty)
+              [ (Filetype.FileOther "system-deps", fp vkey) ])
       (List.concat
          (List.map
             (fun opt -> List.map (fun ty -> (opt, ty)) [ Native; ByteCode ])
