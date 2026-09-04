@@ -269,14 +269,30 @@ let check hier_registry proj_file reconf setup =
   let conf = Hier.conf hier_registry in
   let ocamlCfg = check_ocaml conf in
   let digestKV = getDigestKV () in
-  (* check if the environment changed. *)
-  comparekvs_hashtbl "ocaml config" setup ocamlCfg;
-  (* if the digest of .obuild changed, let's reconfigure *)
+  (* environment (compiler config) changed: reconfigure automatically with
+     the saved flags rather than erroring — a switch update or new obuild
+     used to demand a manual `obuild configure` here.  The build tree is
+     wiped by [create_dist], which is the correct response to a compiler
+     change anyway. *)
   let reconfigure =
     try
-      comparekvs "digest" setup digestKV;
+      comparekvs_hashtbl "ocaml config" setup ocamlCfg;
       false
-    with e -> if reconf then true else raise e
+    with ConfigChanged r when reconf ->
+      log Report "config changed (%s): reconfiguring with saved flags\n" r;
+      true
+  in
+  (* if the digest of .obuild changed, let's reconfigure *)
+  let reconfigure =
+    reconfigure
+    || (try
+          comparekvs "digest" setup digestKV;
+          false
+        with ConfigChanged r ->
+          if reconf then (
+            log Report "%s changed: reconfiguring with saved flags\n" r;
+            true)
+          else raise (ConfigChanged r))
   in
   (* user_flags are also restored from setup file *)
   let setup_flags = get_flags setup in
