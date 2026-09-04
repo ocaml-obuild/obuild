@@ -512,9 +512,24 @@ let build_module_steps_dag modulesDeps target stepsDag =
 
     Processes C source files, determines their header dependencies, and adds compilation tasks to
     both the steps DAG and files DAG. *)
-let add_c_compilation_tasks cbits buildDir stepsDag filesDag =
+let add_c_compilation_tasks bstate cbits buildDir stepsDag filesDag =
   if cbits.target_csources <> [] then
-    let objDeps = run_ccdep cbits.target_cdir cbits.target_csources in
+    (* same include dirs as the real C compile, so cc -M resolves the very
+       headers (gtk, vte, caml/) whose upgrades must invalidate the .o *)
+    let inc_dirs =
+      [ cbits.target_cdir ]
+      @ cbits.target_clibpaths
+      @ List.concat
+          (List.map
+             (fun (cpkg, _) ->
+               (Hashtbl.find bstate.bstate_config.project_cpkgs cpkg).cpkg_conf_includes)
+             cbits.target_cpkgs)
+      @ [ fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config) ]
+    in
+    let objDeps =
+      run_ccdep ~inc_dirs ~cflags:cbits.target_cflags cbits.target_cdir
+        cbits.target_csources
+    in
 
     List.iter
       (fun cSource ->
@@ -1172,7 +1187,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
        CompileC nodes must be dependencies of LinkTarget; otherwise the parallel
        scheduler can dispatch LinkTarget concurrently with C compilation and
        check_needs_relink will see stale .o mtimes. *)
-    add_c_compilation_tasks cbits buildDir stepsDag filesDag;
+    add_c_compilation_tasks bstate cbits buildDir stepsDag filesDag;
     List.iter (fun cSource ->
       Dag.add_edge (LinkTarget target) (CompileC cSource) stepsDag;
       Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag

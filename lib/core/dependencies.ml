@@ -126,8 +126,17 @@ let joinLines s =
   in
   bytes_to_string (replace 0)
 
-let run_ccdep srcDir files : (filename * filepath list) list =
-  let args = [ Prog.get_cc (); "-MM" ] @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files in
+let run_ccdep ?(inc_dirs = []) ?(cflags = []) srcDir files : (filename * filepath list) list =
+  (* -M (not -MM): system headers ARE dependencies — a gtk/vte/OCaml-switch
+     upgrade changes their content and must invalidate the C objects, which
+     used to keep silently-stale stubs.  The include dirs and cflags mirror
+     the actual compile so the same headers resolve. *)
+  let args =
+    [ Prog.get_cc (); "-M" ]
+    @ cflags
+    @ List.concat (List.map (fun d -> [ "-I"; fp_to_string d ]) inc_dirs)
+    @ List.map (fun fn -> fp_to_string (srcDir </> fn)) files
+  in
   match Process.run args with
   | Process.Failure (_, err, _) -> raise (BuildCDepAnalyzeFailed err)
   | Process.Success (out, _, _) ->

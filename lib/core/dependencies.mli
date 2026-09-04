@@ -45,10 +45,16 @@ val run_ocamldep : dep_opt -> Filepath.filepath -> Modname.t list list
     @return list of module dependency lists
     @raise BuildDepAnalyzeFailed if ocamldep fails or returns invalid output *)
 
-val run_ccdep : Filepath.filepath -> Filepath.filename list -> (Filepath.filename * Filepath.filepath list) list
-(** [run_ccdep src_dir files] analyzes C file dependencies
+val run_ccdep :
+  ?inc_dirs:Filepath.filepath list ->
+  ?cflags:string list ->
+  Filepath.filepath ->
+  Filepath.filename list ->
+  (Filepath.filename * Filepath.filepath list) list
+(** [run_ccdep ~inc_dirs ~cflags src_dir files] analyzes C file dependencies
 
-    Runs gcc -MM to determine C file dependencies (headers, etc.).
+    Runs [cc -M] (system headers included, so toolkit/compiler upgrades
+    invalidate objects) with the same include dirs and cflags as the compile.
 
     @param src_dir source directory containing C files
     @param files C source files to analyze
