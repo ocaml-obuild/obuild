@@ -193,6 +193,132 @@ let internal_libs_paths_for bstate target =
     Hashtbl.replace internal_libs_paths_memo key v;
     v
 
+let satisfy_preds metacache dep preds =
+  let satisfy_all current_pkg =
+    let res =
+      List.fold_left
+        (fun acc (req_preds, req_libs) ->
+          List.fold_left
+            (fun _in_acc lib -> if lib = dep then Meta.Pkg.satisfy req_preds preds else true)
+            acc req_libs)
+        true current_pkg.Meta.Pkg.requires
+    in
+    res
+  in
+  let rec dep_is_satisfied current_pkg =
+    satisfy_all current_pkg && List.for_all satisfy_all current_pkg.Meta.Pkg.subs
+  in
+  let _, root_pkg = Metacache.get metacache dep.Libname.main_name in
+  dep_is_satisfied root_pkg
+
+(** Helper: Resolve build dependencies to actual library file paths *)
+let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadLib is_lib_target =
+  let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
+  if is_lib_target then
+    []
+  else
+    List.flatten
+      (List.map
+         (fun dep ->
+           match Hashtbl.find bstate.bstate_config.project_dep_data dep with
+           | Internal -> [ in_current_dir (Libname.to_cmca compiledType compileOpt dep) ]
+           | System ->
+               let path, rootPkg = Metacache.get_from_cache bstate.bstate_config.project_metacache dep in
+               let libDir =
+                 Meta.get_include_dir_with_subpath
+                   (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config))
+                   (path, rootPkg) dep.Libname.subnames
+               in
+               let pred =
+                 match compiledType with
+                 | Native -> Meta.Predicate.Native
+                 | ByteCode -> Meta.Predicate.Byte
+               in
+               let preds =
+                 match useThreadLib with
+                 | PosixThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_posix ]
+                 | VMThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_vm ]
+                 | DefaultThread ->
+                     (if systhread = "true" then Meta.Predicate.Mt_posix else Meta.Predicate.Mt_vm)
+                     :: [ pred; Meta.Predicate.Mt ]
+                 | NoThreads -> [ pred ]
+               in
+               let preds =
+                 match compileOpt with
+                 | WithProf -> Meta.Predicate.Gprof :: preds
+                 | _ -> preds
+               in
+               if satisfy_preds bstate.bstate_config.project_metacache dep preds then
+                 let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
+                 List.fold_left
+                   (fun acc (_, a) ->
+                     (* A virtual/meta package declares [archive(...) = ""] (empty),
+                        equivalent to having no archive: it contributes nothing to
+                        the link line (but its [requires] are still followed). The
+                        split then yields empty tokens — drop them so [fn] is never
+                        handed "" (which raises Filepath.EmptyFilename). *)
+                     let files =
+                       List.filter (fun f -> f <> "") (String_utils.split ' ' a)
+                     in
+                     acc @ List.map (fun f -> libDir </> fn f) files)
+                   [] archives
+               else
+                 [])
+         pkgDeps)
+
+
+(* System (findlib/opam) archives of a target's external deps, as compile
+   inputs per (compileOpt, compiledType).  A reinstalled external package
+   (an otreesitter version bump, a switch upgrade) must RECOMPILE dependent
+   modules, not just relink: native .cmx files record implementation CRCs,
+   so relinking stale objects against the new archive fails with
+   "inconsistent assumptions".  Memoized per target like
+   internal_libs_paths_for.  Only absolute, existing paths qualify (internal
+   deps resolve build-dir-relative and are tracked separately); native
+   implementations live in the .cmxa's companion .a, digested too. *)
+let system_libs_paths_memo = Hashtbl.create 16
+let system_libs_paths_for bstate target =
+  let key = target.Target.target_name in
+  try Hashtbl.find system_libs_paths_memo key
+  with Not_found ->
+    let pkgDeps = Analyze.get_pkg_deps target bstate.bstate_config in
+    let useThreadLib =
+      if List.mem (Libname.of_string "threads") pkgDeps then DefaultThread
+      else if List.mem (Libname.of_string "threads.posix") pkgDeps then PosixThread
+      else if List.mem (Libname.of_string "threads.vm") pkgDeps then VMThread
+      else NoThreads
+    in
+    let tbl = Hashtbl.create 6 in
+    List.iter
+      (fun (opt, ty) ->
+        let archives =
+          (* is_lib_target=false on purpose: a library's modules still
+             compile against the external packages *)
+          try resolve_build_dependencies bstate pkgDeps ty opt useThreadLib false
+          with _ -> []
+        in
+        let files =
+          List.fold_left
+            (fun acc p ->
+              let s = fp_to_string p in
+              if Filename.is_relative s || not (Filesystem.exists p) then acc
+              else
+                let acc = (Filetype.of_filepath p, p) :: acc in
+                if Filename.check_suffix s ".cmxa" then (
+                  let a = fp (Filename.chop_suffix s ".cmxa" ^ ".a") in
+                  if Filesystem.exists a then (Filetype.of_filepath a, a) :: acc
+                  else acc)
+                else acc)
+            [] archives
+        in
+        Hashtbl.replace tbl (opt, ty) files)
+      (List.concat
+         (List.map
+            (fun opt -> List.map (fun ty -> (opt, ty)) [ Native; ByteCode ])
+            [ Normal; WithProf; WithDebug ]));
+    Hashtbl.replace system_libs_paths_memo key tbl;
+    tbl
+
 (* Helper: get include paths for ctypes from dependencies *)
 
 (* Generate ctypes.cstubs type discovery - produces types_generated.ml *)
@@ -493,6 +619,7 @@ let organize_compilation_functions is_intf check_fun_list hdesc =
 
 let dep_descs is_intf hdesc bstate cstate target h =
   let internal_libs_paths_all_modes = internal_libs_paths_for bstate target in
+  let system_libs_paths_all_modes = system_libs_paths_for bstate target in
   let module_deps = hdesc.Module.File.dep_cwd_modules in
   let compile_opts = Target.get_compilation_opts (Hier.conf cstate.compilation_hier) target in
   let all_modes = get_all_modes (Hier.conf cstate.compilation_hier) target in
@@ -514,7 +641,8 @@ let dep_descs is_intf hdesc bstate cstate target h =
             module_deps
         in
         let internal_deps = Hashtbl.find internal_libs_paths_all_modes (comp_opt, ByteCode) in
-        (dest, Interface, comp_opt, src @ internal_deps @ m_deps))
+        let system_deps = Hashtbl.find system_libs_paths_all_modes (comp_opt, ByteCode) in
+        (dest, Interface, comp_opt, src @ internal_deps @ system_deps @ m_deps))
       compile_opts
   else
     List.map
@@ -554,7 +682,8 @@ let dep_descs is_intf hdesc bstate cstate target h =
                  module_deps)
         in
         let internal_deps = Hashtbl.find internal_libs_paths_all_modes (comp_opt, compiled_ty) in
-        (dest, Compiled compiled_ty, comp_opt, src @ internal_deps @ m_deps))
+        let system_deps = Hashtbl.find system_libs_paths_all_modes (comp_opt, compiled_ty) in
+        (dest, Compiled compiled_ty, comp_opt, src @ internal_deps @ system_deps @ m_deps))
       all_modes
 
 (* add a OCaml module or interface compilation process *)
@@ -646,79 +775,6 @@ let wait_for_files cdep_files =
   in
   loop cdep_files
 
-
-let satisfy_preds metacache dep preds =
-  let satisfy_all current_pkg =
-    let res =
-      List.fold_left
-        (fun acc (req_preds, req_libs) ->
-          List.fold_left
-            (fun _in_acc lib -> if lib = dep then Meta.Pkg.satisfy req_preds preds else true)
-            acc req_libs)
-        true current_pkg.Meta.Pkg.requires
-    in
-    res
-  in
-  let rec dep_is_satisfied current_pkg =
-    satisfy_all current_pkg && List.for_all satisfy_all current_pkg.Meta.Pkg.subs
-  in
-  let _, root_pkg = Metacache.get metacache dep.Libname.main_name in
-  dep_is_satisfied root_pkg
-
-(** Helper: Resolve build dependencies to actual library file paths *)
-let resolve_build_dependencies bstate pkgDeps compiledType compileOpt useThreadLib is_lib_target =
-  let systhread = Analyze.get_ocaml_config_key_global "systhread_supported" in
-  if is_lib_target then
-    []
-  else
-    List.flatten
-      (List.map
-         (fun dep ->
-           match Hashtbl.find bstate.bstate_config.project_dep_data dep with
-           | Internal -> [ in_current_dir (Libname.to_cmca compiledType compileOpt dep) ]
-           | System ->
-               let path, rootPkg = Metacache.get_from_cache bstate.bstate_config.project_metacache dep in
-               let libDir =
-                 Meta.get_include_dir_with_subpath
-                   (fp (Analyze.get_ocaml_config_key "standard_library" bstate.bstate_config))
-                   (path, rootPkg) dep.Libname.subnames
-               in
-               let pred =
-                 match compiledType with
-                 | Native -> Meta.Predicate.Native
-                 | ByteCode -> Meta.Predicate.Byte
-               in
-               let preds =
-                 match useThreadLib with
-                 | PosixThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_posix ]
-                 | VMThread -> [ pred; Meta.Predicate.Mt; Meta.Predicate.Mt_vm ]
-                 | DefaultThread ->
-                     (if systhread = "true" then Meta.Predicate.Mt_posix else Meta.Predicate.Mt_vm)
-                     :: [ pred; Meta.Predicate.Mt ]
-                 | NoThreads -> [ pred ]
-               in
-               let preds =
-                 match compileOpt with
-                 | WithProf -> Meta.Predicate.Gprof :: preds
-                 | _ -> preds
-               in
-               if satisfy_preds bstate.bstate_config.project_metacache dep preds then
-                 let archives = Meta.Pkg.get_archive_with_filter (path, rootPkg) dep preds in
-                 List.fold_left
-                   (fun acc (_, a) ->
-                     (* A virtual/meta package declares [archive(...) = ""] (empty),
-                        equivalent to having no archive: it contributes nothing to
-                        the link line (but its [requires] are still followed). The
-                        split then yields empty tokens — drop them so [fn] is never
-                        handed "" (which raises Filepath.EmptyFilename). *)
-                     let files =
-                       List.filter (fun f -> f <> "") (String_utils.split ' ' a)
-                     in
-                     acc @ List.map (fun f -> libDir </> fn f) files)
-                   [] archives
-               else
-                 [])
-         pkgDeps)
 
 (** Helper: Calculate destination path for linked output *)
 let get_link_destination cstate target compiledType compileOpt plugin =
@@ -867,10 +923,32 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
         [] pkgDeps
   in
 
+  (* System (findlib/opam) archives from the link line: digest them so a
+     reinstalled external package (an otreesitter version bump, a switch
+     upgrade) triggers a relink instead of silently keeping a binary linked
+     against the old library.  Only absolute paths qualify — internal deps
+     appear in [buildDeps] as build-dir-relative names and are already
+     covered by [internal_dep_archives].  Native implementations live in
+     the .cmxa's companion .a, so digest that too.  Digests are mtime-cached
+     (Digests.file_digest), so large external archives hash once. *)
+  let system_dep_archives =
+    List.fold_left
+      (fun acc p ->
+        let s = fp_to_string p in
+        if Filename.is_relative s || not (Filesystem.exists p) then acc
+        else
+          let acc = p :: acc in
+          if Filename.check_suffix s ".cmxa" then (
+            let a = fp (Filename.chop_suffix s ".cmxa" ^ ".a") in
+            if Filesystem.exists a then a :: acc else acc)
+          else acc)
+      [] buildDeps
+  in
+
   let depsTime =
     check_needs_relink cstate compiled c_obj_files
-      (internal_dep_archives @ internal_stub_archives) dest compiledType
-      compileOpt
+      (internal_dep_archives @ internal_stub_archives @ system_dep_archives)
+      dest compiledType compileOpt
   in
 
   if depsTime <> None then (

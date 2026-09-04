@@ -332,6 +332,38 @@ configure && build && {
 	}
 }
 
+scenario external-package-reinstall-rebuilds
+# a reinstalled findlib package used to leave binaries silently linked
+# against the old library: external archives were neither compile nor link
+# staleness inputs.  Dependent modules must recompile (native cmx records
+# impl CRCs — relink alone fails with "inconsistent assumptions") and the
+# exe relink, in one build.
+mkdir -p site/fakelib
+( cd site/fakelib \
+  && printf 'let v = "one"\n' > fakelib.ml \
+  && ocamlopt -c fakelib.ml && ocamlopt -a fakelib.cmx -o fakelib.cmxa \
+  && ocamlc -c fakelib.ml && ocamlc -a fakelib.cmo -o fakelib.cma \
+  && printf 'version = "1"\narchive(byte) = "fakelib.cma"\narchive(native) = "fakelib.cmxa"\n' > META )
+cat > p.obuild <<-'EOF'
+name: incr
+version: 1.0
+obuild-ver: 1
+executable main
+  main-is: main.ml
+  build-deps: fakelib
+EOF
+echo 'let () = print_endline Fakelib.v' > main.ml
+export OCAMLPATH="${DIR}/site"
+configure && build && expect_output "one" && {
+	( cd site/fakelib \
+	  && printf 'let v = "two"\n' > fakelib.ml \
+	  && ocamlopt -c fakelib.ml && ocamlopt -a fakelib.cmx -o fakelib.cmxa \
+	  && ocamlc -c fakelib.ml && ocamlc -a fakelib.cmo -o fakelib.cma )
+	build && expect_step "Compiling Main" && expect_step "Linking executable" \
+		&& expect_output "two" && expect_converged && ok
+}
+unset OCAMLPATH
+
 scenario duplicate-module-is-an-error
 mkdir -p a b
 cat > p.obuild <<-'EOF'
