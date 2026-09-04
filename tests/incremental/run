@@ -364,6 +364,40 @@ configure && build && expect_output "one" && {
 }
 unset OCAMLPATH
 
+scenario subdep-change-through-cutoff-middle-lib
+# main depends (build-deps) only on libb, but legally calls liba's A1
+# directly (include dirs are transitive).  Changing A1 leaves libb's
+# archive byte-identical (early cutoff: B uses only A2), which used to
+# mask the change from main FOREVER — never recompiled, and the native
+# link failed with "inconsistent assumptions" until a manual clean.
+# Compile staleness must track the TRANSITIVE lib archives.
+cat > p.obuild <<-'EOF'
+name: incr
+version: 1.0
+obuild-ver: 1
+library liba
+  modules: A1, A2
+  src-dir: a
+library libb
+  modules: B
+  src-dir: b
+  build-deps: liba
+executable main
+  main-is: main.ml
+  build-deps: libb
+EOF
+mkdir -p a b
+echo 'let v = "one"' > a/a1.ml
+echo 'let w = "stable"' > a/a2.ml
+echo 'let v = A2.w' > b/b.ml
+printf 'let () = print_endline A1.v ; print_endline B.v\n' > main.ml
+configure && build && expect_output "one
+stable" && {
+	echo 'let v = "two"' > a/a1.ml
+	build && expect_step "Compiling Main" && expect_output "two
+stable" && expect_converged && ok
+}
+
 scenario duplicate-module-is-an-error
 mkdir -p a b
 cat > p.obuild <<-'EOF'

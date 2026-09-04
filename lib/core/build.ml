@@ -189,7 +189,9 @@ let internal_libs_paths_for bstate target =
   let key = target.Target.target_name in
   try Hashtbl.find internal_libs_paths_memo key
   with Not_found ->
-    let v = internal_libs_paths (Analyze.get_internal_library_deps bstate.bstate_config target) in
+    let v =
+      internal_libs_paths
+        (Analyze.get_internal_library_deps_transitive bstate.bstate_config target) in
     Hashtbl.replace internal_libs_paths_memo key v;
     v
 
@@ -962,9 +964,19 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       else
         LinkingExecutable
     in
-    log Report "[%*d of %d] Linking %s %s\n%!" nb_step_len task_index nb_step
+    (* show WHY, like compile steps do — relink causes were invisible,
+       which made staleness bugs (stale archives, missed inputs) hard to
+       diagnose *)
+    let reason =
+      match depsTime with
+      | Some p when p <> current_dir ->
+          "    ( " ^ reason_from_paths (Filetype.FileEXE, dest) (Filetype.of_filepath p, p) ^ " )"
+      | Some _ -> "    ( new or input set changed )"
+      | None -> ""
+    in
+    log Report "[%*d of %d] Linking %s %s%s\n%!" nb_step_len task_index nb_step
       (if is_lib target then "library" else "executable")
-      (fp_to_string dest);
+      (fp_to_string dest) reason;
     [
       (fun () ->
         run_ocaml_linking cstate.compilation_hier (linking_paths_of compileOpt) compiledType link_type compileOpt
@@ -1377,4 +1389,13 @@ let build_dag bstate proj_file targets_dag =
                   (Dag.get_parents targets_dag ntask);
                 Taskdep.mark_done taskdep ntask
           done);
+      (* the per-target dots (prepare.ml) miss the cross-target edges added
+         above — dump the MERGED dag too, it is the one the scheduler runs *)
+      if (Hier.conf bstate.bstate_config.Analyze.project_hier_registry).Gconf.dump_dot
+      then begin
+        let dotDir = Dist.create_build Dist.Dot in
+        let path = dotDir </> fn "merged.dot" in
+        Filesystem.write_file path
+          (Dag.to_dot string_of_compile_step "merged" true dag)
+      end;
       Helper.Timing.measure_time "compilation phase" (fun () -> compile bstate task_context dag))

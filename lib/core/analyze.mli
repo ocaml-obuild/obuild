@@ -91,3 +91,8 @@ val get_internal_library_deps : project_config -> Target.target -> Libname.t lis
 (** [get_internal_library_deps project target] gets internal library dependencies
 
     Returns only dependencies that are libraries defined in the project *)
+
+val get_internal_library_deps_transitive : project_config -> Target.target -> Libname.t list
+(** Transitive closure of [get_internal_library_deps] — what compile
+    staleness must track, since include dirs (and thus direct references
+    into sub-dependencies) are transitive. *)

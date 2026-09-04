@@ -78,6 +78,28 @@ let get_internal_library_deps project target =
       | _ -> None)
     internalDeps
 
+(* Transitive closure of the above.  Compile-staleness must track it:
+   include dirs are transitive, so a module may legally reference a
+   sub-dependency's modules directly (e.g. main.ml calling a module of the
+   bottom library of a chain).  Tracking only DIRECT deps let early cutoff
+   on the middle library mask sub-dep implementation changes entirely — the
+   dependent was never recompiled and native links kept failing with
+   "inconsistent assumptions" until a manual clean. *)
+let get_internal_library_deps_transitive project target =
+  let seen = Hashtbl.create 8 in
+  let rec walk names =
+    List.iter
+      (fun name ->
+        match name with
+        | Name.Lib l when not (Hashtbl.mem seen l) ->
+            Hashtbl.replace seen l ();
+            walk (Dag.get_children project.project_targets_dag name)
+        | _ -> ())
+      names
+  in
+  walk (Dag.get_children project.project_targets_dag target.target_name);
+  Hashtbl.fold (fun l () acc -> l :: acc) seen []
+
 (* all the standard libraries shipped with ocaml, comes *without* META files, so
  * we pre-populate the META cache with whatever we need by scanning the
  * directory that ocaml use as standard_library (found by running ocamlc -config).
