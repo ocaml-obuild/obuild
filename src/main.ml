@@ -376,21 +376,48 @@ let cmd_run =
 let cmd_test =
   let cmd =
     Cli.command "test" ~doc:"Run the tests"
-      ~description:"Executes all test targets and reports results."
+      ~description:
+        "Builds and executes test targets and reports results. Positional \
+         arguments select a subset of tests by name; by default all tests run."
       ~run:(fun ctx ->
         let show_test = Cli.get_flag ctx "output" in
+        let no_build = Cli.get_flag ctx "no-build" in
+        let names = Cli.get_positionals ctx in
 
         let hreg = Hier.create_registry () in
         let setup = read_setup (Hier.conf hreg) in
         let proj_file = project_read_with hreg in
-        let _ = Configure.check hreg proj_file false setup in
+        let flags = Configure.check hreg proj_file true setup in
 
         if not (Gconf.get_target_option_typed (Hier.conf hreg) Gconf.Build_tests) then (
           eprintf "error: building tests are disabled, re-configure with --build-tests=true\n";
           exit 1);
 
-        let test_targets = List.map Project.Test.to_target proj_file.Project.tests in
-        if test_targets <> [] then (
+        (* optional positional names select a subset of the tests *)
+        let tests_to_run =
+          match names with
+          | [] -> proj_file.Project.tests
+          | _ ->
+              List.iter
+                (fun n ->
+                  if not (List.exists (fun t -> t.Project.Test.name = n)
+                            proj_file.Project.tests)
+                  then (
+                    eprintf "error: unknown test '%s'; available: %s\n" n
+                      (String.concat ", "
+                         (List.map (fun t -> t.Project.Test.name) proj_file.Project.tests));
+                    exit 1))
+                names;
+              List.filter (fun t -> List.mem t.Project.Test.name names)
+                proj_file.Project.tests
+        in
+        if tests_to_run <> [] then (
+          (* bring the selected tests (and their dependencies) up to date —
+             a prior manual `obuild build` used to be required *)
+          if not no_build then
+            build_targets hreg proj_file flags
+              (Some (List.map (fun t -> Target.Name.Test t.Project.Test.name)
+                       tests_to_run));
           let results =
             List.map
               (fun test ->
@@ -424,7 +451,7 @@ let cmd_test =
                 | Process.Failure (out, err, _) ->
                     print_warnings (if String.length out > 0 then out ^ "\n" ^ err else err);
                     (test.Project.Test.name, false))
-              proj_file.Project.tests
+              tests_to_run
           in
 
           let failed = List.filter (fun (_, x) -> not x) results in
@@ -441,7 +468,9 @@ let cmd_test =
           printf "warning: no tests defined: not doing anything.\n")
       ()
   in
-  cmd |> Cli.help_flag |> Cli.flag "output" ~doc:"Show test outputs"
+  cmd |> Cli.help_flag
+  |> Cli.flag "output" ~doc:"Show test outputs"
+  |> Cli.flag "no-build" ~doc:"Do not rebuild test targets before running"
 
 (* ===== Init Command ===== *)
 
