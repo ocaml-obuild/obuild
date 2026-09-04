@@ -842,8 +842,28 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
         [] pkgDeps
   in
 
+  (* C stub archives of internal library dependencies are linked in via
+     -lstubs_<lib> flags only, so they must be tracked as staleness inputs
+     explicitly — a changed .c stub used to rebuild libstubs_<lib>.a without
+     ever relinking dependent executables (stale binaries shipped silently) *)
+  let internal_stub_archives =
+    if is_lib target then
+      []
+    else
+      List.fold_left
+        (fun acc dep ->
+          match Hashtbl.find bstate.bstate_config.project_dep_data dep with
+          | Internal ->
+              let dir = Dist.get_build_exn (Dist.Target (Name.Lib dep)) in
+              let ar = dir </> fn ("lib" ^ Name.get_clibname (Name.Lib dep) ^ ".a") in
+              if Filesystem.exists ar then ar :: acc else acc
+          | System -> acc)
+        [] pkgDeps
+  in
+
   let depsTime =
-    check_needs_relink cstate compiled c_obj_files internal_dep_archives dest compiledType
+    check_needs_relink cstate compiled c_obj_files
+      (internal_dep_archives @ internal_stub_archives) dest compiledType
       compileOpt
   in
 
@@ -1047,11 +1067,11 @@ let compile (bstate : build_state) task_context dag =
     (match Process.terminate (task, st) with
     | Process.Success (_, warnings, duration) ->
         log Gconf.Debug "[TIMING] %s: %.3fs\n" (string_of_compile_step task) duration;
-        (* TODO: store warnings for !isDone and print them if they are different when isDone *)
-        if is_done then begin
-          print_warnings warnings;
-          try Digests.commit_group (Hashtbl.find task_groups task) with Not_found -> ()
-        end
+        (* print warnings from every step, not just the task's final one —
+           intermediate-step warnings used to be silently dropped *)
+        print_warnings warnings;
+        if is_done then (
+          try Digests.commit_group (Hashtbl.find task_groups task) with Not_found -> ())
     | Process.Failure (out, er, _) -> (
         let msg = if String.length out > 0 then out ^ "\n" ^ er else er in
         match task with

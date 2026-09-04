@@ -280,6 +280,34 @@ configure && build && expect_output "vend1" && {
 	build && expect_output "vend2" && expect_converged && ok
 }
 
+scenario cstub-change-relinks-exe
+# regression: a changed C stub rebuilt libstubs_<lib>.a but never relinked
+# dependent executables (stub archives reached the link line as -l flags
+# only, invisible to the staleness check) — stale binaries shipped silently
+cat > p.obuild <<-'EOF'
+name: incr
+version: 1.0
+obuild-ver: 1
+library clib
+  modules: Cbind
+  src-dir: lib
+  c-sources: stub.c
+executable main
+  main-is: main.ml
+  build-deps: clib
+EOF
+mkdir -p lib
+cat > lib/stub.c <<-'EOF'
+#include <caml/mlvalues.h>
+CAMLexport value stub_geti(value unit) { return Val_int(1); }
+EOF
+echo 'external geti : unit -> int = "stub_geti"' > lib/cbind.ml
+echo 'let () = Printf.printf "c-%d\n" (Cbind.geti ())' > main.ml
+configure && build && expect_output "c-1" && {
+	sed -i 's/Val_int(1)/Val_int(2)/' lib/stub.c
+	build && expect_step "Linking executable" && expect_output "c-2" && expect_converged && ok
+}
+
 scenario duplicate-module-is-an-error
 mkdir -p a b
 cat > p.obuild <<-'EOF'
