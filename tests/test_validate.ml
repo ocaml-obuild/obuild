@@ -146,6 +146,66 @@ let test_executable_conversion () =
 (* TEST TARGET CONVERSION TESTS *)
 (* ============================================================ *)
 
+let test_js_conversion () =
+  Printf.printf "\n=== js_of_ocaml Tests ===\n";
+
+  let exe_target input =
+    let proj = parse_and_convert (Gconf.create ()) input in
+    (List.hd proj.Project.exes).Project.Executable.target
+  in
+
+  test "executable without js-of-ocaml" (fun () ->
+      let t = exe_target "\
+name: test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+executable app\n\
+\  main-is: app.ml\n" in
+      assert_true "no js settings" (t.Target.target_js = None);
+      assert_true "not a js target" (not (Target.is_js t)));
+
+  test "js-of-ocaml with flags and files" (fun () ->
+      let t = exe_target "\
+name: test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+executable app\n\
+\  main-is: app.ml\n\
+\  js-of-ocaml: true\n\
+\  js-flags: --pretty --opt 2\n\
+\  js-files: a.js, src/b.js\n" in
+      let js = option_get t.Target.target_js in
+      assert_true "is a js target" (Target.is_js t);
+      assert_eq "flags" "--pretty --opt 2" (String.concat " " js.Target.js_flags);
+      assert_eq "files" "a.js src/b.js"
+        (String.concat " " (List.map Filepath.fp_to_string js.Target.js_files)));
+
+  test "js target is bytecode only" (fun () ->
+      let t = exe_target "\
+name: test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+executable app\n\
+\  main-is: app.ml\n\
+\  js-of-ocaml: true\n" in
+      (* default configuration builds native executables only *)
+      assert_true "bytecode only"
+        (Target.get_ocaml_compiled_types (Gconf.create ()) t = [ Types.ByteCode ]));
+
+  test "js-flags alone do not enable js" (fun () ->
+      let t = exe_target "\
+name: test\n\
+version: 1.0\n\
+obuild-ver: 1\n\
+\n\
+executable app\n\
+\  main-is: app.ml\n\
+\  js-flags: --pretty\n" in
+      assert_true "no js settings" (t.Target.target_js = None))
+
 let test_test_conversion () =
   Printf.printf "\n=== Test Target Conversion Tests ===\n";
 
@@ -275,6 +335,7 @@ let () =
   test_basic_conversion ();
   test_library_conversion ();
   test_executable_conversion ();
+  test_js_conversion ();
   test_test_conversion ();
   test_cstubs_conversion ();
   test_flag_conversion ();

@@ -45,6 +45,7 @@ type compile_step =
   | CompileCstubsC of Libname.t  (** Compile generated C stubs *)
   | RunGenerateBlock of Target.target_generate  (** Run explicit generate block *)
   | LinkTarget of Target.target
+  | JsTarget of Target.target (* js_of_ocaml on the linked bytecode executable *)
   | CheckTarget of Target.target
 
 (** Module descriptor system *)

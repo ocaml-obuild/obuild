@@ -141,6 +141,12 @@ type target_generate = {
   generate_args : string option;      (* Additional command-line arguments *)
 }
 
+(* js_of_ocaml: translate the bytecode executable to JavaScript *)
+type target_js = {
+  js_flags : string list; (* extra arguments for js_of_ocaml *)
+  js_files : filepath list; (* extra JavaScript runtime files *)
+}
+
 type target = {
   target_name : Name.t;
   target_type : Typ.t;
@@ -152,6 +158,7 @@ type target = {
   target_buildable : runtime_bool;
   target_installable : runtime_bool;
   target_pack : bool;  (* library modules wrapped under one pack module *)
+  target_js : target_js option;  (* executable also produced as JavaScript *)
 }
 
 let new_target_cbits =
@@ -198,6 +205,7 @@ let new_target n ty buildable installable =
     target_cstubs = None;
     target_generates = [];
     target_pack = false;
+    target_js = None;
   }
 
 let new_target_extra objs =
@@ -214,7 +222,13 @@ let get_target_dest_name target = Name.get_dest_name target.target_name
 let get_target_clibname target = Name.get_clibname target.target_name
 let is_lib target = Typ.is_lib target.target_type
 
+let is_js target = (not (is_lib target)) && target.target_js <> None
+
 let get_ocaml_compiled_types conf target =
+  (* js_of_ocaml consumes the bytecode executable; a native build of a
+     browser program is useless, so a js target is bytecode-only whatever
+     the configured executable modes are *)
+  if is_js target then [ ByteCode ] else
   let nat, byte =
     if is_lib target then
       (Gconf.get_target_option_typed conf Gconf.Library_native, Gconf.get_target_option_typed conf Gconf.Library_bytecode)

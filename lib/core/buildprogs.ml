@@ -161,7 +161,7 @@ let run_c_linking conf sharingMode depfiles dest =
   in
   Process.make args
 
-let run_ocaml_linking reg includeDirs build_mode linking_mode compileType use_thread systhread oflags cclibs libs
+let run_ocaml_linking ?(root_link = true) reg includeDirs build_mode linking_mode compileType use_thread systhread oflags cclibs libs
     modules dest =
   let conf = Hier.conf reg in
   (* create a soft link to a freshly compiled exe, unless a file with the same name already exist *)
@@ -224,8 +224,20 @@ let run_ocaml_linking reg includeDirs build_mode linking_mode compileType use_th
     @ List.map (fun m -> fp_to_string (Hier.get_dest_file reg current_dir ext m)) modules
   in
   let res = Process.make args in
-  let () = link_maybe linking_mode dest in
+  (* [root_link = false]: no convenience symlink in the project root (a js
+     target's bytecode is only an intermediate file) *)
+  let () = if root_link then link_maybe linking_mode dest in
   res
+
+(* js_of_ocaml: whole-program translation of a bytecode executable.
+   Runtime .js files come first, the bytecode last, as the tool expects. *)
+let run_js_of_ocaml flags js_files bytecode dest =
+  let args =
+    [ Prog.get_js_of_ocaml () ] @ flags
+    @ List.map fp_to_string js_files
+    @ [ fp_to_string bytecode; "-o"; fp_to_string dest ]
+  in
+  Process.make args
 
 (* ================================================================
    ctypes.cstubs generation functions

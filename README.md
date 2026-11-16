@@ -260,6 +260,31 @@ Declaring an executable
       build-deps: unix
 ```
 
+Compiling an executable to JavaScript
+-------------------------------------
+
+With `js-of-ocaml: true`, obuild builds the executable as bytecode and runs
+[js_of_ocaml](https://ocsigen.org/js_of_ocaml) on it. The result is
+`dist/build/myapp/myapp.js`, rebuilt only when the bytecode, the flags or the
+runtime files change.
+
+```
+    executable myapp
+      main-is: myapp.ml
+      src-dir: src
+      build-deps: mylib, js_of_ocaml
+      js-of-ocaml: true
+      js-flags: --opt 3
+      js-files: src/runtime.js
+```
+
+* `js-flags`: extra arguments passed to js_of_ocaml.
+* `js-files`: JavaScript files implementing `external` primitives.
+* Such a target is bytecode only; its internal libraries need their bytecode
+  archives (`library-bytecode`, on by default).
+* Code compiled this way cannot use C stubs: keep C bindings in other targets.
+* The js_of_ocaml program is found in the PATH; it is not installed by `obuild install`.
+
 Declaring a library
 -------------------
 

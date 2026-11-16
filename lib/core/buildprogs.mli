@@ -85,7 +85,13 @@ val run_c_linking :
   Process.t
 (** Link C object files *)
 
+val run_js_of_ocaml :
+  string list -> Filepath.filepath list -> Filepath.filepath -> Filepath.filepath -> Process.t
+(** [run_js_of_ocaml flags js_files bytecode dest] translates a bytecode
+    executable to JavaScript *)
+
 val run_ocaml_linking :
+  ?root_link:bool ->
   Hier.registry -> Filepath.filepath list ->
   Types.ocaml_compiled_type ->
   linking_mode ->

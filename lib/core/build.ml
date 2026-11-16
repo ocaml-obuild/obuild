@@ -519,7 +519,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
   let modules_task = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [ task ] in
   let filter_modules t : Hier.t option =
     match t with
-    | CompileC _ | LinkTarget _ | CheckTarget _ -> None
+    | CompileC _ | LinkTarget _ | JsTarget _ | CheckTarget _ -> None
     | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ | RunGenerateBlock _ -> None
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = Hier.lvl h + 1 then Some m else None
     | CompileInterface m ->
@@ -1011,8 +1011,15 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       (fp_to_string dest) reason;
     [
       (fun () ->
-        run_ocaml_linking cstate.compilation_hier (linking_paths_of compileOpt) compiledType link_type compileOpt
-          useThreadLib systhread target.target_obits.target_oflags cclibs buildDeps compiled dest);
+        run_ocaml_linking ~root_link:(not (Target.is_js target))
+          cstate.compilation_hier (linking_paths_of compileOpt) compiledType link_type compileOpt
+          useThreadLib systhread
+          (* primitives of a js target may be provided by JavaScript runtime
+             files (js-files, or a library's runtime.js): they do not exist
+             as C at bytecode link time *)
+          (target.target_obits.target_oflags
+           @ if Target.is_js target && compiledType = ByteCode then [ "-no-check-prims" ] else [])
+          cclibs buildDeps compiled dest);
     ])
   else
     []
@@ -1147,6 +1154,44 @@ let link task_index task bstate task_context dag =
   else
     Scheduler.FinishTask task
 
+(* file name of the JavaScript produced for a js_of_ocaml target *)
+let js_dest_name target = fn (Target.get_target_dest_name target ^ ".js")
+
+(* js_of_ocaml step: translate the Normal-mode bytecode executable to
+   <name>.js next to it.  Inputs are the bytecode, the extra runtime files
+   and (as a virtual input) the flags, so editing js-flags rebuilds too. *)
+let js_of_ocaml task_index task task_context dag =
+  let cstate, target = Hashtbl.find task_context task in
+  match target.target_js with
+  | None -> Scheduler.FinishTask task
+  | Some js ->
+      let conf = Hier.conf cstate.compilation_hier in
+      let dir = cstate.compilation_builddir_ml Normal in
+      let bytecode =
+        dir </> Utils.to_exe_name conf Normal ByteCode (Target.get_target_dest_name target)
+      in
+      let dest = dir </> js_dest_name target in
+      let vkey = "@js-flags/" ^ Target.get_target_name target in
+      Digests.set_virtual vkey (Digest.string (String.concat "\000" js.js_flags));
+      let srcs =
+        (Filetype.FileEXE, bytecode)
+        :: (Filetype.FileOther "js-flags", fp vkey)
+        :: List.map (fun p -> (Filetype.FileOther "js", p)) js.js_files
+      in
+      (match check_destination_valid_with srcs (Filetype.FileOther "js", dest) with
+       | None -> Scheduler.FinishTask task
+       | Some (_, changed) ->
+           let nb_step, nb_step_len = get_nb_step dag in
+           let reason =
+             if changed = current_dir then ""
+             else if Digests.is_virtual changed then "    ( js-flags changed )"
+             else "    ( " ^ fp_to_string changed ^ " changed )"
+           in
+           log Report "[%*d of %d] Js_of_ocaml %s%s\n%!" nb_step_len task_index nb_step
+             (fp_to_string dest) reason;
+           Scheduler.AddProcess
+             (task, run_js_of_ocaml js.js_flags js.js_files bytecode dest))
+
 let get_destination_files conf target =
   let all_modes = get_all_modes conf target in
   match target.Target.target_name with
@@ -1155,6 +1200,7 @@ let get_destination_files conf target =
       List.map
         (fun (ty, opt) -> Utils.to_exe_name conf opt ty (Target.get_target_dest_name target))
         all_modes
+      @ (if Target.is_js target then [ js_dest_name target ] else [])
 
 let sanity_check conf build_dir target =
   let files = get_destination_files conf target in
@@ -1236,6 +1282,7 @@ let compile (bstate : build_state) task_context dag =
     | CompileCstubsC lib -> compile_cstubs_c task_index task lib bstate task_context dag
     | RunGenerateBlock gen_block -> run_generate_block task_index task gen_block bstate task_context dag
     | LinkTarget _ -> link task_index task bstate task_context dag
+    | JsTarget _ -> js_of_ocaml task_index task task_context dag
     | CheckTarget _ -> check task_index task task_context dag
     in
     Hashtbl.replace task_groups task (Digests.take_group ());

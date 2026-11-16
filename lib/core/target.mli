@@ -123,6 +123,12 @@ type target_generate = {
   generate_args   : string option;      (** Additional command-line arguments *)
 }
 
+(** js_of_ocaml settings: the bytecode executable is translated to JavaScript *)
+type target_js = {
+  js_flags : string list;              (** Extra arguments for js_of_ocaml *)
+  js_files : Filepath.filepath list;   (** Extra JavaScript runtime files *)
+}
+
 (** Complete build target definition *)
 type target = {
   target_name        : Name.t;
@@ -135,6 +141,7 @@ type target = {
   target_buildable   : runtime_bool;
   target_installable : runtime_bool;
   target_pack        : bool;  (** library modules wrapped under one pack module *)
+  target_js          : target_js option;  (** executable also produced as JavaScript *)
 }
 
 val new_target_cbits : target_cbits
@@ -168,6 +175,9 @@ val get_target_clibname : target -> string
 
 val is_lib : target -> bool
 (** Check if target is a library *)
+
+val is_js : target -> bool
+(** Executable target with js_of_ocaml output enabled *)
 
 val get_ocaml_compiled_types : Gconf.t -> target -> Types.ocaml_compiled_type list
 (** Get OCaml compilation types (Native/ByteCode) based on target type and global config *)

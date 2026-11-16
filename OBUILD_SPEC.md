@@ -75,6 +75,14 @@ sections, etc.
 * per: NO VALUE (define a new block)
 * main | mainis | main-is: string: ml file being the entry point for the executable
 
+## Executable only fields (js_of_ocaml)
+
+* js-of-ocaml | jsoo | js: bool: also translate the executable to JavaScript with js_of_ocaml.
+  The target is then built as bytecode only (whatever the configured executable modes),
+  linked with `-no-check-prims`, and `dist/build/<name>/<name>.js` is produced from `<name>.byte`.
+* js-flags: words: extra arguments for js_of_ocaml (e.g. `--pretty`, `--opt 3`, `--source-map`)
+* js-files: list: extra JavaScript runtime files (project-relative), for externals implemented in JavaScript
+
 ## Test only fields
 
 * rundir:

@@ -1,0 +1,16 @@
+name: js-test
+version: 0.1
+synopsis: js_of_ocaml output for an executable
+obuild-ver: 1
+
+library greet
+  modules: greet
+  src-dir: lib
+
+executable hello
+  main-is: hello.ml
+  src-dir: src
+  build-deps: greet
+  js-of-ocaml: true
+  js-flags: --pretty
+  js-files: src/extra.js

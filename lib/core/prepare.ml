@@ -92,6 +92,7 @@ type compile_step = Prepare_types.compile_step =
   | CompileCstubsC of Libname.t
   | RunGenerateBlock of Target.target_generate
   | LinkTarget of Target.target
+  | JsTarget of Target.target
   | CheckTarget of Target.target
 
 type compilation_state = Prepare_types.compilation_state = {
@@ -114,10 +115,20 @@ type compilation_state = Prepare_types.compilation_state = {
 let string_of_compile_step = Prepare_types.string_of_compile_step
 let init project = { bstate_config = project }
 
+(* steps after the link: Link -> [Js] -> Check.  The js_of_ocaml step is its
+   own DAG node so it is dispatched once the bytecode executable exists and
+   the ordinary staleness check (digest of the .byte) applies to it. *)
+let add_final_steps target stepsDag =
+  if Target.is_js target then begin
+    Dag.add_edge (JsTarget target) (LinkTarget target) stepsDag;
+    Dag.add_edge (CheckTarget target) (JsTarget target) stepsDag
+  end else
+    Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+
 let get_compilation_order cstate =
   let filter_modules t : Hier.t option =
     match t with
-    | CompileC _ | CompileInterface _ | LinkTarget _ | CheckTarget _ -> None
+    | CompileC _ | CompileInterface _ | LinkTarget _ | JsTarget _ | CheckTarget _ -> None
     | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ | RunGenerateBlock _ -> None
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = 0 then Some m else None
   in
@@ -498,7 +509,7 @@ let build_module_steps_dag modulesDeps target stepsDag =
         match r with
         | CompileModule _ | CompileDirectory _ | CompileC _ ->
             Dag.add_edge (LinkTarget target) r stepsDag;
-            Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+            add_final_steps target stepsDag
         | _ -> ())
       roots;
 
@@ -658,7 +669,7 @@ let add_cstubs_tasks target stepsDag =
 
       (* Link depends on CompileCstubsC *)
       Dag.add_edge (LinkTarget target) compile_task stepsDag;
-      Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+      add_final_steps target stepsDag
 
 (** Add generate block tasks to the DAG *)
 let add_generate_block_tasks target stepsDag =
@@ -1190,7 +1201,7 @@ let prepare_target_ bstate buildDir target toplevelModules =
     add_c_compilation_tasks bstate cbits buildDir stepsDag filesDag;
     List.iter (fun cSource ->
       Dag.add_edge (LinkTarget target) (CompileC cSource) stepsDag;
-      Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+      add_final_steps target stepsDag
     ) cbits.target_csources;
 
     (* Add cstubs generation tasks if configured *)

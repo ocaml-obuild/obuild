@@ -136,6 +136,9 @@ type library = {
 type executable = {
   exe_name: string;
   exe_main: string;               (* main-is *)
+  exe_js: bool;                   (* js-of-ocaml: also produce <name>.js *)
+  exe_js_flags: string list;      (* js-flags: extra js_of_ocaml arguments *)
+  exe_js_files: string list;      (* js-files: extra JavaScript runtime files *)
   exe_target: target_common;
 }
 

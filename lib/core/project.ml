@@ -381,6 +381,12 @@ let write file proj =
           add (sprintf "executable %s\n" exe.Executable.name);
           add (sprintf "  main: %s\n" (fn_to_string exe.Executable.main));
           show_target "  " exe.Executable.target;
+          (match exe.Executable.target.target_js with
+           | None -> ()
+           | Some js ->
+               add "  js-of-ocaml: true\n";
+               add_string "  js-flags" (Utils.showList " " id js.js_flags);
+               add_string "  js-files" (Utils.showList ", " fp_to_string js.js_files));
           ())
         proj.exes)
 

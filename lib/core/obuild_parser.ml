@@ -422,10 +422,15 @@ let parse_executable_block name tokens =
     ~handle_key:(fun k v exe ->
       match k with
       | "main" | "mainis" | "main-is" -> Some { exe with exe_main = v }
+      | "js-of-ocaml" | "js_of_ocaml" | "jsoo" | "js" ->
+          Some { exe with exe_js = Compat.string_lowercase v = "true" }
+      | "js-flags" -> Some { exe with exe_js_flags = exe.exe_js_flags @ parse_words v }
+      | "js-files" -> Some { exe with exe_js_files = exe.exe_js_files @ parse_list v }
       | _ -> None)
     ~get_target:(fun e -> e.exe_target)
     ~set_target:(fun e t -> { e with exe_target = t })
-    { exe_name = name; exe_main = ""; exe_target = default_target_common }
+    { exe_name = name; exe_main = ""; exe_js = false; exe_js_flags = []; exe_js_files = [];
+      exe_target = default_target_common }
     tokens
 
 (** Parse test block *)

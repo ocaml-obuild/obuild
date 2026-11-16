@@ -189,6 +189,7 @@ let convert_target_common name typ ?cstubs (tc : target_common) : Target.target 
     target_buildable = convert_runtime_bool tc.buildable;
     target_installable = convert_runtime_bool tc.installable;
     target_pack = false;
+    target_js = None;
   }
 
 (* ============================================================ *)
@@ -281,6 +282,14 @@ and convert_sublibrary parent_name (lib : library) : Project.Library.t =
 let convert_executable (exe : executable) : Project.Executable.t =
   let target_name = Target.Name.Exe exe.exe_name in
   let target = convert_target_common target_name Target.Typ.Exe exe.exe_target in
+  let target =
+    (* js-flags / js-files alone do nothing: js-of-ocaml: true enables the step *)
+    if exe.exe_js then
+      { target with
+        Target.target_js =
+          Some { Target.js_flags = exe.exe_js_flags; js_files = List.map fp exe.exe_js_files } }
+    else target
+  in
   { Project.Executable.name = exe.exe_name; main = fn exe.exe_main; target }
 
 (* ============================================================ *)
