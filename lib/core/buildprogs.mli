@@ -38,6 +38,7 @@ val run_ocaml_compile :
 (** Compile an OCaml module *)
 
 val run_ocaml_pack :
+  ?debug:bool ->
   Hier.registry -> Filepath.filepath ->
   Filepath.filepath ->
   annotation_mode ->
@@ -90,6 +91,10 @@ val run_web_compiler :
   string list -> Filepath.filepath list -> Filepath.filepath -> Filepath.filepath -> Process.t
 (** [run_web_compiler backend flags runtime_files bytecode dest] translates a
     bytecode executable with js_of_ocaml or wasm_of_ocaml *)
+
+val run_web_tool : Target.web_backend -> string -> string list -> Process.t
+(** [run_web_tool backend subcommand args] runs one step of separate
+    compilation ([build-runtime], [compile] or [link]) *)
 
 val run_ocaml_linking :
   ?root_link:bool ->

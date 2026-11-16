@@ -47,6 +47,9 @@ exception UnknownExtraDepFormat of string
 (** Raised when extra dependency format is invalid *)
 
 exception UnknownFlag of string
+
+exception WebFileNotFound of Target.target * string * Filepath.filepath
+(** A js-files / wasm-files entry (target, field name, path) does not exist *)
 (** Raised when an unknown flag is referenced *)
 
 exception BadOcamlVersion of (string * Expr.t)
@@ -308,6 +311,10 @@ val get_all_installable_targets : t -> (string * bool) list -> Target.target lis
     given user-specified flags *)
 
 (** {1 Lookup Functions} *)
+
+val resolve_web_flags : (string * bool) list -> t -> t
+(** Replace flag variables in the js-of-ocaml / wasm-of-ocaml fields by their
+    configured value. @raise UnknownFlag for an undeclared flag *)
 
 val find_lib : t -> Libname.t -> Library.t
 (** Find library in project by name

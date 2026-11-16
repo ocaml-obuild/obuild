@@ -144,6 +144,7 @@ let cmd_configure =
         add_bool_opt "library-native" "library-native";
         add_bool_opt "library-plugin" "library-plugin";
         add_bool_opt "executable-bytecode" "executable-bytecode";
+        add_bool_opt "web-separate" "web-separate";
         add_bool_opt "executable-native" "executable-native";
         add_bool_opt "library-profiling" "library-profiling";
         add_bool_opt "library-debugging" "library-debugging";
@@ -178,6 +179,8 @@ let cmd_configure =
   |> Cli.option_bool "library-native" ~doc:"Compile libraries as native"
   |> Cli.option_bool "library-plugin" ~doc:"Compile libraries as native plugin"
   |> Cli.option_bool "executable-bytecode" ~doc:"Compile executables as bytecode"
+  |> Cli.option_bool "web-separate"
+       ~doc:"js_of_ocaml/wasm_of_ocaml: compile each library and module separately, then link"
   |> Cli.option_bool "executable-native" ~doc:"Compile executables as native"
   |> Cli.option_bool "library-profiling" ~doc:"Enable library profiling"
   |> Cli.option_bool "library-debugging" ~doc:"Enable library debugging"
@@ -220,6 +223,7 @@ let cmd_build =
         let setup = read_setup conf in
         let proj_file = project_read_with hreg in
         let flags = Configure.check hreg proj_file true setup in
+        let proj_file = Project.resolve_web_flags flags proj_file in
         let target_names =
           match targets with
           | [] -> None
@@ -280,6 +284,7 @@ let cmd_install =
         let setup = read_setup (Hier.conf hreg) in
         let proj_file = project_read_with hreg in
         let flags = Configure.check hreg proj_file false setup in
+        let proj_file = Project.resolve_web_flags flags proj_file in
 
         let dest_dir =
           match dest_dir_str with
@@ -344,6 +349,8 @@ let cmd_run =
         in
         (* build the executable target (and its dependencies) if stale *)
         let flags = Configure.check hreg proj_file true setup in
+        let proj_file = Project.resolve_web_flags flags proj_file in
+        let exe = Project.find_exe proj_file exe.Project.Executable.name in
         let target_name = Target.Name.Exe exe.Project.Executable.name in
         build_targets hreg proj_file flags (Some [ target_name ]);
         (* run it, inheriting the terminal, and propagate the exit code *)
@@ -380,11 +387,15 @@ let cmd_run =
 
 (* A web target (js_of_ocaml / wasm_of_ocaml) has no native executable: it is
    run with node, once per enabled backend. *)
-let web_commands target dir =
+let web_outputs target dir =
   List.map
-    (fun b ->
-      [ Prog.get_node (); fp_to_string (dir </> Target.web_dest_name target b Normal) ])
+    (fun b -> (Target.web_backend_to_string b, dir </> Target.web_dest_name target b Normal))
     (Target.web_backends target)
+
+(* commands are run from another directory when a test has a rundir *)
+let absolute path =
+  let s = fp_to_string path in
+  if Filename.is_relative s then Filename.concat (Sys.getcwd ()) s else s
 
 let cmd_test =
   let cmd =
@@ -401,6 +412,7 @@ let cmd_test =
         let setup = read_setup (Hier.conf hreg) in
         let proj_file = project_read_with hreg in
         let flags = Configure.check hreg proj_file true setup in
+        let proj_file = Project.resolve_web_flags flags proj_file in
 
         if not (Gconf.get_target_option_typed (Hier.conf hreg) Gconf.Build_tests) then (
           eprintf "error: building tests are disabled, re-configure with --build-tests=true\n";
@@ -441,28 +453,33 @@ let cmd_test =
                 let dir = Dist.get_build_exn (Dist.Target test_target.Target.target_name) in
                 let exe_path = dir </> output_name in
                 (* web tests run under node, once per backend; the test
-                   passes when every backend passes *)
-                let commands =
-                  match web_commands test_target dir with
-                  | [] -> [ [ fp_to_string exe_path ] ]
-                  | l -> l
+                   passes when every backend passes.  Each run is
+                   (label, produced file, command). *)
+                let runs =
+                  match web_outputs test_target dir with
+                  | [] -> [ ("", exe_path, fun () -> [ absolute exe_path ]) ]
+                  | l -> List.map (fun (b, out) -> (b, out, fun () -> [ Prog.get_node (); absolute out ])) l
                 in
                 List.iter
-                  (fun command ->
-                    let produced = fp (List.nth command (List.length command - 1)) in
+                  (fun (_, produced, _) ->
                     if not (Filesystem.exists produced) then (
                       eprintf "error: %s doesn't appear built, make sure 'obuild build' is run first\n"
                         (Target.get_target_name test_target);
                       exit 1))
-                  commands;
+                  runs;
+                let commands = List.map (fun (label, _, command) -> (label, command ())) runs in
 
                 let run () =
                   let rec go acc = function
                     | [] -> Process.Success (acc, "", 0.)
-                    | command :: rest -> (
+                    | (label, command) :: rest -> (
                         match Process.run (command @ test.Project.Test.runopt) with
                         | Process.Success (out, _, _) -> go (acc ^ out) rest
-                        | failure -> failure)
+                        | Process.Failure (out, err, code) ->
+                            (* keep what the earlier backends printed, and say
+                               which one failed *)
+                            let tag = if label = "" then "" else "[" ^ label ^ "] " in
+                            Process.Failure (acc ^ out, tag ^ err, code))
                   in
                   go "" commands
                 in
@@ -471,9 +488,7 @@ let cmd_test =
                   | Some d ->
                       let saved = Sys.getcwd () in
                       Unix.chdir (fp_to_string d);
-                      let r = run () in
-                      Unix.chdir saved;
-                      r
+                      finally run (fun () -> Unix.chdir saved)
                 in
                 match result with
                 | Process.Success (out, _, _) ->

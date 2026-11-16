@@ -174,7 +174,7 @@ let convert_per (per : per_settings) : Target.target_extra =
 
 let convert_web_settings (w : web_settings) : Target.target_web =
   {
-    Target.web_enabled = w.web_enabled;
+    Target.web_enabled = convert_runtime_bool w.web_enabled;
     web_flags = w.web_flags;
     web_files = List.map fp w.web_files;
   }
@@ -204,6 +204,17 @@ let convert_target_common name typ ?cstubs (tc : target_common) : Target.target 
 (* Convert library *)
 (* ============================================================ *)
 
+(* a library is never translated itself: only its runtime files matter *)
+let warn_library_web (lib : library) =
+  List.iter
+    (fun (key, (w : web_settings)) ->
+      if w.web_enabled <> Bool_const false then
+        Printf.eprintf
+          "warning: library %s: %s has no effect on a library (only %s are used, by the web targets depending on it)\n%!"
+          lib.lib_name key
+          (if key = "js-of-ocaml" then "js-files" else "wasm-files"))
+    [ ("js-of-ocaml", lib.lib_target.js); ("wasm-of-ocaml", lib.lib_target.wasm) ]
+
 let rec convert_library (lib : library) : Project.Library.t =
   let libname = Libname.of_string lib.lib_name in
   let target_name = Target.Name.Lib libname in
@@ -211,6 +222,7 @@ let rec convert_library (lib : library) : Project.Library.t =
     convert_target_common target_name Target.Typ.Lib ?cstubs:lib.lib_cstubs lib.lib_target
   in
   let target = { target with Target.target_pack = lib.lib_pack } in
+  warn_library_web lib;
 
   (* Auto-add cstubs generated modules if present *)
   let base_modules = List.map module_name_to_hier lib.lib_modules in

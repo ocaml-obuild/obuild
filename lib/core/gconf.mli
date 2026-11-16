@@ -14,6 +14,7 @@ type target_option =
   | Executable_native
   | Executable_bytecode
   | Executable_as_obj
+  | Web_separate
   | Library_profiling
   | Library_debugging
   | Library_native

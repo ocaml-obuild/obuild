@@ -30,3 +30,11 @@ val sanity_check : Gconf.t -> Filepath.filepath -> Target.target -> unit
 
     @param build_dir target build directory
     @param target target to check *)
+
+val web_runtime_flags : Target.web_backend -> string list -> string list
+(** Separate web compilation: the js-flags / wasm-flags that the
+    [build-runtime] subcommand accepts (compile-only flags removed) *)
+
+val web_link_flags : Target.web_backend -> string list -> string list
+(** Separate web compilation: the js-flags / wasm-flags that the [link]
+    subcommand accepts *)

@@ -258,6 +258,10 @@ module Pkg = struct
           in
           append (sprintf "%slinkopts%s = \"%s\"\n" indent_str preds_str (escape v)))
         pkg.linkopts;
+      (* plain variables without a dedicated field, e.g. jsoo_runtime *)
+      List.iter
+        (fun (k, v) -> append (sprintf "%s%s = \"%s\"\n" indent_str k (escape v)))
+        (List.rev pkg.assignment);
 
       List.iter
         (fun spkg ->

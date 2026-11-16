@@ -210,6 +210,44 @@ let test_js_conversion () =
       let t = Project.Test.to_target (List.hd proj.Project.tests) in
       assert_true "js test" (Target.web_backends t = [ Target.Js ]));
 
+  test "separate compilation: flags per subcommand" (fun () ->
+      let flags =
+        [ "--opt"; "3"; "--pretty"; "--opt=2"; "--effects=cps"; "--linkall"; "--export=f";
+          "--disable"; "inline"; "--file=a.ml"; "--enable=x" ]
+      in
+      let show l = String.concat " " l in
+      assert_eq "js build-runtime" "--pretty --effects=cps --disable inline --file=a.ml --enable=x"
+        (show (Build.web_runtime_flags Target.Js flags));
+      (* wasm_of_ocaml build-runtime rejects --file *)
+      assert_eq "wasm build-runtime" "--pretty --effects=cps --disable inline --enable=x"
+        (show (Build.web_runtime_flags Target.Wasm flags));
+      (* a value written as a second token stays with its flag *)
+      assert_eq "link" "--pretty --linkall --disable inline --enable=x"
+        (show (Build.web_link_flags Target.Js flags));
+      assert_eq "trailing --opt" "" (show (Build.web_runtime_flags Target.Js [ "--opt" ])));
+
+  test "enable fields accept true, false and flag variables only" (fun () ->
+      let enabled v =
+        (exe_target ("executable app\n  main-is: app.ml\n  js-of-ocaml: " ^ v ^ "\n")).Target.target_js
+          .Target.web_enabled
+      in
+      assert_true "True" (enabled "True" = Target.BoolConst true);
+      assert_true "false" (enabled "false" = Target.BoolConst false);
+      assert_true "$web" (enabled "$web" = Target.BoolVariable "web");
+      (* anything else is a flag name: an undeclared one is an error when resolved *)
+      assert_true "yes" (enabled "yes" = Target.BoolVariable "yes");
+      let proj = project "executable app\n  main-is: app.ml\n  js-of-ocaml: $web\n" in
+      let resolved flags =
+        Target.web_backends
+          (List.hd (Project.resolve_web_flags flags proj).Project.exes).Project.Executable.target
+      in
+      assert_true "unresolved counts as disabled"
+        (Target.web_backends (List.hd proj.Project.exes).Project.Executable.target = []);
+      assert_true "flag on" (resolved [ ("web", true) ] = [ Target.Js ]);
+      assert_true "flag off" (resolved [ ("web", false) ] = []);
+      assert_true "unknown flag"
+        (try ignore (resolved []); false with Project.UnknownFlag "web" -> true));
+
   test "library carries runtime files but is never a web target" (fun () ->
       let proj =
         project "library foo\n  modules: Foo\n  js-of-ocaml: true\n  js-files: foo_stubs.js\n  wasm-files: foo_stubs.wat\n"

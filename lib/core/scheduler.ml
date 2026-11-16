@@ -134,6 +134,16 @@ let schedule j taskdep dispatch_fun finish_fun =
     if stats.max_runqueue < st.runqueue_len then stats.max_runqueue <- st.runqueue_len
   in
 
+  (* a failing step aborts the build: let the processes already started
+     finish before the exception leaves.  Otherwise they keep running after
+     obuild exits and write their outputs under the feet of the next build
+     (or overwrite what it has just produced). *)
+  let reap_running () =
+    List.iter (fun running -> try ignore (Process.terminate running) with _ -> ()) st.runqueue;
+    st.runqueue <- [];
+    st.runqueue_len <- 0
+  in
+  (try
   (* add more bulletproofing to prevent busy looping for no reason
    * if user of this api is not behaving properly *)
   while not st.terminate || st.runqueue <> [] || st.waitqueue <> [] do
@@ -151,5 +161,6 @@ let schedule j taskdep dispatch_fun finish_fun =
       finish_fun proc_done finished_task
     else
       assert (st.terminate)
-  done;
+  done
+  with e -> reap_running (); raise e);
   stats

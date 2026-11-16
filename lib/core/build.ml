@@ -575,7 +575,9 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
             in
             let dir = cstate.compilation_builddir_ml comp_opt in
             let fcompile =
-             fun () -> run_ocaml_pack cstate.compilation_hier dir dir annot_mode build_mode pack_opt h modules
+             fun () ->
+               run_ocaml_pack ~debug:(comp_opt = WithDebug) cstate.compilation_hier dir dir
+                 annot_mode build_mode pack_opt h modules
             in
             match check_destination_valid_with mdeps dest with
             | None -> None
@@ -1026,6 +1028,19 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
 
 let link task_index task bstate task_context dag =
   let cstate, target = Hashtbl.find task_context task in
+  (* a web target links the bytecode archives of its internal libraries *)
+  (if Target.is_web target
+      && not (Gconf.get_target_option_typed (Hier.conf cstate.compilation_hier) Gconf.Library_bytecode)
+   then
+     match Analyze.get_internal_library_deps bstate.bstate_config target with
+     | [] -> ()
+     | libs ->
+         raise
+           (CompilationFailed
+              (Printf.sprintf
+                 "web target %s needs the bytecode archive of its libraries (%s): configure with --library-bytecode=true"
+                 (Target.get_target_name target)
+                 (Utils.showList ", " Libname.to_string libs))));
   let cbits = target.target_cbits in
   let compiled = get_compilation_order cstate in
   log Debug "  compilation order: %s\n" (Utils.showList "," Hier.to_string compiled);
@@ -1159,8 +1174,40 @@ let link task_index task bstate task_context dag =
 let web_opts conf target =
   List.filter (fun o -> o <> WithProf) (Target.get_compilation_opts conf target)
 
-(* the debug variant is the one opened in the browser's debugger *)
-let web_debug_flags = [ "--pretty"; "--source-map-inline"; "--debuginfo" ]
+(* The debug variant is the one opened in the browser's debugger: pretty
+   output, debug info and an inline source map — each added only when the
+   user flags do not already decide it (the tools reject a repeated option,
+   and "--no-source-map" must win). *)
+let web_debug_flags user_flags =
+  let has names = List.exists (fun f -> List.mem f names) user_flags in
+  (if has [ "--pretty" ] then [] else [ "--pretty" ])
+  @ (if
+       has
+         [ "--sourcemap"; "--source-map"; "--source-map-inline"; "--no-sourcemap";
+           "--no-source-map" ]
+     then []
+     else [ "--source-map-inline" ])
+  @ if has [ "--debuginfo"; "--debug-info" ] then [] else [ "--debuginfo" ]
+
+(* the compiler's version is an input of everything it produces: after an
+   upgrade, outputs and separately compiled units are rebuilt *)
+let web_tool_version =
+  let memo = Hashtbl.create 2 in
+  fun backend ->
+    try Hashtbl.find memo backend
+    with Not_found ->
+      let prog =
+        match backend with
+        | Js -> Prog.get_js_of_ocaml ()
+        | Wasm -> Prog.get_wasm_of_ocaml ()
+      in
+      let v =
+        match Process.run [ prog; "--version" ] with
+        | Process.Success (out, _, _) -> String_utils.strip_spaces out
+        | Process.Failure _ -> ""
+      in
+      Hashtbl.replace memo backend v;
+      v
 
 (* Runtime files a web target inherits from its dependencies, in dependency
    order: the js-files / wasm-files of internal libraries, and for
@@ -1196,15 +1243,260 @@ let web_dep_runtime_files bstate target backend =
   List.rev
     (List.fold_left (fun acc f -> if List.mem f acc then acc else f :: acc) [] all)
 
-(* web step: translate the bytecode executable(s) with js_of_ocaml or
-   wasm_of_ocaml, next to them.  Inputs are the bytecode, the runtime files
-   and (as a virtual input) the flags. *)
+(* thread flavour requested through the package dependencies *)
+let thread_lib_of_deps pkgDeps =
+  if List.mem (Libname.of_string "threads") pkgDeps then DefaultThread
+  else if List.mem (Libname.of_string "threads.posix") pkgDeps then PosixThread
+  else if List.mem (Libname.of_string "threads.vm") pkgDeps then VMThread
+  else NoThreads
+
+(* js-flags / wasm-flags are written for the whole-program compiler.  In
+   separate compilation they all go to the per-unit [compile] steps; the
+   [build-runtime] and [link] subcommands accept only a subset, selected
+   here by allow-lists (checked against js_of_ocaml / wasm_of_ocaml 6.5). *)
+let web_flag_name f = try String.sub f 0 (String.index f '=') with Not_found -> f
+
+(* keep the flags a subcommand accepts.  [with_value] flags take a value,
+   written "--flag=v" or "--flag v" (the value token is kept with its flag) *)
+let web_keep_flags ~plain ~with_value flags =
+  let rec go = function
+    | [] -> []
+    | f :: rest when List.mem f with_value -> (
+        match rest with
+        | v :: r -> f :: v :: go r
+        | [] -> [ f ])
+    | f :: rest when List.mem f plain || (f <> web_flag_name f && List.mem (web_flag_name f) with_value)
+      -> f :: go rest
+    | _ :: rest -> go rest
+  in
+  go flags
+
+let web_common_plain =
+  [ "--pretty"; "--debuginfo"; "--debug-info"; "--noinline"; "--no-inline"; "--sourcemap";
+    "--source-map"; "--source-map-inline"; "--no-sourcemap"; "--no-source-map"; "-q"; "--quiet";
+    "--Werror" ]
+
+let web_common_with_value = [ "--enable"; "--disable"; "-w"; "--custom-header"; "--debug" ]
+
+let web_runtime_flags backend flags =
+  let js = backend = Js in
+  web_keep_flags
+    ~plain:
+      (web_common_plain
+      @ [ "--source-map-no-source"; "--toplevel" ]
+      @
+      if js then
+        [ "--extern-fs"; "--no-extern-fs"; "--nocmis"; "--no-cmis"; "--empty-sourcemap";
+          "--empty-source-map"; "--noruntime"; "--no-runtime" ]
+      else [])
+    ~with_value:
+      (web_common_with_value
+      @ [ "--effects"; "--set"; "--setenv"; "--apply-build-config"; "--source-map-root"; "-I" ]
+      @ if js then [ "--target-env"; "--wrap-with-fun"; "--file"; "--ofs" ] else [])
+    flags
+
+let web_link_flags backend flags =
+  let js = backend = Js in
+  web_keep_flags
+    ~plain:
+      (web_common_plain @ [ "--linkall" ]
+      @ if js then [ "--empty-sourcemap"; "--empty-source-map" ] else [])
+    ~with_value:
+      (web_common_with_value
+      @ if js then [ "--source-map-root"; "--resolve-sourcemap-url" ] else [])
+    flags
+
+(* bytecode units of a web target in link order: the standard library, the
+   archives of the dependencies, the target's own modules, then std_exit *)
+let web_link_units bstate cstate target opt =
+  let conf = bstate.bstate_config in
+  let stdlib = fp (Analyze.get_ocaml_config_key "standard_library" conf) in
+  let pkgDeps = Analyze.get_pkg_deps target conf in
+  let threads = thread_lib_of_deps pkgDeps in
+  let dep_archives dep =
+    match Hashtbl.find conf.project_dep_data dep with
+    | Internal ->
+        [ Dist.get_build_exn (Dist.Target (Name.Lib dep)) </> Libname.to_cmca ByteCode opt dep ]
+    | System -> resolve_build_dependencies bstate [ dep ] ByteCode opt threads false
+  in
+  let modules =
+    List.map
+      (fun m ->
+        Hier.get_dest_file cstate.compilation_hier (cstate.compilation_builddir_ml opt)
+          Filetype.FileCMO m)
+      (get_compilation_order cstate)
+  in
+  let units =
+    ((stdlib </> fn "stdlib.cma") :: List.concat (List.map dep_archives pkgDeps))
+    @ modules
+    @ [ stdlib </> fn "std_exit.cmo" ]
+  in
+  (* a unit is linked once (e.g. stdlib.cma when "stdlib" is also listed in
+     build-deps) *)
+  List.rev (List.fold_left (fun acc u -> if List.mem u acc then acc else u :: acc) [] units)
+
+(* Separate compilation of one variant: build the runtime, compile every
+   unit on its own, then link.  Each intermediate file has its own staleness
+   record, so editing one module recompiles that module and relinks.
+
+   The link is checked against the ORIGINAL inputs (bytecode units, runtime
+   files, flags), not against the intermediate files: input digests are
+   snapshotted when the task is dispatched, before the intermediates are
+   rewritten. *)
+let web_separate_jobs bstate cstate target backend opt flags files dest =
+  let work =
+    cstate.compilation_builddir_ml Normal
+    </> fn ("web-" ^ Target.web_backend_to_string backend ^ extDP opt)
+  in
+  Filesystem.mkdir_safe_recursive work 0o755;
+  let vkey kind digest_of =
+    let k =
+      Printf.sprintf "@web-%s/%s/%s" kind (Target.get_target_name target)
+        (fn_to_string (path_basename dest))
+    in
+    Digests.set_virtual k
+      (Digest.string (String.concat "\000" (web_tool_version backend :: digest_of)));
+    (Filetype.FileOther "web-flags", fp k)
+  in
+  (* options that only make sense for a whole program *)
+  List.iter
+    (fun f ->
+      if List.mem (web_flag_name f) [ "--wrap-with-fun"; "--no-runtime"; "--noruntime"; "--keep-unit-names" ]
+      then
+        raise
+          (CompilationFailed
+             (Printf.sprintf
+                "%s: %s is not supported with separate compilation (configure with --web-separate=false)"
+                (Target.get_target_name target) (web_flag_name f))))
+    flags;
+  let debug = opt = WithDebug in
+  (* embedded files (--file) belong to the runtime: given to every unit they
+     are registered several times ("file already exists" at start-up).
+     wasm_of_ocaml only embeds files in whole-program mode. *)
+  let unit_flags =
+    if backend = Js then
+      let fs_with_value = [ "--file"; "--ofs" ] and fs_plain = [ "--extern-fs"; "--no-extern-fs" ] in
+      let rec strip = function
+        | [] -> []
+        | f :: _ :: rest when List.mem f fs_with_value -> strip rest
+        | f :: rest when List.mem (web_flag_name f) fs_with_value || List.mem f fs_plain -> strip rest
+        | f :: rest -> f :: strip rest
+      in
+      strip flags
+    else flags
+  in
+  let compile_flags = (if debug then web_debug_flags unit_flags else []) @ unit_flags in
+  let runtime_flags = web_runtime_flags backend flags in
+  let link_flags =
+    let kept =
+      web_link_flags backend flags
+      (* the executable's -linkall applies to the web link too *)
+      @
+      if List.mem "-linkall" target.target_obits.target_oflags && not (List.mem "--linkall" flags)
+      then [ "--linkall" ]
+      else []
+    in
+    (if debug then web_debug_flags kept else []) @ kept
+  in
+  (* an output being rebuilt is removed first: if the build is interrupted,
+     no half-updated file is left for a later build to trust *)
+  let fresh out = try Sys.remove (fp_to_string out) with Sys_error _ -> () in
+  let stale srcs out = check_destination_valid_with srcs (Filetype.FileOther "web", out) <> None in
+  (* runtime *)
+  let runtime =
+    work </> fn (match backend with Js -> "runtime.js" | Wasm -> "runtime.wasma")
+  in
+  let file_srcs = List.map (fun p -> (Filetype.FileOther "runtime", p)) files in
+  let runtime_job =
+    if stale (vkey "runtime-flags" runtime_flags :: file_srcs) runtime then
+      [ (fun () ->
+          fresh runtime;
+          run_web_tool backend "build-runtime"
+            (runtime_flags @ List.map fp_to_string files @ [ "-o"; fp_to_string runtime ])) ]
+    else []
+  in
+  (* units *)
+  let units = web_link_units bstate cstate target opt in
+  let unit_output u =
+    let base = fn_to_string (path_basename u) in
+    let name =
+      match backend with
+      | Js -> base ^ ".js"
+      | Wasm ->
+          Filename.chop_extension base
+          ^ if Filename.check_suffix base ".cma" then ".wasma" else ".wasmo"
+    in
+    work </> fn name
+  in
+  let compile_key = vkey "compile-flags" compile_flags in
+  let unit_jobs =
+    list_filter_map
+      (fun u ->
+        let out = unit_output u in
+        if stale [ (Filetype.of_filepath u, u); compile_key ] out then
+          Some
+            (fun () ->
+              fresh out;
+              run_web_tool backend "compile"
+                (compile_flags @ [ fp_to_string u; "-o"; fp_to_string out ]))
+        else None)
+      units
+  in
+  let stage1 = runtime_job @ unit_jobs in
+  let link_srcs =
+    vkey "link-flags" (link_flags @ runtime_flags @ compile_flags)
+    :: (file_srcs @ List.map (fun u -> (Filetype.of_filepath u, u)) units)
+  in
+  let link_changed = check_destination_valid_with link_srcs (Filetype.FileOther "web", dest) in
+  if stage1 = [] && link_changed = None then None
+  else
+    let link () =
+      fresh dest;
+      run_web_tool backend "link"
+        (link_flags
+        @ (fp_to_string runtime :: List.map (fun u -> fp_to_string (unit_output u)) units)
+        @ [ "-o"; fp_to_string dest ])
+    in
+    let reason =
+      Printf.sprintf "    ( separate: %d of %d units )" (List.length unit_jobs) (List.length units)
+    in
+    Some (dest, reason, (if stage1 = [] then [] else [ stage1 ]) @ [ [ link ] ])
+
+(* Whole-program compilation of one variant.  Inputs are the bytecode
+   executable, the runtime files and (as a virtual input) the flags. *)
+let web_whole_job target backend flags files bytecode dest =
+  let vkey = "@web-flags/" ^ Target.get_target_name target ^ "/" ^ fn_to_string (path_basename dest) in
+  Digests.set_virtual vkey (Digest.string (String.concat "\000" (web_tool_version backend :: flags)));
+  let srcs =
+    (Filetype.FileEXE, bytecode)
+    :: (Filetype.FileOther "web-flags", fp vkey)
+    :: List.map (fun p -> (Filetype.FileOther "runtime", p)) files
+  in
+  match check_destination_valid_with srcs (Filetype.FileOther "web", dest) with
+  | None -> None
+  | Some (_, changed) ->
+      let reason =
+        if changed = current_dir then ""
+        else if Digests.is_virtual changed then "    ( flags changed )"
+        else "    ( " ^ fp_to_string changed ^ " changed )"
+      in
+      Some
+        ( dest,
+          reason,
+          [ [ (fun () ->
+                (* removed first: an interrupted build leaves no stale output *)
+                (try Sys.remove (fp_to_string dest) with Sys_error _ -> ());
+                run_web_compiler backend flags files bytecode dest) ] ] )
+
+(* web step: translate the target with js_of_ocaml or wasm_of_ocaml, once per
+   variant (Normal, and Debug when configured), next to the bytecode. *)
 let web_target task_index task backend bstate task_context dag =
   let cstate, target = Hashtbl.find task_context task in
   let ws = Target.web_settings target backend in
   let conf = Hier.conf cstate.compilation_hier in
   let dir = cstate.compilation_builddir_ml Normal in
   let files = web_dep_runtime_files bstate target backend @ ws.web_files in
+  let separate = Gconf.get_target_option_typed conf Gconf.Web_separate in
   let label =
     match backend with
     | Js -> "Js_of_ocaml"
@@ -1213,30 +1505,21 @@ let web_target task_index task backend bstate task_context dag =
   let jobs =
     list_filter_map
       (fun opt ->
-        let bytecode =
-          dir </> Utils.to_exe_name conf opt ByteCode (Target.get_target_dest_name target)
-        in
-        let dest_name = Target.web_dest_name target backend opt in
-        let dest = dir </> dest_name in
-        let flags = (if opt = WithDebug then web_debug_flags else []) @ ws.web_flags in
-        let vkey =
-          "@web-flags/" ^ Target.get_target_name target ^ "/" ^ fn_to_string dest_name
-        in
-        Digests.set_virtual vkey (Digest.string (String.concat "\000" flags));
-        let srcs =
-          (Filetype.FileEXE, bytecode)
-          :: (Filetype.FileOther "web-flags", fp vkey)
-          :: List.map (fun p -> (Filetype.FileOther "runtime", p)) files
-        in
-        match check_destination_valid_with srcs (Filetype.FileOther "js", dest) with
-        | None -> None
-        | Some (_, changed) ->
-            let reason =
-              if changed = current_dir then ""
-              else if Digests.is_virtual changed then "    ( flags changed )"
-              else "    ( " ^ fp_to_string changed ^ " changed )"
-            in
-            Some (dest, reason, fun () -> run_web_compiler backend flags files bytecode dest))
+        let dest = dir </> Target.web_dest_name target backend opt in
+        (* the wasm loader is useless without its assets directory: when
+           that is gone, drop the loader so the output counts as missing *)
+        (if backend = Wasm && Filesystem.exists dest then
+           let d = fp_to_string dest in
+           let assets = Filename.chop_suffix d ".js" ^ ".assets" in
+           if not (Sys.file_exists assets) then try Sys.remove d with Sys_error _ -> ());
+        if separate then
+          web_separate_jobs bstate cstate target backend opt ws.web_flags files dest
+        else
+          let bytecode =
+            dir </> Utils.to_exe_name conf opt ByteCode (Target.get_target_dest_name target)
+          in
+          let flags = (if opt = WithDebug then web_debug_flags ws.web_flags else []) @ ws.web_flags in
+          web_whole_job target backend flags files bytecode dest)
       (web_opts conf target)
   in
   if jobs = [] then Scheduler.FinishTask task
@@ -1247,7 +1530,14 @@ let web_target task_index task backend bstate task_context dag =
         log Report "[%*d of %d] %s %s%s\n%!" nb_step_len task_index nb_step label
           (fp_to_string dest) reason)
       jobs;
-    Scheduler.AddTask (task, [ List.map (fun (_, _, f) -> f) jobs ])
+    (* merge the variants stage by stage: every first stage in parallel, then
+       every second stage *)
+    let rec merge stages =
+      let heads = List.concat (List.map (function [] -> [] | h :: _ -> h) stages) in
+      let tails = List.filter (fun l -> l <> []) (List.map (function [] -> [] | _ :: t -> t) stages) in
+      if heads = [] then [] else heads :: (if tails = [] then [] else merge tails)
+    in
+    Scheduler.AddTask (task, merge (List.map (fun (_, _, st) -> st) jobs))
   end
 
 let get_destination_files conf target =

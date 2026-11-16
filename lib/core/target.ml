@@ -148,14 +148,17 @@ type web_backend =
   | Wasm
 
 type target_web = {
-  web_enabled : bool; (* executable-like targets: produce this output *)
+  web_enabled : runtime_bool;
+      (* executable-like targets: produce this output.  A flag variable is
+         resolved by Project.resolve_web_flags once the configured flags are
+         known; unresolved, it counts as disabled. *)
   web_flags : string list; (* extra arguments for the compiler *)
   web_files : filepath list;
       (* runtime files (.js, and .wat/.wasm for Wasm).  On a library they are
          handed to every web target that depends on it. *)
 }
 
-let new_target_web = { web_enabled = false; web_flags = []; web_files = [] }
+let new_target_web = { web_enabled = BoolConst false; web_flags = []; web_files = [] }
 
 type target = {
   target_name : Name.t;
@@ -241,7 +244,7 @@ let web_settings target = function
 (* enabled web backends; libraries only carry runtime files *)
 let web_backends target =
   if is_lib target then []
-  else List.filter (fun b -> (web_settings target b).web_enabled) [ Js; Wasm ]
+  else List.filter (fun b -> (web_settings target b).web_enabled = BoolConst true) [ Js; Wasm ]
 
 let is_web target = web_backends target <> []
 

@@ -135,6 +135,13 @@ let snapshot srcs =
 
 let record_pending dest srcs =
   let d = fp_to_string dest in
+  (* the rebuild is decided: the committed record describes an output that is
+     about to be overwritten.  Drop it now, so a build aborted after the
+     output was rewritten (a failing sibling step, Ctrl-C) cannot leave new
+     content matched by the old record once the sources are reverted. *)
+  if Hashtbl.mem records d then (
+    Hashtbl.remove records d;
+    dirty := true);
   Hashtbl.replace pending d (snapshot srcs);
   current_group := d :: !current_group
 

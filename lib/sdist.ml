@@ -27,6 +27,8 @@ let run projFile _isSnapshot =
             let fpath = dir </> ent in
             match Filetype.of_filepath fpath with
             | Filetype.FileML | Filetype.FileMLI -> Filesystem.copy_to_dir fpath dest
+            (* generator inputs *)
+            | Filetype.FileOther ("mll" | "mly" | "atd") -> Filesystem.copy_to_dir fpath dest
             | _ -> ())
           dir)
       obits.target_srcdir
@@ -44,11 +46,19 @@ let run projFile _isSnapshot =
   let copy_target target =
     copy_obits target.target_obits;
     copy_cbits target.target_cbits;
+    (* files named explicitly: web runtime files, inputs of generate blocks *)
+    List.iter
+      (fun f -> if Filesystem.exists f then Filesystem.copy_to_dir f dest)
+      (target.target_js.web_files @ target.target_wasm.web_files
+      @ List.concat (List.map (fun g -> g.generate_from) target.target_generates));
     ()
   in
   let copy_lib lib = List.iter copy_target (Project.Library.to_targets lib) in
   List.iter copy_lib projFile.Project.libs;
   List.iter (fun exe -> copy_target (Project.Executable.to_target exe)) projFile.Project.exes;
+  List.iter (fun t -> copy_target (Project.Test.to_target t)) projFile.Project.tests;
+  List.iter (fun b -> copy_target (Project.Bench.to_target b)) projFile.Project.benchs;
+  List.iter (fun e -> copy_target (Project.Example.to_target e)) projFile.Project.examples;
   List.iter (fun extra -> Filesystem.copy_to_dir extra dest) projFile.Project.extra_srcs;
 
   finally

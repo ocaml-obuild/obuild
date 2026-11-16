@@ -77,7 +77,7 @@ let run_ocaml_compile reg dirSpec use_thread annot_mode build_mode compileOpt pa
   in
   Process.make args
 
-let run_ocaml_pack reg _srcDir dst_dir annot_mode build_mode pack_opt dest modules =
+let run_ocaml_pack ?(debug = false) reg _srcDir dst_dir annot_mode build_mode pack_opt dest modules =
   let conf = Hier.conf reg in
   let prog = if build_mode = ByteCode then Prog.get_ocamlc () else Prog.get_ocamlopt () in
   let ext = if build_mode = ByteCode then Filetype.FileCMO else Filetype.FileCMX in
@@ -95,6 +95,9 @@ let run_ocaml_pack reg _srcDir dst_dir annot_mode build_mode pack_opt dest modul
         (fun x -> if build_mode = Native then [ "-for-pack"; Hier.to_string x ] else [])
         pack_opt
     @ annotToOpts conf annot_mode
+    (* without -g the packed object of the debug variant carries no debug
+       events (no backtrace locations, no source maps) *)
+    @ (if debug then [ "-g" ] else [])
     @ [ "-pack"; "-o"; fp_to_string (Hier.get_dest_file reg dst_dir ext dest) ]
     @ List.map (fun m -> fp_to_string (Hier.get_dest_file_ext reg dst_dir m ext_f)) modules
   in
@@ -244,6 +247,16 @@ let run_web_compiler backend flags runtime_files bytecode dest =
     @ [ fp_to_string bytecode; "-o"; fp_to_string dest ]
   in
   Process.make args
+
+(* one step of separate compilation: [subcommand] is build-runtime, compile
+   or link *)
+let run_web_tool backend subcommand args =
+  let prog =
+    match backend with
+    | Target.Js -> Prog.get_js_of_ocaml ()
+    | Target.Wasm -> Prog.get_wasm_of_ocaml ()
+  in
+  Process.make (prog :: subcommand :: args)
 
 (* ================================================================
    ctypes.cstubs generation functions

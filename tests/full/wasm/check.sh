@@ -15,4 +15,12 @@ done
 "$OBUILD" configure --build-tests=true >/dev/null 2>&1 || fail "configure with tests"
 out=$("$OBUILD" test --output 2>&1) || fail "obuild test: $out"
 [ "$(echo "$out" | grep -c 'calc ok')" = "2" ] || fail "test did not run under both backends: $out"
+# separate compilation gives the same programs
+"$OBUILD" configure --web-separate=true >/dev/null 2>&1 || fail "configure separate"
+"$OBUILD" build >/dev/null 2>&1 || fail "separate build"
+[ -f dist/build/sum/web-wasm/stdlib.wasma ] || fail "no separately compiled stdlib"
+for f in sum/sum.wasm.js both/both.js both/both.wasm.js; do
+  out=$(node "dist/build/$f") || fail "node $f (separate)"
+  [ "$out" = "sum=10" ] || fail "unexpected separate output of $f: $out"
+done
 exit 0

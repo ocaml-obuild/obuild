@@ -290,25 +290,66 @@ wasm_of_ocaml:
 
 * `js-of-ocaml: true` produces `dist/build/myapp/myapp.js`.
 * `wasm-of-ocaml: true` produces `dist/build/myapp/myapp.wasm.js` (the loader)
-  and the `myapp.wasm.assets/` directory next to it. Both can be enabled.
+  and the `myapp.wasm.assets/` directory next to it, which must be served with
+  it. Both backends can be enabled.
+* The two fields take `true`, `false` or a flag (`js-of-ocaml: $web`), like
+  `buildable`.
+* A test, benchmark or example keeps its usual prefix: test `mytest` gives
+  `dist/build/mytest/test-mytest.js`.
 * `js-flags` / `wasm-flags`: extra arguments for the compiler.
 * `js-files` / `wasm-files`: runtime files implementing `external` primitives
-  (JavaScript for js_of_ocaml; `.wat`/`.wasm` and JavaScript for wasm_of_ocaml).
-  On a library, they are passed to every web target that depends on it.
+  (JavaScript for js_of_ocaml; `.wat`/`.wasm` for wasm_of_ocaml), as a
+  comma-separated list of paths relative to the project. On a library, they
+  are passed to every web target that depends on it.
 * Runtime files that installed packages declare in their META (`jsoo_runtime`)
   are passed to js_of_ocaml automatically.
-* With `--executable-debugging`, a debug variant is built too (`myapp.d.js`,
-  `myapp.d.wasm.js`): pretty-printed, with an inline source map.
-* `obuild test` and `obuild run` execute web targets with node (a test with
-  both backends runs once per backend).
-* Outputs are rebuilt only when the bytecode, the flags or a runtime file change.
+* With `obuild configure --executable-debugging=true`, a debug variant is built
+  too (`myapp.d.js`, `myapp.d.wasm.js`): pretty-printed, with an inline source
+  map.
+* `obuild test` runs a web test with node, once per enabled backend, stopping
+  at the first backend that fails. `obuild run` runs the JavaScript output
+  when both backends are enabled.
+* Outputs are rebuilt only when the bytecode or a runtime file changes. (An
+  edit of the `.obuild` file, flags included, reconfigures and rebuilds the
+  whole project, as for any other field.)
 
 Such a target is built as bytecode only, and linked with `-no-check-prims`.
 Its internal libraries need their bytecode archives (`library-bytecode`, on by
-default). Code compiled this way cannot use C stubs. The compilers and node
-are found in the PATH (or given with the global options `--js_of_ocaml`,
-`--wasm_of_ocaml`, `--node`); web outputs are not installed by `obuild install`. Compilation is
-whole-program: there is no separate compilation per library.
+default). Code compiled this way cannot use C stubs.
+
+By default the whole program is compiled at once, which gives the smallest
+and fastest output. `obuild configure --web-separate=true` switches to
+separate compilation, meant for development: the runtime, every library
+archive and every module are compiled on their own (in
+`dist/build/myapp/web-js/`, `web-wasm/`), then linked. After an edit only the
+changed units are recompiled; the output is larger. In this mode `js-flags` /
+`wasm-flags` go to the per-unit compile steps, and only the flags the other
+subcommands accept are passed to `build-runtime` and `link`.
+
+Things to know:
+
+* Effects (OCaml 5 `Effect`) need a flag with js_of_ocaml:
+  `js-flags: --effects=cps`. wasm_of_ocaml uses the browser's JSPI by default;
+  for browsers without it, `wasm-flags: --effects=cps`.
+* The executable's `oflags: -linkall` is applied to the web link as well.
+* Separate compilation does not report missing primitives, cannot embed files
+  with wasm_of_ocaml (`--file`), and rejects `--wrap-with-fun`: build the
+  release with the default whole-program mode.
+* A findlib package that ships WebAssembly runtime files is not detected
+  (there is no META convention): list them in `wasm-files`.
+* To serve the WebAssembly output, publish `myapp.wasm.js` together with the
+  whole `myapp.wasm.assets/` directory, under that name, with `.wasm` files
+  served as `application/wasm`. The file names in it change at every build.
+
+The compilers and node are found in the PATH, or given with the global options
+`--js_of_ocaml`, `--wasm_of_ocaml`, `--node`. These options are not saved by
+configure: they go before the command, on each invocation
+(`obuild --node /path/to/node test`).
+
+`obuild install` does not install web outputs (a web executable is skipped).
+For a library it installs the `js-files` beside the archives and declares them
+as `jsoo_runtime` in the META, so that js_of_ocaml users of the installed
+library get them; `wasm-files` are not installed.
 
 Declaring a library
 -------------------

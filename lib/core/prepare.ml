@@ -156,7 +156,11 @@ let resolve_module_ppx_flags bstate target =
   in
   let stdlib = fp (get_ocaml_config_key "standard_library" bstate.bstate_config) in
   let get_ppx_ppxopt fpath meta libname =
-    let includePath = Meta.get_include_dir stdlib (fpath, meta) in
+    (* "./ppx.exe" is relative to the package that declares it: for a
+       sub-package with its own [directory] (sedlex.ppx), that directory *)
+    let includePath =
+      Meta.get_include_dir_with_subpath stdlib (fpath, meta) libname.Libname.subnames
+    in
     let pkg = Meta.Pkg.find libname.Libname.subnames meta in
     let ppx = pkg.Meta.Pkg.ppx in
     let ppxopt = pkg.Meta.Pkg.ppxopt in

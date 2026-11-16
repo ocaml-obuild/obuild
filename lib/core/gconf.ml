@@ -13,6 +13,7 @@ type target_option =
   | Executable_native
   | Executable_bytecode
   | Executable_as_obj
+  | Web_separate
   | Library_profiling
   | Library_debugging
   | Library_native
@@ -48,7 +49,7 @@ type t = {
 
 let all_target_options = [
   Executable_profiling; Executable_debugging; Executable_native; Executable_bytecode;
-  Executable_as_obj; Library_profiling; Library_debugging; Library_native;
+  Executable_as_obj; Web_separate; Library_profiling; Library_debugging; Library_native;
   Library_bytecode; Library_plugin; Build_benchs; Build_tests; Build_examples; Annot;
 ]
 
@@ -58,6 +59,7 @@ let target_option_to_string = function
   | Executable_native -> "executable-native"
   | Executable_bytecode -> "executable-bytecode"
   | Executable_as_obj -> "executable-as-obj"
+  | Web_separate -> "web-separate"
   | Library_profiling -> "library-profiling"
   | Library_debugging -> "library-debugging"
   | Library_native -> "library-native"
@@ -76,6 +78,7 @@ let target_option_of_string = function
   | "executable-native" -> Executable_native
   | "executable-bytecode" -> Executable_bytecode
   | "executable-as-obj" -> Executable_as_obj
+  | "web-separate" -> Web_separate
   | "library-profiling" -> Library_profiling
   | "library-debugging" -> Library_debugging
   | "library-native" -> Library_native
@@ -99,6 +102,7 @@ let env_variables =
     "js_of_ocaml";
     "wasm_of_ocaml";
     "node";
+    "tar";
     "cc";
     "ranlib";
     "ar";
@@ -141,7 +145,15 @@ let create () =
 
 let rec set_target_option_typed conf opt value =
   Hashtbl.replace conf.target_options opt value;
+  let is_on o = try Hashtbl.find conf.target_options o with Not_found -> false in
   match (opt, value) with
+  (* debug/profiling executables link the matching variant of the project's
+     libraries: turning that variant off afterwards would leave them without
+     it ("Unbound module" on the internal libraries) *)
+  | Library_debugging, false when is_on Executable_debugging ->
+      Hashtbl.replace conf.target_options opt true
+  | Library_profiling, false when is_on Executable_profiling ->
+      Hashtbl.replace conf.target_options opt true
   | Executable_profiling, true -> set_target_option_typed conf Library_profiling true
   | Executable_debugging, true -> set_target_option_typed conf Library_debugging true
   | Library_plugin, true -> set_target_option_typed conf Library_native true

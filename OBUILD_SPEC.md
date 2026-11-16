@@ -78,22 +78,30 @@ sections, etc.
 ## Web fields (js_of_ocaml / wasm_of_ocaml)
 
 Accepted by every target type. The two "enable" fields only act on
-executable, test, example and benchmark targets; on a library, the `-files`
-fields are passed on to the web targets that depend on it.
+executable, test, example and benchmark targets (on a library they are
+ignored, with a warning); on a library, the `-files` fields are passed on to
+the web targets that depend on it.
 
-* js-of-ocaml | jsoo | js: bool: also translate the target with js_of_ocaml: `dist/build/<name>/<name>.js`
+* js-of-ocaml | js_of_ocaml | jsoo | js: `true`, `false` or a flag (`$name`): also translate
+  the target with js_of_ocaml: `dist/build/<target>/<output>.js`
 * js-flags: words: extra arguments for js_of_ocaml (e.g. `--opt 3`)
-* js-files: list: JavaScript runtime files (project-relative)
-* wasm-of-ocaml | wasmoo | wasm: bool: also translate the target with wasm_of_ocaml:
-  `dist/build/<name>/<name>.wasm.js` and `<name>.wasm.assets/`
+* js-files: list: JavaScript runtime files (comma-separated, project-relative; they must exist)
+* wasm-of-ocaml | wasm_of_ocaml | wasmoo | wasm: `true`, `false` or a flag: also translate the
+  target with wasm_of_ocaml: `dist/build/<target>/<output>.wasm.js` and `<output>.wasm.assets/`
 * wasm-flags: words: extra arguments for wasm_of_ocaml
-* wasm-files: list: runtime files for wasm_of_ocaml (`.wat`, `.wasm`, `.js`)
+* wasm-files: list: runtime files for wasm_of_ocaml (`.wat`, `.wasm`)
+
+`<output>` is the executable name, with the usual `test-`, `bench-` or `example-` prefix for
+the other target kinds.
 
 A target with a web backend is built as bytecode only (whatever the configured
 executable modes) and linked with `-no-check-prims`. With executable debugging
-configured, `<name>.d.js` / `<name>.d.wasm.js` are built as well, with
+configured, `<output>.d.js` / `<output>.d.wasm.js` are built as well, with
 `--pretty --source-map-inline --debuginfo`. `jsoo_runtime` files declared in the
 META of findlib dependencies are passed to js_of_ocaml automatically.
+
+`obuild configure --web-separate=true` replaces whole-program compilation by
+separate compilation (build-runtime, one compile per archive and module, link).
 
 ## Test only fields
 

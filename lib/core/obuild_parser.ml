@@ -193,13 +193,13 @@ let parse_target_setting target key value =
   | "buildable" -> { target with buildable = parse_runtime_bool value }
   | "installable" -> { target with installable = parse_runtime_bool value }
   | "js-of-ocaml" | "js_of_ocaml" | "jsoo" | "js" ->
-      { target with js = { target.js with web_enabled = Compat.string_lowercase value = "true" } }
+      { target with js = { target.js with web_enabled = parse_runtime_bool value } }
   | "js-flags" ->
       { target with js = { target.js with web_flags = target.js.web_flags @ parse_words value } }
   | "js-files" ->
       { target with js = { target.js with web_files = target.js.web_files @ parse_list value } }
   | "wasm-of-ocaml" | "wasm_of_ocaml" | "wasmoo" | "wasm" ->
-      { target with wasm = { target.wasm with web_enabled = Compat.string_lowercase value = "true" } }
+      { target with wasm = { target.wasm with web_enabled = parse_runtime_bool value } }
   | "wasm-flags" ->
       { target with wasm = { target.wasm with web_flags = target.wasm.web_flags @ parse_words value } }
   | "wasm-files" ->

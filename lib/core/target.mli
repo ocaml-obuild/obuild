@@ -130,7 +130,9 @@ type web_backend =
 
 (** Settings of one web backend for a target *)
 type target_web = {
-  web_enabled : bool;                  (** Executable-like targets: produce this output *)
+  web_enabled : runtime_bool;
+      (** Executable-like targets: produce this output. A flag variable is resolved by
+          [Project.resolve_web_flags]; unresolved, it counts as disabled *)
   web_flags : string list;             (** Extra arguments for the compiler *)
   web_files : Filepath.filepath list;
       (** Runtime files. On a library they are handed to the web targets depending on it *)

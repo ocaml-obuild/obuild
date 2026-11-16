@@ -22,6 +22,7 @@ exception ExecutableWithNoMain of string
 exception UnknownStdlib of string
 exception UnknownExtraDepFormat of string
 exception UnknownFlag of string
+exception WebFileNotFound of target * string * filepath
 exception BadOcamlVersion of (string * Expr.t)
 exception LibraryNotFound of Libname.t
 exception ExecutableNotFound of string
@@ -65,7 +66,13 @@ module Library = struct
 
   let rec show add show_target section lib =
     add "\n";
-    add (sprintf "%slibrary %s\n" section (Libname.to_string lib.name));
+    (* a sub-library block carries its own node only: the parser prepends
+       the parent's name *)
+    let shown =
+      if section = "" then Libname.to_string lib.name
+      else list_last (Libname.to_string_nodes lib.name)
+    in
+    add (sprintf "%slibrary %s\n" section shown);
     let iStr = section ^ "  " in
     add (sprintf "%smodules: %s\n" iStr (Utils.showList "," Hier.to_string lib.modules));
     if lib.pack then add (sprintf "%spack: %b\n" iStr lib.pack);
@@ -338,6 +345,22 @@ let check reg proj =
         raise (ExecutableWithNoMain exe.Executable.name);
       check_files_exists exe.Executable.target [ exe.Executable.main ])
     proj.exes;
+  (* runtime files of the web backends: report a wrong path here, naming the
+     target and the field, not later from the web compiler *)
+  List.iter
+    (fun target ->
+      List.iter
+        (fun (field, (w : target_web)) ->
+          List.iter
+            (fun f ->
+              if not (Filesystem.exists f) then raise (WebFileNotFound (target, field, f)))
+            w.web_files)
+        [ ("js-files", target.target_js); ("wasm-files", target.target_wasm) ])
+    (List.concat (List.map Library.to_targets proj.libs)
+    @ List.map Executable.to_target proj.exes
+    @ List.map Test.to_target proj.tests
+    @ List.map Bench.to_target proj.benchs
+    @ List.map Example.to_target proj.examples);
   ()
 
 let write file proj =
@@ -375,20 +398,38 @@ let write file proj =
         add_string (iStr ^ "c-pkgs") (Utils.showList ", " (fun (l, _) -> l) cbits.target_cpkgs);
         List.iter
           (fun (key, (w : target_web)) ->
-            if w.web_enabled then add (sprintf "%s%s-of-ocaml: true\n" iStr key);
+            (match w.web_enabled with
+             | BoolConst false -> ()
+             | BoolConst true -> add (sprintf "%s%s-of-ocaml: true\n" iStr key)
+             | BoolVariable v -> add (sprintf "%s%s-of-ocaml: $%s\n" iStr key v));
             add_string (iStr ^ key ^ "-flags") (Utils.showList " " id w.web_flags);
             add_string (iStr ^ key ^ "-files") (Utils.showList ", " fp_to_string w.web_files))
           [ ("js", target.target_js); ("wasm", target.target_wasm) ]
       in
       List.iter (Library.show add show_target "") proj.libs;
+      let show_exe_like kind name main target =
+        add "\n";
+        add (sprintf "%s %s\n" kind name);
+        add (sprintf "  main: %s\n" (fn_to_string main));
+        show_target "  " target
+      in
       List.iter
         (fun exe ->
-          add "\n";
-          add (sprintf "executable %s\n" exe.Executable.name);
-          add (sprintf "  main: %s\n" (fn_to_string exe.Executable.main));
-          show_target "  " exe.Executable.target;
-          ())
-        proj.exes)
+          show_exe_like "executable" exe.Executable.name exe.Executable.main exe.Executable.target)
+        proj.exes;
+      List.iter
+        (fun (t : Test.t) ->
+          show_exe_like "test" t.Test.name t.Test.main t.Test.target;
+          maybe () (fun d -> add_string "  rundir" (fp_to_string d)) t.Test.rundir;
+          add_string "  run-params" (Utils.showList ", " id t.Test.runopt))
+        proj.tests;
+      List.iter
+        (fun (b : Bench.t) -> show_exe_like "benchmark" b.Bench.name b.Bench.main b.Bench.target)
+        proj.benchs;
+      List.iter
+        (fun (e : Example.t) ->
+          show_exe_like "example" e.Example.name e.Example.main e.Example.target)
+        proj.examples)
 
 let get_all_targets projFile =
   List.concat (List.map Library.to_targets projFile.libs)
@@ -411,6 +452,29 @@ let get_all_buildable_targets proj_file user_flags =
 let get_all_installable_targets proj_file user_flags =
   get_all_targets_filter proj_file (fun target ->
       get_val_const_or_var user_flags target.target_installable)
+
+(* The js-of-ocaml / wasm-of-ocaml fields may name a flag ("$web"): replace
+   every such variable by its configured value.  To call once the flags are
+   known (after Configure.check), before building. *)
+let resolve_web_flags user_flags proj =
+  let resolve (w : target_web) =
+    { w with web_enabled = BoolConst (get_val_const_or_var user_flags w.web_enabled) }
+  in
+  let on_target t =
+    { t with target_js = resolve t.target_js; target_wasm = resolve t.target_wasm }
+  in
+  let rec on_lib (l : Library.t) =
+    { l with Library.target = on_target l.Library.target; subs = List.map on_lib l.Library.subs }
+  in
+  {
+    proj with
+    libs = List.map on_lib proj.libs;
+    exes = List.map (fun (e : Executable.t) -> { e with Executable.target = on_target e.Executable.target }) proj.exes;
+    tests = List.map (fun (t : Test.t) -> { t with Test.target = on_target t.Test.target }) proj.tests;
+    benchs = List.map (fun (b : Bench.t) -> { b with Bench.target = on_target b.Bench.target }) proj.benchs;
+    examples =
+      List.map (fun (e : Example.t) -> { e with Example.target = on_target e.Example.target }) proj.examples;
+  }
 
 let find_lib proj_file name = Library.find proj_file.libs name
 let find_exe proj_file name = Executable.find proj_file.exes name

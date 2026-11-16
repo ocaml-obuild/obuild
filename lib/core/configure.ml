@@ -199,7 +199,15 @@ let bool_of_opt hashtable k =
 let set_opts conf hashtable =
   (* load the environment *)
   let opts = Gconf.get_target_options_keys () in
-  List.iter (fun k -> Gconf.set_target_options conf k (bool_of_opt hashtable k)) opts
+  (* a setup written by an older obuild lacks the options added since: those
+     (and only those) keep their default instead of forcing a reconfigure of
+     every project.  Any other missing key still means a damaged setup. *)
+  let added_later = [ "web-separate" ] in
+  List.iter
+    (fun k ->
+      if Hashtbl.mem hashtable k || not (List.mem k added_later) then
+        Gconf.set_target_options conf k (bool_of_opt hashtable k))
+    opts
 
 let check_ocaml conf =
   let ocamlCfg = Prog.get_ocaml_config () in

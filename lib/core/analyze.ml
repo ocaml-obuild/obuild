@@ -290,6 +290,11 @@ let prepare projFile user_flags hier_registry =
             (fun (preds, reqDeps) ->
               match preds with
               | [ Meta.Predicate.Toploop ] -> ()
+              (* requires(ppx_driver) lists what the ppx DRIVER links (ppxlib,
+                 compiler-libs, ...), not what the preprocessed program needs
+                 — that is requires(-ppx_driver).  Following it put the whole
+                 compiler front end on every link line. *)
+              | l when List.mem Meta.Predicate.Ppx_driver l -> ()
               | _ ->
                   List.iter
                     (fun reqDep ->

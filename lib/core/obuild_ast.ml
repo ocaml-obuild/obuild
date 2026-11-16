@@ -112,7 +112,7 @@ type generate_block = {
 
 (** js_of_ocaml / wasm_of_ocaml settings (shared by all target types) *)
 type web_settings = {
-  web_enabled: bool;                  (** js-of-ocaml / wasm-of-ocaml *)
+  web_enabled: runtime_bool;          (** js-of-ocaml / wasm-of-ocaml *)
   web_flags: string list;             (** js-flags / wasm-flags *)
   web_files: string list;             (** js-files / wasm-files *)
 }
@@ -231,7 +231,7 @@ let default_ocaml_settings = {
   stdlib = None;
 }
 
-let default_web_settings = { web_enabled = false; web_flags = []; web_files = [] }
+let default_web_settings = { web_enabled = Bool_const false; web_flags = []; web_files = [] }
 
 let default_target_common = {
   js = default_web_settings;

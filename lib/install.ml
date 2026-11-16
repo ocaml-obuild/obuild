@@ -10,13 +10,30 @@ open Gconf
 let list_target_files_pred conf target pred =
   let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
   Build.sanity_check conf build_dir target;
-  (* don't play with matches *)
-  let matches = Filesystem.list_dir_pred pred build_dir in
+  (* only files: the build directory also holds sub-directories (opt-d,
+     web-js, ...) whose extension-less names look like executables *)
+  let matches =
+    Filesystem.list_dir_pred (fun f -> pred f && not (Filesystem.is_dir (build_dir </> f))) build_dir
+  in
   (build_dir, matches)
 
+(* JavaScript runtime files of a library, installed beside its archives and
+   declared as [jsoo_runtime] in its META (the convention js_of_ocaml
+   consumers read).  wasm-files have no META convention and stay
+   project-local. *)
+let lib_js_runtime_names target =
+  List.map (fun p -> fn_to_string (path_basename p)) target.Target.target_js.Target.web_files
+
+let stage_js_runtime target =
+  let build_dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
+  List.iter
+    (fun p -> Filesystem.copy_file p (build_dir </> path_basename p))
+    target.Target.target_js.Target.web_files
+
 let list_lib_files conf lib build_dir =
+  let js_runtime = lib_js_runtime_names lib in
   list_target_files_pred conf lib (fun f ->
-      if fn_to_string f = "META" then
+      if fn_to_string f = "META" || List.mem (fn_to_string f) js_runtime then
         true
       else
         match Filetype.of_filepath (build_dir </> f) with
@@ -96,7 +113,8 @@ let opam_install_file conf proj_file flags =
       List.iter
         (fun target ->
           match target.target_name with
-          | Name.Exe _ -> print_target_files target (list_exe_files conf) ""
+          | Name.Exe _ when not (Target.is_web target) ->
+              print_target_files target (list_exe_files conf) ""
           | _ -> ())
         all_targets;
       add "]\n";
@@ -131,6 +149,10 @@ let lib_to_meta conf proj_file lib =
       Meta.Pkg.description =
         (if lib.Library.description <> "" then lib.Library.description else proj_file.description);
       Meta.Pkg.linkopts = linkopts_of_lib lib;
+      Meta.Pkg.assignment =
+        (match lib_js_runtime_names lib.Library.target with
+         | [] -> []
+         | names -> [ ("jsoo_runtime", String.concat " " names) ]);
       Meta.Pkg.archives =
         ([
            ([ Meta.Predicate.Byte ], fn_to_string (Libname.to_cmca ByteCode Normal lib.Library.name));
@@ -162,6 +184,7 @@ let write_lib_meta conf projFile lib =
   let dir = Dist.get_build_exn (Dist.Target lib.Library.target.target_name) in
   let metadir_path = dir </> fn "META" in
   let pkg = lib_to_meta conf projFile lib in
+  List.iter stage_js_runtime (Project.Library.to_targets lib);
   Meta.Pkg.write metadir_path pkg
 
 let copy_files files dest_dir dir_name =
@@ -221,7 +244,10 @@ let install conf proj_file destdir bindir opam =
     List.iter
       (fun exe ->
         let target = Project.Executable.to_target exe in
-        if Filesystem.is_dir (Dist.get_build_path (Dist.Target target.Target.target_name)) then
+        if Target.is_web target then
+          log Report "skipping web executable %s (web outputs are not installed)\n"
+            exe.Project.Executable.name
+        else if Filesystem.is_dir (Dist.get_build_path (Dist.Target target.Target.target_name)) then
           install_exe conf exe bindir)
       proj_file.Project.exes
   end else

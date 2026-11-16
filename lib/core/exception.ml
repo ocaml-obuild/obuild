@@ -186,7 +186,20 @@ let show exn =
       error "generator failed: %s\n" err;
       exit exit_project_error
   | Prog.ProgramNotFound name ->
-      error "program not found: %s\n" name;
+      (match name with
+       | "js_of_ocaml" | "wasm_of_ocaml" ->
+           error "program not found: %s (needed by the targets with %s: true; install it or pass --%s PATH before the command)\n"
+             name (if name = "js_of_ocaml" then "js-of-ocaml" else "wasm-of-ocaml") name
+       | "node" ->
+           error "program not found: node (needed to run web targets; install it or pass --node PATH before the command)\n"
+       | _ -> error "program not found: %s\n" name);
+      exit exit_project_error
+  | Project.UnknownFlag f ->
+      error "unknown flag '%s' in the project file: a boolean field takes true, false or the name of a declared flag ($%s)\n" f f;
+      exit exit_project_error
+  | Project.WebFileNotFound (t, field, f) ->
+      error "%s: %s names a file that does not exist: %s\n" (Target.get_target_name t) field
+        (fp_to_string f);
       exit exit_project_error
   | Prog.OCamlProgramError err ->
       error "ocaml toolchain error: %s\n" err;
