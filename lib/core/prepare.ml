@@ -253,7 +253,8 @@ let resolve_module_ppx_flags bstate target =
     @param pp preprocessor settings
     @param file_search_paths search paths for finding modules
     @return (internal_deps, external_deps, use_thread_flag) *)
-let analyze_module_dependencies ?pack_members reg dep_cache srcFile hier pp file_search_paths =
+let analyze_module_dependencies ?pack_members ?(provided_by_deps = []) reg dep_cache srcFile hier pp
+    file_search_paths =
   let cache_key = fp_to_string srcFile in
   let allDeps =
     match (try Some (Hashtbl.find dep_cache cache_key) with Not_found -> None) with
@@ -278,6 +279,10 @@ let analyze_module_dependencies ?pack_members reg dep_cache srcFile hier pp file
     | None ->
         List.partition
           (fun dep ->
+            (* a module that a library dependency provides is that library's,
+               even when its source sits in this target's own directory *)
+            (not (List.mem dep provided_by_deps))
+            &&
             try
               let entry = Hier.get_file_entry reg (Hier.of_modname dep) (file_search_paths hier) in
               match entry with
@@ -954,6 +959,28 @@ let get_modules_desc bstate target toplevelModules =
 
   (* target-invariant: resolve once here rather than per module inside get_one *)
   let ppx = resolve_module_ppx_flags bstate target in
+  (* Top-level modules provided by the internal libraries an executable-like
+     target depends on.  When such a library shares the target's source
+     directory, its modules must not also become the target's own: they
+     would be compiled a second time under the same build step as the
+     library's copy (steps are keyed by module name), before the library
+     archive they are checked against exists — recompiled again by the next
+     build — and linked twice.  A library keeps the modules it declares. *)
+  let provided_by_deps =
+    if Target.is_lib target then []
+    else
+      List.concat
+        (List.map
+           (fun libname ->
+             try
+               let lib = Project.find_lib bstate.bstate_config.project_file libname in
+               if lib.Project.Library.pack then
+                 [ Modname.wrap
+                     (Compat.string_capitalize (list_last (Libname.to_string_nodes libname))) ]
+               else List.map Hier.root lib.Project.Library.modules
+             with _ -> [])
+           (Analyze.get_internal_library_deps bstate.bstate_config target))
+  in
   let get_one hier =
     let moduleName = Hier.to_string hier in
     log Verbose "Analysing %s\n%!" moduleName;
@@ -1070,7 +1097,8 @@ let get_modules_desc bstate target toplevelModules =
             | _ -> None
           in
           let cwdDeps, otherDeps, use_thread =
-            analyze_module_dependencies ?pack_members reg dep_cache srcFile hier pp file_search_paths
+            analyze_module_dependencies ?pack_members ~provided_by_deps reg dep_cache srcFile hier pp
+              file_search_paths
           in
           (* alias-wrapped members: sibling deps map to their mangled units and
              every member depends on the generated alias module, which is opened

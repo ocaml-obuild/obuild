@@ -1,0 +1,13 @@
+obuild-ver: 1
+name: sharedlib
+version: 0.1
+
+# the executable depends on a library whose source shares its directory
+library util
+  src-dir: src
+  modules: Util
+
+executable prog
+  src-dir: src
+  main-is: prog.ml
+  build-deps: util
