@@ -1,16 +1,24 @@
 name: js-test
 version: 0.1
-synopsis: js_of_ocaml output for an executable
+synopsis: js_of_ocaml output for executables and tests
 obuild-ver: 1
 
+# the library's runtime file is handed to every js target depending on it
 library greet
   modules: greet
   src-dir: lib
+  js-files: lib/greet_stubs.js
 
 executable hello
   main-is: hello.ml
   src-dir: src
   build-deps: greet
   js-of-ocaml: true
-  js-flags: --pretty
+  js-flags: --opt 2
   js-files: src/extra.js
+
+test greet
+  main-is: test_greet.ml
+  src-dir: src
+  build-deps: greet
+  js-of-ocaml: true

@@ -519,7 +519,7 @@ let compile_directory task_index task (h : Hier.t) task_context dag =
   let modules_task = Taskdep.linearize cstate.compilation_dag Taskdep.FromParent [ task ] in
   let filter_modules t : Hier.t option =
     match t with
-    | CompileC _ | LinkTarget _ | JsTarget _ | CheckTarget _ -> None
+    | CompileC _ | LinkTarget _ | WebTarget _ | CheckTarget _ -> None
     | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ | RunGenerateBlock _ -> None
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = Hier.lvl h + 1 then Some m else None
     | CompileInterface m ->
@@ -1011,14 +1011,14 @@ let link_ task_index bstate cstate pkgDeps target dag compiled useThreadLib ccli
       (fp_to_string dest) reason;
     [
       (fun () ->
-        run_ocaml_linking ~root_link:(not (Target.is_js target))
+        run_ocaml_linking ~root_link:(not (Target.is_web target))
           cstate.compilation_hier (linking_paths_of compileOpt) compiledType link_type compileOpt
           useThreadLib systhread
-          (* primitives of a js target may be provided by JavaScript runtime
-             files (js-files, or a library's runtime.js): they do not exist
-             as C at bytecode link time *)
+          (* primitives of a web target may be provided by runtime files
+             (js-files / wasm-files, or a library's runtime.js): they do not
+             exist as C at bytecode link time *)
           (target.target_obits.target_oflags
-           @ if Target.is_js target && compiledType = ByteCode then [ "-no-check-prims" ] else [])
+           @ if Target.is_web target && compiledType = ByteCode then [ "-no-check-prims" ] else [])
           cclibs buildDeps compiled dest);
     ])
   else
@@ -1154,43 +1154,101 @@ let link task_index task bstate task_context dag =
   else
     Scheduler.FinishTask task
 
-(* file name of the JavaScript produced for a js_of_ocaml target *)
-let js_dest_name target = fn (Target.get_target_dest_name target ^ ".js")
+(* compilation variants a web target is produced in: the Normal bytecode,
+   plus the debug one (<name>.d.js) when executable debugging is configured *)
+let web_opts conf target =
+  List.filter (fun o -> o <> WithProf) (Target.get_compilation_opts conf target)
 
-(* js_of_ocaml step: translate the Normal-mode bytecode executable to
-   <name>.js next to it.  Inputs are the bytecode, the extra runtime files
-   and (as a virtual input) the flags, so editing js-flags rebuilds too. *)
-let js_of_ocaml task_index task task_context dag =
+(* the debug variant is the one opened in the browser's debugger *)
+let web_debug_flags = [ "--pretty"; "--source-map-inline"; "--debuginfo" ]
+
+(* Runtime files a web target inherits from its dependencies, in dependency
+   order: the js-files / wasm-files of internal libraries, and for
+   JavaScript the [jsoo_runtime] files that findlib packages declare in
+   their META (wasm_of_ocaml has no such META convention). *)
+let web_dep_runtime_files bstate target backend =
+  let conf = bstate.bstate_config in
+  let stdlib = fp (Analyze.get_ocaml_config_key "standard_library" conf) in
+  let of_dep dep =
+    match Hashtbl.find conf.project_dep_data dep with
+    | Internal -> (
+        try
+          let lib = Project.find_lib conf.Analyze.project_file dep in
+          (Target.web_settings lib.Project.Library.target backend).web_files
+        with _ -> [])
+    | System when backend = Js -> (
+        try
+          let path, root = Metacache.get_from_cache conf.project_metacache dep in
+          let pkg = Meta.Pkg.find dep.Libname.subnames root in
+          let dir = Meta.get_include_dir_with_subpath stdlib (path, root) dep.Libname.subnames in
+          let names =
+            String_utils.split_pred
+              (fun c -> List.mem c [ ','; ' '; '\n'; '\r'; '\t' ])
+              (List.assoc "jsoo_runtime" pkg.Meta.Pkg.assignment)
+          in
+          List.filter Filesystem.exists
+            (List.map (fun n -> dir </> fn n) (List.filter (fun n -> n <> "") names))
+        with _ -> [])
+    | System -> []
+  in
+  let all = List.concat (List.map of_dep (Analyze.get_pkg_deps target conf)) in
+  (* a file reachable through several packages is passed once *)
+  List.rev
+    (List.fold_left (fun acc f -> if List.mem f acc then acc else f :: acc) [] all)
+
+(* web step: translate the bytecode executable(s) with js_of_ocaml or
+   wasm_of_ocaml, next to them.  Inputs are the bytecode, the runtime files
+   and (as a virtual input) the flags. *)
+let web_target task_index task backend bstate task_context dag =
   let cstate, target = Hashtbl.find task_context task in
-  match target.target_js with
-  | None -> Scheduler.FinishTask task
-  | Some js ->
-      let conf = Hier.conf cstate.compilation_hier in
-      let dir = cstate.compilation_builddir_ml Normal in
-      let bytecode =
-        dir </> Utils.to_exe_name conf Normal ByteCode (Target.get_target_dest_name target)
-      in
-      let dest = dir </> js_dest_name target in
-      let vkey = "@js-flags/" ^ Target.get_target_name target in
-      Digests.set_virtual vkey (Digest.string (String.concat "\000" js.js_flags));
-      let srcs =
-        (Filetype.FileEXE, bytecode)
-        :: (Filetype.FileOther "js-flags", fp vkey)
-        :: List.map (fun p -> (Filetype.FileOther "js", p)) js.js_files
-      in
-      (match check_destination_valid_with srcs (Filetype.FileOther "js", dest) with
-       | None -> Scheduler.FinishTask task
-       | Some (_, changed) ->
-           let nb_step, nb_step_len = get_nb_step dag in
-           let reason =
-             if changed = current_dir then ""
-             else if Digests.is_virtual changed then "    ( js-flags changed )"
-             else "    ( " ^ fp_to_string changed ^ " changed )"
-           in
-           log Report "[%*d of %d] Js_of_ocaml %s%s\n%!" nb_step_len task_index nb_step
-             (fp_to_string dest) reason;
-           Scheduler.AddProcess
-             (task, run_js_of_ocaml js.js_flags js.js_files bytecode dest))
+  let ws = Target.web_settings target backend in
+  let conf = Hier.conf cstate.compilation_hier in
+  let dir = cstate.compilation_builddir_ml Normal in
+  let files = web_dep_runtime_files bstate target backend @ ws.web_files in
+  let label =
+    match backend with
+    | Js -> "Js_of_ocaml"
+    | Wasm -> "Wasm_of_ocaml"
+  in
+  let jobs =
+    list_filter_map
+      (fun opt ->
+        let bytecode =
+          dir </> Utils.to_exe_name conf opt ByteCode (Target.get_target_dest_name target)
+        in
+        let dest_name = Target.web_dest_name target backend opt in
+        let dest = dir </> dest_name in
+        let flags = (if opt = WithDebug then web_debug_flags else []) @ ws.web_flags in
+        let vkey =
+          "@web-flags/" ^ Target.get_target_name target ^ "/" ^ fn_to_string dest_name
+        in
+        Digests.set_virtual vkey (Digest.string (String.concat "\000" flags));
+        let srcs =
+          (Filetype.FileEXE, bytecode)
+          :: (Filetype.FileOther "web-flags", fp vkey)
+          :: List.map (fun p -> (Filetype.FileOther "runtime", p)) files
+        in
+        match check_destination_valid_with srcs (Filetype.FileOther "js", dest) with
+        | None -> None
+        | Some (_, changed) ->
+            let reason =
+              if changed = current_dir then ""
+              else if Digests.is_virtual changed then "    ( flags changed )"
+              else "    ( " ^ fp_to_string changed ^ " changed )"
+            in
+            Some (dest, reason, fun () -> run_web_compiler backend flags files bytecode dest))
+      (web_opts conf target)
+  in
+  if jobs = [] then Scheduler.FinishTask task
+  else begin
+    let nb_step, nb_step_len = get_nb_step dag in
+    List.iter
+      (fun (dest, reason, _) ->
+        log Report "[%*d of %d] %s %s%s\n%!" nb_step_len task_index nb_step label
+          (fp_to_string dest) reason)
+      jobs;
+    Scheduler.AddTask (task, [ List.map (fun (_, _, f) -> f) jobs ])
+  end
 
 let get_destination_files conf target =
   let all_modes = get_all_modes conf target in
@@ -1200,7 +1258,10 @@ let get_destination_files conf target =
       List.map
         (fun (ty, opt) -> Utils.to_exe_name conf opt ty (Target.get_target_dest_name target))
         all_modes
-      @ (if Target.is_js target then [ js_dest_name target ] else [])
+      @ List.concat
+          (List.map
+             (fun b -> List.map (fun opt -> Target.web_dest_name target b opt) (web_opts conf target))
+             (Target.web_backends target))
 
 let sanity_check conf build_dir target =
   let files = get_destination_files conf target in
@@ -1282,7 +1343,7 @@ let compile (bstate : build_state) task_context dag =
     | CompileCstubsC lib -> compile_cstubs_c task_index task lib bstate task_context dag
     | RunGenerateBlock gen_block -> run_generate_block task_index task gen_block bstate task_context dag
     | LinkTarget _ -> link task_index task bstate task_context dag
-    | JsTarget _ -> js_of_ocaml task_index task task_context dag
+    | WebTarget (b, _) -> web_target task_index task b bstate task_context dag
     | CheckTarget _ -> check task_index task task_context dag
     in
     Hashtbl.replace task_groups task (Digests.take_group ());

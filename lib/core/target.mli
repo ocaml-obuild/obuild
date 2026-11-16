@@ -123,11 +123,20 @@ type target_generate = {
   generate_args   : string option;      (** Additional command-line arguments *)
 }
 
-(** js_of_ocaml settings: the bytecode executable is translated to JavaScript *)
-type target_js = {
-  js_flags : string list;              (** Extra arguments for js_of_ocaml *)
-  js_files : Filepath.filepath list;   (** Extra JavaScript runtime files *)
+(** Web backends: js_of_ocaml (JavaScript) and wasm_of_ocaml (WebAssembly) *)
+type web_backend =
+  | Js
+  | Wasm
+
+(** Settings of one web backend for a target *)
+type target_web = {
+  web_enabled : bool;                  (** Executable-like targets: produce this output *)
+  web_flags : string list;             (** Extra arguments for the compiler *)
+  web_files : Filepath.filepath list;
+      (** Runtime files. On a library they are handed to the web targets depending on it *)
 }
+
+val new_target_web : target_web
 
 (** Complete build target definition *)
 type target = {
@@ -141,7 +150,8 @@ type target = {
   target_buildable   : runtime_bool;
   target_installable : runtime_bool;
   target_pack        : bool;  (** library modules wrapped under one pack module *)
-  target_js          : target_js option;  (** executable also produced as JavaScript *)
+  target_js          : target_web;  (** js_of_ocaml settings *)
+  target_wasm        : target_web;  (** wasm_of_ocaml settings *)
 }
 
 val new_target_cbits : target_cbits
@@ -176,8 +186,19 @@ val get_target_clibname : target -> string
 val is_lib : target -> bool
 (** Check if target is a library *)
 
-val is_js : target -> bool
-(** Executable target with js_of_ocaml output enabled *)
+val web_settings : target -> web_backend -> target_web
+(** Settings of a web backend *)
+
+val web_backends : target -> web_backend list
+(** Web backends enabled for an executable-like target (always empty for a library) *)
+
+val is_web : target -> bool
+(** Executable-like target with at least one web backend enabled *)
+
+val web_backend_to_string : web_backend -> string
+
+val web_dest_name : target -> web_backend -> Types.ocaml_compilation_option -> Filepath.filename
+(** File produced for a backend: [<name>.js], [<name>.d.js], [<name>.wasm.js], [<name>.d.wasm.js] *)
 
 val get_ocaml_compiled_types : Gconf.t -> target -> Types.ocaml_compiled_type list
 (** Get OCaml compilation types (Native/ByteCode) based on target type and global config *)

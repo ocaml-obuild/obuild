@@ -229,12 +229,18 @@ let run_ocaml_linking ?(root_link = true) reg includeDirs build_mode linking_mod
   let () = if root_link then link_maybe linking_mode dest in
   res
 
-(* js_of_ocaml: whole-program translation of a bytecode executable.
-   Runtime .js files come first, the bytecode last, as the tool expects. *)
-let run_js_of_ocaml flags js_files bytecode dest =
+(* js_of_ocaml / wasm_of_ocaml: whole-program translation of a bytecode
+   executable.  Both tools take the same shape of command line: runtime
+   files first, the bytecode last. *)
+let run_web_compiler backend flags runtime_files bytecode dest =
+  let prog =
+    match backend with
+    | Target.Js -> Prog.get_js_of_ocaml ()
+    | Target.Wasm -> Prog.get_wasm_of_ocaml ()
+  in
   let args =
-    [ Prog.get_js_of_ocaml () ] @ flags
-    @ List.map fp_to_string js_files
+    [ prog ] @ flags
+    @ List.map fp_to_string runtime_files
     @ [ fp_to_string bytecode; "-o"; fp_to_string dest ]
   in
   Process.make args

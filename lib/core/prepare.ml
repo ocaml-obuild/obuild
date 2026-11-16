@@ -92,7 +92,7 @@ type compile_step = Prepare_types.compile_step =
   | CompileCstubsC of Libname.t
   | RunGenerateBlock of Target.target_generate
   | LinkTarget of Target.target
-  | JsTarget of Target.target
+  | WebTarget of Target.web_backend * Target.target
   | CheckTarget of Target.target
 
 type compilation_state = Prepare_types.compilation_state = {
@@ -115,20 +115,24 @@ type compilation_state = Prepare_types.compilation_state = {
 let string_of_compile_step = Prepare_types.string_of_compile_step
 let init project = { bstate_config = project }
 
-(* steps after the link: Link -> [Js] -> Check.  The js_of_ocaml step is its
-   own DAG node so it is dispatched once the bytecode executable exists and
-   the ordinary staleness check (digest of the .byte) applies to it. *)
+(* steps after the link: Link -> [Web Js | Web Wasm] -> Check.  Each web
+   backend is its own DAG node so it is dispatched once the bytecode
+   executable exists (the ordinary staleness check then applies to it), and
+   the two backends run in parallel. *)
 let add_final_steps target stepsDag =
-  if Target.is_js target then begin
-    Dag.add_edge (JsTarget target) (LinkTarget target) stepsDag;
-    Dag.add_edge (CheckTarget target) (JsTarget target) stepsDag
-  end else
-    Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+  match Target.web_backends target with
+  | [] -> Dag.add_edge (CheckTarget target) (LinkTarget target) stepsDag
+  | backends ->
+      List.iter
+        (fun b ->
+          Dag.add_edge (WebTarget (b, target)) (LinkTarget target) stepsDag;
+          Dag.add_edge (CheckTarget target) (WebTarget (b, target)) stepsDag)
+        backends
 
 let get_compilation_order cstate =
   let filter_modules t : Hier.t option =
     match t with
-    | CompileC _ | CompileInterface _ | LinkTarget _ | JsTarget _ | CheckTarget _ -> None
+    | CompileC _ | CompileInterface _ | LinkTarget _ | WebTarget _ | CheckTarget _ -> None
     | GenerateCstubsTypes _ | GenerateCstubsFunctions _ | CompileCstubsC _ | RunGenerateBlock _ -> None
     | CompileDirectory m | CompileModule m -> if Hier.lvl m = 0 then Some m else None
   in

@@ -46,6 +46,9 @@ let reroot prefix p = if p = current_dir then prefix else prefix <//> p
 let reroot_target prefix (t : Target.target) =
   let obits = t.Target.target_obits in
   let cbits = t.Target.target_cbits in
+  let reroot_web (w : Target.target_web) =
+    { w with Target.web_files = List.map (reroot prefix) w.Target.web_files }
+  in
   {
     t with
     Target.target_obits =
@@ -56,6 +59,8 @@ let reroot_target prefix (t : Target.target) =
         (fun (g : Target.target_generate) ->
           { g with Target.generate_from = List.map (reroot prefix) g.Target.generate_from })
         t.Target.target_generates;
+    target_js = reroot_web t.Target.target_js;
+    target_wasm = reroot_web t.Target.target_wasm;
     (* vendored code is built into the parent's artifacts, not installed *)
     target_installable = Target.BoolConst false;
   }

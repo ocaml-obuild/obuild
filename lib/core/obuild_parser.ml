@@ -192,6 +192,18 @@ let parse_target_setting target key value =
   match Compat.string_lowercase key with
   | "buildable" -> { target with buildable = parse_runtime_bool value }
   | "installable" -> { target with installable = parse_runtime_bool value }
+  | "js-of-ocaml" | "js_of_ocaml" | "jsoo" | "js" ->
+      { target with js = { target.js with web_enabled = Compat.string_lowercase value = "true" } }
+  | "js-flags" ->
+      { target with js = { target.js with web_flags = target.js.web_flags @ parse_words value } }
+  | "js-files" ->
+      { target with js = { target.js with web_files = target.js.web_files @ parse_list value } }
+  | "wasm-of-ocaml" | "wasm_of_ocaml" | "wasmoo" | "wasm" ->
+      { target with wasm = { target.wasm with web_enabled = Compat.string_lowercase value = "true" } }
+  | "wasm-flags" ->
+      { target with wasm = { target.wasm with web_flags = target.wasm.web_flags @ parse_words value } }
+  | "wasm-files" ->
+      { target with wasm = { target.wasm with web_files = target.wasm.web_files @ parse_list value } }
   | _ ->
       let ocaml' = parse_ocaml_setting target.ocaml key value in
       let c' = parse_c_setting target.c key value in
@@ -422,15 +434,10 @@ let parse_executable_block name tokens =
     ~handle_key:(fun k v exe ->
       match k with
       | "main" | "mainis" | "main-is" -> Some { exe with exe_main = v }
-      | "js-of-ocaml" | "js_of_ocaml" | "jsoo" | "js" ->
-          Some { exe with exe_js = Compat.string_lowercase v = "true" }
-      | "js-flags" -> Some { exe with exe_js_flags = exe.exe_js_flags @ parse_words v }
-      | "js-files" -> Some { exe with exe_js_files = exe.exe_js_files @ parse_list v }
       | _ -> None)
     ~get_target:(fun e -> e.exe_target)
     ~set_target:(fun e t -> { e with exe_target = t })
-    { exe_name = name; exe_main = ""; exe_js = false; exe_js_flags = []; exe_js_files = [];
-      exe_target = default_target_common }
+    { exe_name = name; exe_main = ""; exe_target = default_target_common }
     tokens
 
 (** Parse test block *)

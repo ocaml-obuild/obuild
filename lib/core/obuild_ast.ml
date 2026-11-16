@@ -110,8 +110,17 @@ type generate_block = {
   generate_args: string option;       (** Additional command-line arguments *)
 }
 
+(** js_of_ocaml / wasm_of_ocaml settings (shared by all target types) *)
+type web_settings = {
+  web_enabled: bool;                  (** js-of-ocaml / wasm-of-ocaml *)
+  web_flags: string list;             (** js-flags / wasm-flags *)
+  web_files: string list;             (** js-files / wasm-files *)
+}
+
 (** Common target settings *)
 type target_common = {
+  js: web_settings;
+  wasm: web_settings;
   buildable: runtime_bool;
   installable: runtime_bool;
   ocaml: ocaml_settings;
@@ -136,9 +145,6 @@ type library = {
 type executable = {
   exe_name: string;
   exe_main: string;               (* main-is *)
-  exe_js: bool;                   (* js-of-ocaml: also produce <name>.js *)
-  exe_js_flags: string list;      (* js-flags: extra js_of_ocaml arguments *)
-  exe_js_files: string list;      (* js-files: extra JavaScript runtime files *)
   exe_target: target_common;
 }
 
@@ -225,7 +231,11 @@ let default_ocaml_settings = {
   stdlib = None;
 }
 
+let default_web_settings = { web_enabled = false; web_flags = []; web_files = [] }
+
 let default_target_common = {
+  js = default_web_settings;
+  wasm = default_web_settings;
   buildable = Bool_const true;
   installable = Bool_const true;
   ocaml = default_ocaml_settings;

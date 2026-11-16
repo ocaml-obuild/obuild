@@ -147,64 +147,77 @@ let test_executable_conversion () =
 (* ============================================================ *)
 
 let test_js_conversion () =
-  Printf.printf "\n=== js_of_ocaml Tests ===\n";
+  Printf.printf "\n=== js_of_ocaml / wasm_of_ocaml Tests ===\n";
 
-  let exe_target input =
-    let proj = parse_and_convert (Gconf.create ()) input in
-    (List.hd proj.Project.exes).Project.Executable.target
+  let header = "name: test\nversion: 1.0\nobuild-ver: 1\n\n" in
+  let project body = parse_and_convert (Gconf.create ()) (header ^ body) in
+  let exe_target body = (List.hd (project body).Project.exes).Project.Executable.target in
+  let files (w : Target.target_web) =
+    String.concat " " (List.map Filepath.fp_to_string w.Target.web_files)
   in
 
-  test "executable without js-of-ocaml" (fun () ->
-      let t = exe_target "\
-name: test\n\
-version: 1.0\n\
-obuild-ver: 1\n\
-\n\
-executable app\n\
-\  main-is: app.ml\n" in
-      assert_true "no js settings" (t.Target.target_js = None);
-      assert_true "not a js target" (not (Target.is_js t)));
+  test "executable without web backend" (fun () ->
+      let t = exe_target "executable app\n  main-is: app.ml\n" in
+      assert_true "not a web target" (not (Target.is_web t));
+      assert_true "no backend" (Target.web_backends t = []));
 
   test "js-of-ocaml with flags and files" (fun () ->
-      let t = exe_target "\
-name: test\n\
-version: 1.0\n\
-obuild-ver: 1\n\
-\n\
-executable app\n\
-\  main-is: app.ml\n\
-\  js-of-ocaml: true\n\
-\  js-flags: --pretty --opt 2\n\
-\  js-files: a.js, src/b.js\n" in
-      let js = option_get t.Target.target_js in
-      assert_true "is a js target" (Target.is_js t);
-      assert_eq "flags" "--pretty --opt 2" (String.concat " " js.Target.js_flags);
-      assert_eq "files" "a.js src/b.js"
-        (String.concat " " (List.map Filepath.fp_to_string js.Target.js_files)));
+      let t =
+        exe_target
+          "executable app\n  main-is: app.ml\n  js-of-ocaml: true\n  js-flags: --pretty --opt 2\n  js-files: a.js, src/b.js\n"
+      in
+      assert_true "js only" (Target.web_backends t = [ Target.Js ]);
+      assert_eq "flags" "--pretty --opt 2" (String.concat " " t.Target.target_js.Target.web_flags);
+      assert_eq "files" "a.js src/b.js" (files t.Target.target_js));
 
-  test "js target is bytecode only" (fun () ->
-      let t = exe_target "\
-name: test\n\
-version: 1.0\n\
-obuild-ver: 1\n\
-\n\
-executable app\n\
-\  main-is: app.ml\n\
-\  js-of-ocaml: true\n" in
+  test "wasm-of-ocaml with flags and files" (fun () ->
+      let t =
+        exe_target
+          "executable app\n  main-is: app.ml\n  wasm-of-ocaml: true\n  wasm-flags: --opt 3\n  wasm-files: rt.wat, rt.js\n"
+      in
+      assert_true "wasm only" (Target.web_backends t = [ Target.Wasm ]);
+      assert_eq "flags" "--opt 3" (String.concat " " t.Target.target_wasm.Target.web_flags);
+      assert_eq "files" "rt.wat rt.js" (files t.Target.target_wasm));
+
+  test "both backends" (fun () ->
+      let t =
+        exe_target "executable app\n  main-is: app.ml\n  js-of-ocaml: true\n  wasm-of-ocaml: true\n"
+      in
+      assert_true "js then wasm" (Target.web_backends t = [ Target.Js; Target.Wasm ]));
+
+  test "web target is bytecode only" (fun () ->
+      let t = exe_target "executable app\n  main-is: app.ml\n  wasm-of-ocaml: true\n" in
       (* default configuration builds native executables only *)
       assert_true "bytecode only"
         (Target.get_ocaml_compiled_types (Gconf.create ()) t = [ Types.ByteCode ]));
 
-  test "js-flags alone do not enable js" (fun () ->
-      let t = exe_target "\
-name: test\n\
-version: 1.0\n\
-obuild-ver: 1\n\
-\n\
-executable app\n\
-\  main-is: app.ml\n\
-\  js-flags: --pretty\n" in
-      assert_true "no js settings" (t.Target.target_js = None))
+  test "flags alone do not enable a backend" (fun () ->
+      let t = exe_target "executable app\n  main-is: app.ml\n  js-flags: --pretty\n" in
+      assert_true "not a web target" (not (Target.is_web t)));
+
+  test "output names" (fun () ->
+      let t =
+        exe_target "executable app\n  main-is: app.ml\n  js-of-ocaml: true\n  wasm-of-ocaml: true\n"
+      in
+      let name b o = Filepath.fn_to_string (Target.web_dest_name t b o) in
+      assert_eq "js" "app.js" (name Target.Js Types.Normal);
+      assert_eq "js debug" "app.d.js" (name Target.Js Types.WithDebug);
+      assert_eq "wasm" "app.wasm.js" (name Target.Wasm Types.Normal);
+      assert_eq "wasm debug" "app.d.wasm.js" (name Target.Wasm Types.WithDebug));
+
+  test "test target with js-of-ocaml" (fun () ->
+      let proj = project "test t1\n  main-is: t1.ml\n  js-of-ocaml: true\n" in
+      let t = Project.Test.to_target (List.hd proj.Project.tests) in
+      assert_true "js test" (Target.web_backends t = [ Target.Js ]));
+
+  test "library carries runtime files but is never a web target" (fun () ->
+      let proj =
+        project "library foo\n  modules: Foo\n  js-of-ocaml: true\n  js-files: foo_stubs.js\n  wasm-files: foo_stubs.wat\n"
+      in
+      let t = (List.hd proj.Project.libs).Project.Library.target in
+      assert_true "not a web target" (not (Target.is_web t));
+      assert_eq "js files" "foo_stubs.js" (files t.Target.target_js);
+      assert_eq "wasm files" "foo_stubs.wat" (files t.Target.target_wasm))
 
 let test_test_conversion () =
   Printf.printf "\n=== Test Target Conversion Tests ===\n";

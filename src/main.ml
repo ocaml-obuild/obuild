@@ -350,18 +350,23 @@ let cmd_run =
         let target = Project.Executable.to_target exe in
         let dir = Dist.get_build_exn (Dist.Target target.Target.target_name) in
         let dest_name = Target.get_target_dest_name target in
-        let exe_path =
-          let candidates =
-            [ Utils.to_exe_name (Hier.conf hreg) Normal Native dest_name;
-              Utils.to_exe_name (Hier.conf hreg) Normal ByteCode dest_name ]
-          in
-          try dir </> List.find (fun c -> Filesystem.exists (dir </> c)) candidates
-          with Not_found ->
-            eprintf "error: executable %s not found after build\n"
-              (Target.get_target_name target);
-            exit 1
+        let command =
+          match Target.web_backends target with
+          | b :: _ ->
+              (* a web target runs under node (first enabled backend) *)
+              [ Prog.get_node (); fp_to_string (dir </> Target.web_dest_name target b Normal) ]
+          | [] ->
+              let candidates =
+                [ Utils.to_exe_name (Hier.conf hreg) Normal Native dest_name;
+                  Utils.to_exe_name (Hier.conf hreg) Normal ByteCode dest_name ]
+              in
+              (try [ fp_to_string (dir </> List.find (fun c -> Filesystem.exists (dir </> c)) candidates) ]
+               with Not_found ->
+                 eprintf "error: executable %s not found after build\n"
+                   (Target.get_target_name target);
+                 exit 1)
         in
-        let argv = Array.of_list (fp_to_string exe_path :: prog_args) in
+        let argv = Array.of_list (command @ prog_args) in
         let pid = Unix.create_process argv.(0) argv Unix.stdin Unix.stdout Unix.stderr in
         let _, status = Unix.waitpid [] pid in
         match status with
@@ -372,6 +377,14 @@ let cmd_run =
   cmd |> Cli.help_flag |> Cli.stop_at_first_positional
 
 (* ===== Test Command ===== *)
+
+(* A web target (js_of_ocaml / wasm_of_ocaml) has no native executable: it is
+   run with node, once per enabled backend. *)
+let web_commands target dir =
+  List.map
+    (fun b ->
+      [ Prog.get_node (); fp_to_string (dir </> Target.web_dest_name target b Normal) ])
+    (Target.web_backends target)
 
 let cmd_test =
   let cmd =
@@ -427,14 +440,32 @@ let cmd_test =
                 in
                 let dir = Dist.get_build_exn (Dist.Target test_target.Target.target_name) in
                 let exe_path = dir </> output_name in
+                (* web tests run under node, once per backend; the test
+                   passes when every backend passes *)
+                let commands =
+                  match web_commands test_target dir with
+                  | [] -> [ [ fp_to_string exe_path ] ]
+                  | l -> l
+                in
+                List.iter
+                  (fun command ->
+                    let produced = fp (List.nth command (List.length command - 1)) in
+                    if not (Filesystem.exists produced) then (
+                      eprintf "error: %s doesn't appear built, make sure 'obuild build' is run first\n"
+                        (Target.get_target_name test_target);
+                      exit 1))
+                  commands;
 
-                if not (Filesystem.exists exe_path) then (
-                  eprintf "error: %s doesn't appear built, make sure 'obuild build' is run first\n"
-                    (Target.get_target_name test_target);
-                  exit 1);
-
-                let args = [ fp_to_string exe_path ] @ test.Project.Test.runopt in
-                let run () = Process.run args in
+                let run () =
+                  let rec go acc = function
+                    | [] -> Process.Success (acc, "", 0.)
+                    | command :: rest -> (
+                        match Process.run (command @ test.Project.Test.runopt) with
+                        | Process.Success (out, _, _) -> go (acc ^ out) rest
+                        | failure -> failure)
+                  in
+                  go "" commands
+                in
                 let result = match test.Project.Test.rundir with
                   | None -> run ()
                   | Some d ->
@@ -723,9 +754,15 @@ let process_global_args ctx =
   (match Cli.get_string_opt ctx "ocamldoc" with
   | Some p -> Gconf.set_env "ocamldoc" p
   | None -> ());
-  match Cli.get_string_opt ctx "ld" with
+  (match Cli.get_string_opt ctx "ld" with
   | Some p -> Gconf.set_env "ld" p
-  | None -> ()
+  | None -> ());
+  List.iter
+    (fun tool ->
+      match Cli.get_string_opt ctx tool with
+      | Some p -> Gconf.set_env tool p
+      | None -> ())
+    [ "js_of_ocaml"; "wasm_of_ocaml"; "node" ]
 
 (* ===== Application Definition ===== *)
 
@@ -759,6 +796,13 @@ let obuild_app =
         (fun cmd ->
           Cli.option_string "ocamldoc" ~placeholder:"PATH" ~doc:"Path to ocamldoc tool" cmd);
         (fun cmd -> Cli.option_string "ld" ~placeholder:"PATH" ~doc:"Path to linker" cmd);
+        (fun cmd ->
+          Cli.option_string "js_of_ocaml" ~placeholder:"PATH" ~doc:"Path to js_of_ocaml compiler" cmd);
+        (fun cmd ->
+          Cli.option_string "wasm_of_ocaml" ~placeholder:"PATH" ~doc:"Path to wasm_of_ocaml compiler"
+            cmd);
+        (fun cmd ->
+          Cli.option_string "node" ~placeholder:"PATH" ~doc:"Path to node (runs web targets)" cmd);
       ]
     ~on_global_args:process_global_args
     ~commands:

@@ -60,6 +60,12 @@ val get_ocamlmktop : unit -> string
 
 val get_js_of_ocaml : unit -> string
 (** Path of the js_of_ocaml compiler *)
+
+val get_wasm_of_ocaml : unit -> string
+(** Path of the wasm_of_ocaml compiler *)
+
+val get_node : unit -> string
+(** Path of node, used to run web targets (tests, [obuild run]) *)
 (** Get path to ocamlmktop (custom toplevel builder) *)
 
 (** OCaml configuration *)

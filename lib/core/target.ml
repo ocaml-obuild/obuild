@@ -141,11 +141,21 @@ type target_generate = {
   generate_args : string option;      (* Additional command-line arguments *)
 }
 
-(* js_of_ocaml: translate the bytecode executable to JavaScript *)
-type target_js = {
-  js_flags : string list; (* extra arguments for js_of_ocaml *)
-  js_files : filepath list; (* extra JavaScript runtime files *)
+(* Web backends: the bytecode executable is translated by js_of_ocaml
+   (JavaScript) and/or wasm_of_ocaml (WebAssembly + a JavaScript loader) *)
+type web_backend =
+  | Js
+  | Wasm
+
+type target_web = {
+  web_enabled : bool; (* executable-like targets: produce this output *)
+  web_flags : string list; (* extra arguments for the compiler *)
+  web_files : filepath list;
+      (* runtime files (.js, and .wat/.wasm for Wasm).  On a library they are
+         handed to every web target that depends on it. *)
 }
+
+let new_target_web = { web_enabled = false; web_flags = []; web_files = [] }
 
 type target = {
   target_name : Name.t;
@@ -158,7 +168,8 @@ type target = {
   target_buildable : runtime_bool;
   target_installable : runtime_bool;
   target_pack : bool;  (* library modules wrapped under one pack module *)
-  target_js : target_js option;  (* executable also produced as JavaScript *)
+  target_js : target_web;  (* js_of_ocaml settings *)
+  target_wasm : target_web;  (* wasm_of_ocaml settings *)
 }
 
 let new_target_cbits =
@@ -205,7 +216,8 @@ let new_target n ty buildable installable =
     target_cstubs = None;
     target_generates = [];
     target_pack = false;
-    target_js = None;
+    target_js = new_target_web;
+    target_wasm = new_target_web;
   }
 
 let new_target_extra objs =
@@ -222,13 +234,32 @@ let get_target_dest_name target = Name.get_dest_name target.target_name
 let get_target_clibname target = Name.get_clibname target.target_name
 let is_lib target = Typ.is_lib target.target_type
 
-let is_js target = (not (is_lib target)) && target.target_js <> None
+let web_settings target = function
+  | Js -> target.target_js
+  | Wasm -> target.target_wasm
+
+(* enabled web backends; libraries only carry runtime files *)
+let web_backends target =
+  if is_lib target then []
+  else List.filter (fun b -> (web_settings target b).web_enabled) [ Js; Wasm ]
+
+let is_web target = web_backends target <> []
+
+let web_backend_to_string = function
+  | Js -> "js"
+  | Wasm -> "wasm"
+
+(* <name>.js, <name>.d.js, <name>.wasm.js, <name>.d.wasm.js *)
+let web_dest_name target backend opt =
+  fn
+    (get_target_dest_name target ^ extDP opt
+    ^ match backend with Js -> ".js" | Wasm -> ".wasm.js")
 
 let get_ocaml_compiled_types conf target =
-  (* js_of_ocaml consumes the bytecode executable; a native build of a
-     browser program is useless, so a js target is bytecode-only whatever
+  (* the web compilers consume the bytecode executable; a native build of a
+     browser program is useless, so a web target is bytecode-only whatever
      the configured executable modes are *)
-  if is_js target then [ ByteCode ] else
+  if is_web target then [ ByteCode ] else
   let nat, byte =
     if is_lib target then
       (Gconf.get_target_option_typed conf Gconf.Library_native, Gconf.get_target_option_typed conf Gconf.Library_bytecode)

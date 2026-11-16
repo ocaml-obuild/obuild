@@ -75,13 +75,25 @@ sections, etc.
 * per: NO VALUE (define a new block)
 * main | mainis | main-is: string: ml file being the entry point for the executable
 
-## Executable only fields (js_of_ocaml)
+## Web fields (js_of_ocaml / wasm_of_ocaml)
 
-* js-of-ocaml | jsoo | js: bool: also translate the executable to JavaScript with js_of_ocaml.
-  The target is then built as bytecode only (whatever the configured executable modes),
-  linked with `-no-check-prims`, and `dist/build/<name>/<name>.js` is produced from `<name>.byte`.
-* js-flags: words: extra arguments for js_of_ocaml (e.g. `--pretty`, `--opt 3`, `--source-map`)
-* js-files: list: extra JavaScript runtime files (project-relative), for externals implemented in JavaScript
+Accepted by every target type. The two "enable" fields only act on
+executable, test, example and benchmark targets; on a library, the `-files`
+fields are passed on to the web targets that depend on it.
+
+* js-of-ocaml | jsoo | js: bool: also translate the target with js_of_ocaml: `dist/build/<name>/<name>.js`
+* js-flags: words: extra arguments for js_of_ocaml (e.g. `--opt 3`)
+* js-files: list: JavaScript runtime files (project-relative)
+* wasm-of-ocaml | wasmoo | wasm: bool: also translate the target with wasm_of_ocaml:
+  `dist/build/<name>/<name>.wasm.js` and `<name>.wasm.assets/`
+* wasm-flags: words: extra arguments for wasm_of_ocaml
+* wasm-files: list: runtime files for wasm_of_ocaml (`.wat`, `.wasm`, `.js`)
+
+A target with a web backend is built as bytecode only (whatever the configured
+executable modes) and linked with `-no-check-prims`. With executable debugging
+configured, `<name>.d.js` / `<name>.d.wasm.js` are built as well, with
+`--pretty --source-map-inline --debuginfo`. `jsoo_runtime` files declared in the
+META of findlib dependencies are passed to js_of_ocaml automatically.
 
 ## Test only fields
 

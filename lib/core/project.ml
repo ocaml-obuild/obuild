@@ -372,7 +372,13 @@ let write file proj =
         add_string (iStr ^ "c-flags") (Utils.showList " " id cbits.target_cflags);
         add_string (iStr ^ "c-libs") (Utils.showList "," id cbits.target_clibs);
         add_string (iStr ^ "c-libpaths") (Utils.showList "," fp_to_string cbits.target_clibpaths);
-        add_string (iStr ^ "c-pkgs") (Utils.showList ", " (fun (l, _) -> l) cbits.target_cpkgs)
+        add_string (iStr ^ "c-pkgs") (Utils.showList ", " (fun (l, _) -> l) cbits.target_cpkgs);
+        List.iter
+          (fun (key, (w : target_web)) ->
+            if w.web_enabled then add (sprintf "%s%s-of-ocaml: true\n" iStr key);
+            add_string (iStr ^ key ^ "-flags") (Utils.showList " " id w.web_flags);
+            add_string (iStr ^ key ^ "-files") (Utils.showList ", " fp_to_string w.web_files))
+          [ ("js", target.target_js); ("wasm", target.target_wasm) ]
       in
       List.iter (Library.show add show_target "") proj.libs;
       List.iter
@@ -381,12 +387,6 @@ let write file proj =
           add (sprintf "executable %s\n" exe.Executable.name);
           add (sprintf "  main: %s\n" (fn_to_string exe.Executable.main));
           show_target "  " exe.Executable.target;
-          (match exe.Executable.target.target_js with
-           | None -> ()
-           | Some js ->
-               add "  js-of-ocaml: true\n";
-               add_string "  js-flags" (Utils.showList " " id js.js_flags);
-               add_string "  js-files" (Utils.showList ", " fp_to_string js.js_files));
           ())
         proj.exes)
 

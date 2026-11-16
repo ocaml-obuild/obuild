@@ -45,7 +45,8 @@ type compile_step =
   | CompileCstubsC of Libname.t (* Compile generated C stubs *)
   | RunGenerateBlock of Target.target_generate (* Run explicit generate block *)
   | LinkTarget of Target.target
-  | JsTarget of Target.target (* js_of_ocaml on the linked bytecode executable *)
+  | WebTarget of Target.web_backend * Target.target
+      (* js_of_ocaml / wasm_of_ocaml on the linked bytecode executable *)
   | CheckTarget of Target.target
 
 (** Module descriptor system *)
@@ -150,5 +151,5 @@ let string_of_compile_step cs =
   | CompileCstubsC x -> "cstubs-c " ^ Libname.to_string x
   | RunGenerateBlock x -> "generate " ^ Hier.to_string x.Target.generate_module
   | LinkTarget x -> "link " ^ Target.get_target_name x
-  | JsTarget x -> "js " ^ Target.get_target_name x
+  | WebTarget (b, x) -> Target.web_backend_to_string b ^ " " ^ Target.get_target_name x
   | CheckTarget x -> "check " ^ Target.get_target_name x

@@ -260,30 +260,55 @@ Declaring an executable
       build-deps: unix
 ```
 
-Compiling an executable to JavaScript
--------------------------------------
+Compiling to JavaScript and WebAssembly
+---------------------------------------
 
-With `js-of-ocaml: true`, obuild builds the executable as bytecode and runs
-[js_of_ocaml](https://ocsigen.org/js_of_ocaml) on it. The result is
-`dist/build/myapp/myapp.js`, rebuilt only when the bytecode, the flags or the
-runtime files change.
+An executable, test, example or benchmark can be translated for the browser
+(or node) with [js_of_ocaml](https://ocsigen.org/js_of_ocaml) and/or
+wasm_of_ocaml:
 
 ```
+    library mylib
+      modules: Mylib
+      src-dir: lib
+      js-files: lib/mylib_stubs.js
+      wasm-files: lib/mylib_stubs.wat
+
     executable myapp
       main-is: myapp.ml
       src-dir: src
       build-deps: mylib, js_of_ocaml
       js-of-ocaml: true
       js-flags: --opt 3
-      js-files: src/runtime.js
+      wasm-of-ocaml: true
+
+    test mytest
+      main-is: mytest.ml
+      build-deps: mylib
+      js-of-ocaml: true
 ```
 
-* `js-flags`: extra arguments passed to js_of_ocaml.
-* `js-files`: JavaScript files implementing `external` primitives.
-* Such a target is bytecode only; its internal libraries need their bytecode
-  archives (`library-bytecode`, on by default).
-* Code compiled this way cannot use C stubs: keep C bindings in other targets.
-* The js_of_ocaml program is found in the PATH; it is not installed by `obuild install`.
+* `js-of-ocaml: true` produces `dist/build/myapp/myapp.js`.
+* `wasm-of-ocaml: true` produces `dist/build/myapp/myapp.wasm.js` (the loader)
+  and the `myapp.wasm.assets/` directory next to it. Both can be enabled.
+* `js-flags` / `wasm-flags`: extra arguments for the compiler.
+* `js-files` / `wasm-files`: runtime files implementing `external` primitives
+  (JavaScript for js_of_ocaml; `.wat`/`.wasm` and JavaScript for wasm_of_ocaml).
+  On a library, they are passed to every web target that depends on it.
+* Runtime files that installed packages declare in their META (`jsoo_runtime`)
+  are passed to js_of_ocaml automatically.
+* With `--executable-debugging`, a debug variant is built too (`myapp.d.js`,
+  `myapp.d.wasm.js`): pretty-printed, with an inline source map.
+* `obuild test` and `obuild run` execute web targets with node (a test with
+  both backends runs once per backend).
+* Outputs are rebuilt only when the bytecode, the flags or a runtime file change.
+
+Such a target is built as bytecode only, and linked with `-no-check-prims`.
+Its internal libraries need their bytecode archives (`library-bytecode`, on by
+default). Code compiled this way cannot use C stubs. The compilers and node
+are found in the PATH (or given with the global options `--js_of_ocaml`,
+`--wasm_of_ocaml`, `--node`); web outputs are not installed by `obuild install`. Compilation is
+whole-program: there is no separate compilation per library.
 
 Declaring a library
 -------------------

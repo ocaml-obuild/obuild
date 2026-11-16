@@ -85,10 +85,11 @@ val run_c_linking :
   Process.t
 (** Link C object files *)
 
-val run_js_of_ocaml :
+val run_web_compiler :
+  Target.web_backend ->
   string list -> Filepath.filepath list -> Filepath.filepath -> Filepath.filepath -> Process.t
-(** [run_js_of_ocaml flags js_files bytecode dest] translates a bytecode
-    executable to JavaScript *)
+(** [run_web_compiler backend flags runtime_files bytecode dest] translates a
+    bytecode executable with js_of_ocaml or wasm_of_ocaml *)
 
 val run_ocaml_linking :
   ?root_link:bool ->

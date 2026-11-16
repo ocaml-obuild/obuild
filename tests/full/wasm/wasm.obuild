@@ -1,0 +1,28 @@
+name: wasm-test
+version: 0.1
+synopsis: wasm_of_ocaml output, alone and together with js_of_ocaml
+obuild-ver: 1
+
+library calc
+  modules: calc
+  src-dir: src
+
+executable sum
+  main-is: sum.ml
+  src-dir: src
+  build-deps: calc
+  wasm-of-ocaml: true
+
+executable both
+  main-is: sum.ml
+  src-dir: src
+  build-deps: calc
+  js-of-ocaml: true
+  wasm-of-ocaml: true
+
+test calc
+  main-is: test_calc.ml
+  src-dir: src
+  build-deps: calc
+  js-of-ocaml: true
+  wasm-of-ocaml: true

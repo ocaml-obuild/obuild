@@ -97,6 +97,8 @@ let env_variables =
     "ocamlmklib";
     "ocamlmktop";
     "js_of_ocaml";
+    "wasm_of_ocaml";
+    "node";
     "cc";
     "ranlib";
     "ar";
